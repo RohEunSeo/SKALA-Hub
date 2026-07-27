@@ -22,6 +22,9 @@ target/
 .DS_Store
 Thumbs.db
 
+# 디자인 목업 (용량 커서 추적 제외)
+design/
+
 # 테스트 파일
 test.html
 server.js
