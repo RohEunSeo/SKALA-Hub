@@ -7,6 +7,6 @@ defineProps({
 
 <template>
   <article class="post-card">
-    <h3>{{ post.ai_title }}</h3>
+    <p>{{ post.content }}</p>
   </article>
 </template>

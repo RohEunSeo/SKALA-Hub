@@ -5,7 +5,7 @@ SKALA 부트캠프 교육생 슬랙 정보공유 채널 아카이빙 플랫폼.
 ## 기술 스택
 
 - 프론트: Vue.js 3 (Vite + Pinia + Vue Router)
-- 백엔드: Spring Boot 3.5 (Java 21)
+- 백엔드: Spring Boot 4 (Java 21)
 - DB: Supabase (PostgreSQL)
 - AI 분류: Claude Haiku API
 
@@ -14,7 +14,7 @@ SKALA 부트캠프 교육생 슬랙 정보공유 채널 아카이빙 플랫폼.
 ```
 skala-hub/
 ├── frontend/   # Vue.js 3 (Vite)
-├── backend/    # Spring Boot 3
+├── backend/    # Spring Boot 4
 ├── design/     # UI 목업
 └── README.md
 ```
@@ -31,8 +31,7 @@ SLACK_CHANNEL_ID=C0BHGGH7PT3
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-# 백엔드 JPA/JDBC 접속용 - Supabase 대시보드 Project Settings > Database > Connection string(JDBC)에서 확인
-SUPABASE_DB_URL=jdbc:postgresql://<호스트>:5432/postgres
+# 백엔드 JPA/JDBC 접속용 DB 비밀번호 (호스트/유저는 application.yml에 고정됨 - Session pooler 주소)
 SUPABASE_DB_PASSWORD=
 CLAUDE_API_KEY=
 JWT_SECRET=

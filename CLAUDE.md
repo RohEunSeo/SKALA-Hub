@@ -6,7 +6,7 @@ SKALA 부트캠프 교육생(340명, 5개월) 슬랙 정보공유 채널 아카�
 
 ## 기술 스택
 - 프론트: Vue.js 3 (Vite + Pinia + Vue Router 4) → Vercel 배포
-- 백엔드: Spring Boot 3 (Java 21) → Render 배포
+- 백엔드: Spring Boot 4 (Java 21) → Render 배포
 - DB: Supabase (PostgreSQL) → 테이블 생성 완료
 - AI 분류: Claude Haiku API
 
@@ -113,7 +113,7 @@ skala-hub/
 │ ├── stores/ # auth.js, posts.js, bookmarks.js
 │ ├── router/ # index.js
 │ └── api/ # auth.js, posts.js
-├── backend/ # Spring Boot 3
+├── backend/ # Spring Boot 4
 │ └── src/main/java/com/skalahub/
 │ ├── controller/ # API 엔드포인트
 │ ├── service/ # 비즈니스 로직
