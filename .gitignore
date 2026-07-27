@@ -5,6 +5,8 @@
 
 # Node
 node_modules/
+dist/
+*.log
 
 # Java
 *.class
