@@ -35,6 +35,9 @@ public class Post {
     @Column(length = 100)
     private String userName;
 
+    @Column(length = 500)
+    private String userAvatarUrl;
+
     private Boolean isInstructor;
 
     private String content;
@@ -52,6 +55,18 @@ public class Post {
     private Boolean isDeleted;
 
     private Boolean isPinned;
+
+    // 슬랙 원본 attachments(링크 미리보기) raw JSON 문자열
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String attachments;
+
+    // 슬랙 원본 files(첨부파일/이미지) raw JSON 문자열
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String files;
+
+    // 이 게시글에 이모지 반응을 남긴 유저의 slackId 목록 (마이페이지 "반응한 글" 조회용)
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    private List<String> reactedUserIds;
 
     private LocalDateTime createdAt;
 

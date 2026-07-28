@@ -39,6 +39,9 @@ public class Reply {
     @Column(length = 100)
     private String userName;
 
+    @Column(length = 500)
+    private String userAvatarUrl;
+
     private String content;
 
     private LocalDateTime createdAt;
