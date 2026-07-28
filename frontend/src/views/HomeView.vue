@@ -103,6 +103,31 @@ function goToCategory(value) {
   router.push({ name: 'feed' })
 }
 
+// 카테고리 원색(cat.color)을 그대로 쓰면 너무 쨍해서, 흰색/검은색을 섞어 연한 파스텔 톤으로 가공
+function hexToRgb(hex) {
+  const value = hex.replace('#', '')
+  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16))
+}
+
+function mixWith(hex, target, amount, alpha = 1) {
+  const [r, g, b] = hexToRgb(hex)
+  const mix = (c) => Math.round(c + (target - c) * amount)
+  return alpha === 1 ? `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})` : `rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, ${alpha})`
+}
+
+// 본체는 원색에 흰색을 섞어 연하게, 탭은 본체보다 더 밝게 - 맥 Finder 폴더처럼 탭/본체 톤 차이로 입체감
+function folderBodyColor(color) {
+  return mixWith(color, 255, 0.4)
+}
+
+function folderTabColor(color) {
+  return mixWith(color, 255, 0.68)
+}
+
+function folderTextColor(color) {
+  return mixWith(color, 0, 0.42)
+}
+
 onMounted(() => {
   // 슬랙 OAuth 콜백이 홈으로 바로 돌아오므로 여기서 토큰을 받는다 (별도 로그인 페이지 없음)
   const { token, error } = route.query
@@ -144,11 +169,12 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <p class="eyebrow">SKALA 판교캠퍼스 교육생을 위한 정보공유 아카이빙 서비스</p>
     <h1 class="greeting">
       <template v-if="authStore.isAuthenticated">안녕하세요, {{ authStore.user?.name }}님 👋</template>
       <template v-else>SKALA Hub에 오신 것을 환영합니다 👋</template>
     </h1>
-    <p class="subtitle">SKALA 부트캠프 교육생을 위한 정보공유 아카이빙 서비스입니다</p>
+    <span class="slogan">슬랙 정보공유 채널, 카테고리별로 찾고 저장하세요 🔖</span>
 
     <div v-if="summary" class="stat-pills">
       <div v-if="authStore.isAuthenticated && authStore.user?.cohort" class="pill">
@@ -210,13 +236,13 @@ onUnmounted(() => {
           v-for="cat in CATEGORIES"
           :key="cat.value"
           class="category-card"
-          :style="{ background: cat.color }"
+          :style="{ background: folderBodyColor(cat.color), '--tab-color': folderTabColor(cat.color) }"
           @click="goToCategory(cat.value)"
         >
           <div class="category-icon">{{ cat.icon }}</div>
           <div>
-            <div class="category-label">{{ cat.label }}</div>
-            <div class="category-count">글 {{ categoryCount(cat.value) }}개</div>
+            <div class="category-label" :style="{ color: folderTextColor(cat.color) }">{{ cat.label }}</div>
+            <div class="category-count" :style="{ color: folderTextColor(cat.color) }">글 {{ categoryCount(cat.value) }}개</div>
           </div>
         </div>
       </div>
@@ -283,16 +309,28 @@ onUnmounted(() => {
   object-fit: cover;
 }
 
+.eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #636e72;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
 .greeting {
+  margin-top: 0px;
   font-size: 24px;
   font-weight: 800;
   color: #1a1a2e;
 }
 
-.subtitle {
-  margin-top: 8px;
-  font-size: 14px;
-  color: #636e72;
+.slogan {
+  display: block;
+  margin-top: 5px;
+  font-size: 14.5px;
+  color: #4a3f8f;
+  font-weight: bold;
 }
 
 .stat-pills {
@@ -345,7 +383,7 @@ onUnmounted(() => {
 .leaderboard-card {
   background: #ffffff;
   border-radius: 16px;
-  padding: 20px 24px;
+  padding: 24px 28px;
   box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
 }
 
@@ -371,7 +409,7 @@ onUnmounted(() => {
 }
 
 .board-list {
-  min-height: 132px;
+  min-height: 200px;
 }
 
 .board-row {
@@ -425,7 +463,7 @@ onUnmounted(() => {
 }
 
 .leaderboard-nav {
-  margin-top: 14px;
+  margin-top: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -459,53 +497,90 @@ onUnmounted(() => {
   background: #4a3f8f;
 }
 
+/* 기본(전체화면)은 1행 6열, 화면이 좁아지면 3열 → 2열 → 1열로 반응형 전환 */
 .category-grid {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 22px 16px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 18px;
 }
 
-/* 맥 Finder 폴더 느낌 - 위에 작은 탭 + 아래 본체, 본체보다 어두운 탭 색으로 입체감 */
+@media (max-width: 1100px) {
+  .category-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 860px) {
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 맥 Finder 폴더 아이콘 느낌 - 둥근 본체(진한 톤) + 왼쪽 위로 삐져나온 탭(연한 톤), 테두리선 없이 그림자로만 입체감 */
 .category-card {
   position: relative;
-  margin-top: 10px;
+  min-width: 0;
+  margin-top: 14px;
   cursor: pointer;
-  border-radius: 3px 14px 14px 14px;
-  padding: 20px 18px 16px;
-  min-height: 92px;
+  border-radius: 13px;
+  padding: 20px 18px 18px;
+  aspect-ratio: 4 / 3;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 8px 16px rgba(26, 26, 46, 0.14);
+  box-shadow: 0 10px 20px rgba(26, 26, 46, 0.15), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.category-card:hover {
+  transform: translateY(-6px) scale(1.04);
+  box-shadow: 0 18px 28px rgba(26, 26, 46, 0.22), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
 }
 
 .category-card::before {
   content: '';
   position: absolute;
-  top: -9px;
+  top: -10px;
   left: 0;
-  width: 42%;
-  height: 15px;
-  border-radius: 6px 8px 0 0;
-  background: inherit;
-  filter: brightness(0.85);
+  width: 46%;
+  height: 22px;
+  border-radius: 10px 10px 0 0;
+  background: var(--tab-color);
+  transition: transform 0.22s ease;
+  transform-origin: bottom left;
+}
+
+/* 마우스 올리면 위쪽 탭이 살짝 들려서 폴더가 열리는 듯한 느낌 */
+.category-card:hover::before {
+  transform: translateY(-3px) rotate(-3deg);
 }
 
 .category-icon {
-  font-size: 20px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+  font-size: 23px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
+  transition: transform 0.22s ease;
+}
+
+.category-card:hover .category-icon {
+  transform: scale(1.1);
 }
 
 .category-label {
-  color: #fff;
   font-weight: 700;
   font-size: 14px;
 }
 
 .category-count {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 12px;
-  margin-top: 2px;
+  font-size: 13.3px;
+  margin-top: 1px;
+  opacity: 0.75;
 }
 </style>

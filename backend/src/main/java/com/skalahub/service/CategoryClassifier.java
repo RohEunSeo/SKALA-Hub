@@ -20,26 +20,46 @@ public class CategoryClassifier {
 
     private static final String PROMPT_TEMPLATE = """
             다음 슬랙 게시글을 분류해줘. JSON으로만 답해줘.
-            카테고리: 개발도구/학습자료/취업자격증/교육생서비스/교수님/기타
-            태그: 영상/아티클/깃허브 (학습자료일 때만, 해당되는 것만)
-
-            {"category": "개발도구", "tags": []}
-
+            
+            카테고리 (하나만 선택):
+            - 개발 툴·환경: VS Code 확장, 터미널, Git 도구, Mac 앱(Karabiner, Rectangle, Raycast 등), 개발 생산성 도구, 맥 환경 설정 관련
+            - 학습자료: 강의, 블로그, 논문, 깃허브 레포, 유튜브 영상 등
+            - 자격증·취업: SQLD, 정처기, SKCT, 채용 정보, 면접 후기
+            - 교육생 서비스: 교육생이 직접 만든 서비스/앱/웹사이트 공유
+            - 교수님: 교수님 또는 전임교수가 작성한 글
+            - 기타: 위에 해당 없는 것
+            
+            태그 (학습자료일 때만, 해당되는 것 모두 선택):
+            - 영상: youtube.com 링크 포함된 것
+            - 블로그·글: velog, tistory, medium, 블로그, 아티클 링크
+            - 깃허브: github.com 링크 포함된 것
+            
+            JSON만 반환:
+            {"category": "개발 툴·환경", "tags": []}
+            
             게시글: %s
             """;
 
     private static final String JSON_SCHEMA = """
             {
-              "type": "object",
-              "properties": {
-                "category": {"type": "string", "enum": ["개발도구","학습자료","취업자격증","교육생서비스","교수님","기타"]},
-                "tags": {"type": "array", "items": {"type": "string", "enum": ["영상","아티클","깃허브"]}}
-              },
-              "required": ["category", "tags"],
-              "additionalProperties": false
+            "type": "object",
+            "properties": {
+                "category": {
+                "type": "string",
+                "enum": ["개발 툴·환경","학습자료","자격증·취업","교육생 서비스","교수님","기타"]
+                },
+                "tags": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": ["영상","블로그·글","깃허브"]
+                }
+                }
+            },
+            "required": ["category", "tags"],
+            "additionalProperties": false
             }
             """;
-
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
