@@ -48,15 +48,20 @@ const uncategorizedPosts = ref([])
 const uncategorizedTotal = ref(0)
 const uncategorizedPage = ref(0)
 const uncategorizedLoading = ref(false)
+const uncategorizedError = ref('')
 const classifying = ref(false)
 const classifyResultCount = ref(null)
+const classifyError = ref('')
 
 async function loadUncategorized() {
   uncategorizedLoading.value = true
+  uncategorizedError.value = ''
   try {
     const { data } = await fetchUncategorizedPosts(uncategorizedPage.value, PAGE_SIZE)
-    uncategorizedPosts.value = data.content
-    uncategorizedTotal.value = data.totalElements
+    uncategorizedPosts.value = data?.content ?? []
+    uncategorizedTotal.value = data?.totalElements ?? 0
+  } catch {
+    uncategorizedError.value = '미분류 게시글을 불러오지 못했습니다.'
   } finally {
     uncategorizedLoading.value = false
   }
@@ -65,6 +70,7 @@ async function loadUncategorized() {
 async function runClassifyAll() {
   classifying.value = true
   classifyResultCount.value = null
+  classifyError.value = ''
   try {
     const { data } = await classifyAllUncategorized()
     classifyResultCount.value = data.classified
@@ -73,6 +79,8 @@ async function runClassifyAll() {
     await loadUncategorized()
     await loadAllPosts(true)
     postsStore.refreshCategoryCounts()
+  } catch {
+    classifyError.value = '일괄 분류에 실패했습니다. 잠시 후 다시 시도해주세요.'
   } finally {
     classifying.value = false
   }
@@ -84,6 +92,7 @@ const allPostsTotal = ref(0)
 const allPostsTotalPages = ref(0)
 const allPostsPage = ref(0)
 const allPostsLoading = ref(false)
+const allPostsError = ref('')
 const editState = reactive({})
 const savingId = ref(null)
 const savedId = ref(null)
@@ -134,16 +143,21 @@ function removeTag(postId, tagValue) {
 // reset=true: 카테고리 필터를 바꿨을 때 목록을 처음부터 새로 조회, false: "더보기"로 다음 페이지를 이어붙임
 async function loadAllPosts(reset = false) {
   allPostsLoading.value = true
+  allPostsError.value = ''
   try {
     const { data } = await fetchPosts({
       category: manageCategoryFilter.value || undefined,
       page: allPostsPage.value,
       size: MANAGE_PAGE_SIZE,
     })
-    allPosts.value = reset ? data.content : [...allPosts.value, ...data.content]
-    allPostsTotal.value = data.totalElements
-    allPostsTotalPages.value = data.totalPages
-    initEditState(data.content)
+    const content = data?.content ?? []
+    allPosts.value = reset ? content : [...allPosts.value, ...content]
+    allPostsTotal.value = data?.totalElements ?? 0
+    allPostsTotalPages.value = data?.totalPages ?? 0
+    initEditState(content)
+  } catch {
+    allPostsError.value = '게시글 목록을 불러오지 못했습니다.'
+    if (reset) allPosts.value = []
   } finally {
     allPostsLoading.value = false
   }
@@ -183,6 +197,8 @@ async function savePost(postId) {
     savedId.value = postId
     toastStore.show(`${categoryLabel(data.category)} 카테고리로 이동했습니다`)
     postsStore.refreshCategoryCounts()
+  } catch {
+    toastStore.show('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     savingId.value = null
   }
@@ -229,8 +245,10 @@ onMounted(() => {
           <div v-if="classifyResultCount !== null" class="result-box">
             {{ classifyResultCount }}개 게시글을 분류했습니다.
           </div>
+          <div v-if="classifyError" class="result-box error">{{ classifyError }}</div>
 
           <div v-if="uncategorizedLoading" class="status-message">불러오는 중...</div>
+          <div v-else-if="uncategorizedError" class="status-message error">{{ uncategorizedError }}</div>
           <div v-else-if="uncategorizedPosts.length === 0" class="status-message">미분류 게시글이 없습니다.</div>
           <div v-else class="uncategorized-list">
             <div v-for="post in uncategorizedPosts" :key="post.id" class="uncategorized-row">
@@ -265,6 +283,7 @@ onMounted(() => {
         </div>
 
         <div v-if="allPostsLoading" class="status-message">불러오는 중...</div>
+        <div v-else-if="allPostsError" class="status-message error">{{ allPostsError }}</div>
         <div v-else-if="allPosts.length === 0" class="status-message">해당 카테고리에 게시글이 없습니다.</div>
         <div v-else class="post-manage-list">
           <div v-for="post in allPosts" :key="post.id" class="manage-row">
@@ -417,6 +436,10 @@ onMounted(() => {
   text-align: center;
   color: #636e72;
   font-size: 13px;
+}
+
+.status-message.error {
+  color: #e01e5a;
 }
 
 .uncategorized-list {

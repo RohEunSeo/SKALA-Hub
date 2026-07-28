@@ -14,11 +14,13 @@ const authStore = useAuthStore()
 const post = ref(null)
 const loading = ref(true)
 const notFound = ref(false)
+const loadError = ref('')
 
 async function load() {
   if (!authStore.isAuthenticated) return
   loading.value = true
   notFound.value = false
+  loadError.value = ''
   post.value = null
   try {
     const { data } = await fetchPost(route.params.id)
@@ -27,7 +29,7 @@ async function load() {
     if (error.response?.status === 404) {
       notFound.value = true
     } else {
-      throw error
+      loadError.value = '게시글을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
     }
   } finally {
     loading.value = false
@@ -46,6 +48,7 @@ watch(() => route.params.id, load)
 
       <div v-if="loading" class="status-message">불러오는 중...</div>
       <div v-else-if="notFound" class="status-message">게시글을 찾을 수 없습니다.</div>
+      <div v-else-if="loadError" class="status-message">{{ loadError }}</div>
       <PostCard v-else-if="post" :post="post" :link-to-detail="false" />
     </template>
   </AppLayout>

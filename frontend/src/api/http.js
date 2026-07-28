@@ -15,4 +15,15 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+// VITE_API_BASE_URL이 잘못 설정되면 API 요청이 프론트 자신의 index.html로 리라이트되어
+// HTML 문자열을 200 OK로 받는 경우가 있음 - JSON을 기대하는데 문자열이 오면 바로 에러로 처리
+http.interceptors.response.use((response) => {
+  if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+    return Promise.reject(
+      new Error('API 응답이 JSON이 아닙니다 (VITE_API_BASE_URL 설정을 확인하세요)'),
+    )
+  }
+  return response
+})
+
 export default http

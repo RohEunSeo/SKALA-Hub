@@ -28,6 +28,7 @@ const toastStore = useToastStore()
 const showComments = ref(!props.linkToDetail)
 const repliesLoaded = ref(false)
 const repliesLoading = ref(false)
+const repliesError = ref('')
 const replies = ref([])
 
 const apiBase = import.meta.env.VITE_API_BASE_URL
@@ -53,10 +54,13 @@ function openImage(path) {
 async function loadReplies() {
   if (repliesLoaded.value || repliesLoading.value) return
   repliesLoading.value = true
+  repliesError.value = ''
   try {
     const { data } = await fetchReplies(props.post.id)
-    replies.value = data
+    replies.value = data ?? []
     repliesLoaded.value = true
+  } catch {
+    repliesError.value = '댓글을 불러오지 못했습니다.'
   } finally {
     repliesLoading.value = false
   }
@@ -82,12 +86,16 @@ onMounted(() => {
 async function toggleBookmark() {
   if (!authStore.isAuthenticated) return
   const wasBookmarked = isBookmarked.value
-  await bookmarksStore.toggle(props.post.id)
-  if (!wasBookmarked) {
-    toastStore.show('저장되었습니다', {
-      actionLabel: '저장한 글 보기',
-      onAction: () => router.push('/mypage'),
-    })
+  try {
+    await bookmarksStore.toggle(props.post.id)
+    if (!wasBookmarked) {
+      toastStore.show('저장되었습니다', {
+        actionLabel: '저장한 글 보기',
+        onAction: () => router.push('/mypage'),
+      })
+    }
+  } catch {
+    toastStore.show('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
   }
 }
 
@@ -162,6 +170,7 @@ function openInSlack() {
 
     <div v-if="showComments" class="comments">
       <div v-if="repliesLoading" class="comment-loading">불러오는 중...</div>
+      <div v-else-if="repliesError" class="comment-empty">{{ repliesError }}</div>
       <div v-for="reply in replies" :key="reply.id" class="comment-row">
         <img v-if="reply.userAvatarUrl" class="comment-avatar avatar-img" :src="reply.userAvatarUrl" :alt="reply.userName" />
         <div v-else class="comment-avatar">{{ reply.userName?.charAt(0) }}</div>
