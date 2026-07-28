@@ -181,7 +181,7 @@ onMounted(() => {
 
       <section class="section">
         <div class="section-header">
-          <span class="section-title">🏅 이달의 도우미</span>
+          <span class="section-title">🏅 나의 활동 뱃지</span>
           <span class="wip-badge">🚧 개발 진행중</span>
         </div>
         <div class="wip-card">곧 만나요 ✨</div>
