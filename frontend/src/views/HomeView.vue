@@ -181,6 +181,7 @@ onUnmounted(() => {
         🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째</strong>
       </div>
       <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong></div>
+      <div class="pill">👥 함께하는 교육생 <strong>{{ summary.userCount ?? 0 }}명</strong></div>
       <div class="pill">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount ?? 0 }}개</strong></div>
       <div class="pill muted">🕐 마지막 동기화: {{ formatRelativeTime(summary.lastSyncedAt) }}</div>
     </div>

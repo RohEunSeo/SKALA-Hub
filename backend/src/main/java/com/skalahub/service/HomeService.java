@@ -6,6 +6,7 @@ import com.skalahub.dto.HomeLeaderboardResponse;
 import com.skalahub.dto.HomeSummaryResponse;
 import com.skalahub.dto.LeaderboardEntryDto;
 import com.skalahub.repository.PostRepository;
+import com.skalahub.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -21,14 +22,17 @@ public class HomeService {
 
     private final PostRepository postRepository;
     private final PostService postService;
+    private final UserRepository userRepository;
     private final LocalDate cohortStartDate;
 
     public HomeService(
             PostRepository postRepository,
             PostService postService,
+            UserRepository userRepository,
             @Value("${app.cohort-start-date}") String cohortStartDate) {
         this.postRepository = postRepository;
         this.postService = postService;
+        this.userRepository = userRepository;
         this.cohortStartDate = LocalDate.parse(cohortStartDate);
     }
 
@@ -46,6 +50,7 @@ public class HomeService {
                 todayNewPostCount,
                 postRepository.findLastSyncedAt(),
                 Math.max(cohortDay, 0),
+                userRepository.count(),
                 categoryCounts);
     }
 
