@@ -24,7 +24,7 @@ watch([keyword, author], () => {
     <input
       v-model="keyword"
       type="text"
-      placeholder="예: SQLD, 1반, 취업 후기... 무엇이든 검색해보세요"
+      placeholder="예: SKCT, 유용한 툴, 코딩... 무엇이든 검색해보세요"
       class="search-input"
       @keyup.enter="submit"
     />
