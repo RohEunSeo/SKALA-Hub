@@ -1,4 +1,8 @@
 # SKALA Hub 백엔드 설정 - 모든 값은 환경변수로 주입 (하드코딩 금지)
+server:
+  # Render는 PORT 환경변수로 리스닝 포트를 지정함 - 로컬 개발은 SERVER_PORT 또는 기본값 8080 사용
+  port: ${PORT:${SERVER_PORT:8080}}
+
 spring:
   application:
     name: skala-hub-backend
@@ -19,12 +23,23 @@ slack:
   client-secret: ${SLACK_CLIENT_SECRET}
   user-token: ${SLACK_USER_TOKEN}
   channel-id: ${SLACK_CHANNEL_ID}
+  redirect-uri: ${SLACK_REDIRECT_URI:http://localhost:8080/api/auth/slack/callback}
+  # 전체 채널을 다시 훑는 방식이라 너무 짧게 잡으면 슬랙 레이트리밋에 걸릴 수 있음 - 5분이 적당한 절충점
+  sync-interval-ms: ${SLACK_SYNC_INTERVAL_MS:300000}
+  workspace-url: ${SLACK_WORKSPACE_URL:https://theskala.slack.com}
 
 # Claude API (게시글 자동 분류)
 claude:
   api-key: ${CLAUDE_API_KEY}
+  model: ${CLAUDE_MODEL:claude-haiku-4-5}
 
 # JWT 인증
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+
+# 프론트엔드 (OAuth 로그인 완료 후 리다이렉트 대상)
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  # 홈 화면 "SKALA N기 D일째" 계산 기준일
+  cohort-start-date: ${SKALA_COHORT_START_DATE:2026-07-14}

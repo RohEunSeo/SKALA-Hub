@@ -1,20 +1,110 @@
 // 게시글 목록 및 필터 상태 관리
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { fetchPosts as fetchPostsApi } from '../api/posts'
+import { fetchHomeSummary } from '../api/home'
+
+const PAGE_SIZE = 20
 
 export const usePostsStore = defineStore('posts', () => {
   const posts = ref([])
-  const selectedCategory = ref(null)
+  const category = ref(null)
+  const tag = ref(null)
+  const keyword = ref('')
+  const author = ref('')
+  const date = ref(null)
+  const page = ref(0)
+  const totalPages = ref(0)
+  const lastSyncedAt = ref(null)
+  const loading = ref(false)
 
-  // 게시글 목록 갱신
-  function setPosts(newPosts) {
-    posts.value = newPosts
+  // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
+  const categoryCounts = ref([])
+  const totalPostCount = ref(0)
+  const categoryCountsLoaded = ref(false)
+
+  const hasMore = computed(() => page.value + 1 < totalPages.value)
+
+  async function loadCategoryCounts() {
+    if (categoryCountsLoaded.value) return
+    await refreshCategoryCounts()
   }
 
-  // 카테고리 필터 변경
-  function setCategory(category) {
-    selectedCategory.value = category
+  // 관리자가 카테고리를 수정한 직후처럼 캐시된 값을 무시하고 강제로 다시 불러올 때 사용
+  async function refreshCategoryCounts() {
+    const { data } = await fetchHomeSummary()
+    categoryCounts.value = data.categoryCounts
+    totalPostCount.value = data.totalPostCount
+    categoryCountsLoaded.value = true
   }
 
-  return { posts, selectedCategory, setPosts, setCategory }
+  function categoryCount(value) {
+    return categoryCounts.value.find((item) => item.category === value)?.count ?? 0
+  }
+
+  // 카테고리(및 학습자료 하위 태그) 필터 변경 - 목록 처음부터 다시 조회
+  function setCategory(newCategory, newTag = null) {
+    category.value = newCategory
+    tag.value = newTag
+    return fetchPosts(true)
+  }
+
+  // 키워드/작성자 검색 - 목록 처음부터 다시 조회
+  function setSearch({ keyword: newKeyword, author: newAuthor }) {
+    keyword.value = newKeyword ?? ''
+    author.value = newAuthor ?? ''
+    return fetchPosts(true)
+  }
+
+  // 기간 필터(today/week/month/YYYY-MM) 변경 - 목록 처음부터 다시 조회
+  function setDate(newDate) {
+    date.value = newDate
+    return fetchPosts(true)
+  }
+
+  // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임("더보기")
+  async function fetchPosts(reset = false) {
+    loading.value = true
+    try {
+      const targetPage = reset ? 0 : page.value + 1
+      const { data } = await fetchPostsApi({
+        category: category.value || undefined,
+        tag: tag.value || undefined,
+        keyword: keyword.value || undefined,
+        author: author.value || undefined,
+        date: date.value || undefined,
+        page: targetPage,
+        size: PAGE_SIZE,
+      })
+      posts.value = reset ? data.content : [...posts.value, ...data.content]
+      page.value = data.page
+      totalPages.value = data.totalPages
+      lastSyncedAt.value = data.lastSyncedAt
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    posts,
+    category,
+    tag,
+    keyword,
+    author,
+    date,
+    page,
+    totalPages,
+    lastSyncedAt,
+    loading,
+    hasMore,
+    categoryCounts,
+    totalPostCount,
+    setCategory,
+    setSearch,
+    setDate,
+    fetchPosts,
+    loadCategoryCounts,
+    refreshCategoryCounts,
+    categoryCount,
+  }
 })

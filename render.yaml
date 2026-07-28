@@ -1,0 +1,33 @@
+# Render Blueprint - "New +" → "Blueprint"로 이 저장소를 연결하면 자동으로 서비스가 생성됨
+# sync: false인 값들은 Render 대시보드에서 직접 입력해야 함 (여기 커밋되지 않음)
+services:
+  - type: web
+    name: skala-hub-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: SUPABASE_DB_PASSWORD
+        sync: false
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: SLACK_USER_TOKEN
+        sync: false
+      - key: SLACK_CHANNEL_ID
+        value: C0BHGGH7PT3
+      - key: SLACK_REDIRECT_URI
+        sync: false
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRATION
+        value: "86400000"
+      - key: FRONTEND_URL
+        sync: false
