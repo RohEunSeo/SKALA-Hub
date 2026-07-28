@@ -7,9 +7,13 @@ spring:
   application:
     name: skala-hub-backend
   datasource:
-    url: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
+    # Transaction 모드 풀러(6543) 사용 - Session 모드(5432)는 동시접속 제한(max clients)에 쉽게 걸림
+    # prepareThreshold=0: PgBouncer transaction 모드는 커넥션이 트랜잭션마다 바뀔 수 있어 서버사이드 prepared statement 캐싱을 끔
+    url: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?prepareThreshold=0
     username: postgres.xbnycvcclaklwqgmzxwb
     password: ${SUPABASE_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
   jpa:
     hibernate:
       ddl-auto: validate
