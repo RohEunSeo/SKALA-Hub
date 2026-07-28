@@ -14,9 +14,9 @@ import { CATEGORIES } from '../constants/categories'
 const AUTO_SLIDE_MS = 2000
 
 const BOARDS = [
-  { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '반응' },
-  { key: 'topComments', label: '💬 가장 댓글이 많은 글', unit: '댓글' },
-  { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '저장' },
+  { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '👍🏻' },
+  { key: 'topComments', label: '💬 가장 댓글이 많은 글', unit: '💬' },
+  { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '🔖' },
 ]
 
 const route = useRoute()
@@ -206,7 +206,7 @@ onUnmounted(() => {
                 >
                   <span class="board-rank">{{ idx + 1 }}</span>
                   <span class="board-post-title">{{ previewText(entry.post.content) }}</span>
-                  <span class="board-count">{{ entry.count }}{{ board.unit }}</span>
+                  <span class="board-count">{{ entry.count }} {{ board.unit }}</span>
                 </div>
                 <div v-if="boardEntries(board.key).length === 0" class="board-empty">아직 데이터가 없습니다</div>
               </div>
@@ -383,7 +383,7 @@ onUnmounted(() => {
 .leaderboard-card {
   background: #ffffff;
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 20px 24px;
   box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
 }
 
@@ -409,7 +409,7 @@ onUnmounted(() => {
 }
 
 .board-list {
-  min-height: 200px;
+  min-height: 132px;
 }
 
 .board-row {
