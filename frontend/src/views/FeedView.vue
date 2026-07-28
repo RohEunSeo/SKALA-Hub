@@ -53,6 +53,7 @@ function loadMore() {
       </div>
 
       <div v-if="postsStore.loading" class="status-message">불러오는 중...</div>
+      <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
       <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
 
       <div v-if="postsStore.hasMore && !postsStore.loading" class="load-more" @click="loadMore">더보기</div>
@@ -83,6 +84,10 @@ function loadMore() {
   text-align: center;
   color: #636e72;
   font-size: 14px;
+}
+
+.status-message.error {
+  color: #e01e5a;
 }
 
 .load-more {

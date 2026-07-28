@@ -25,18 +25,39 @@ const authStore = useAuthStore()
 const postsStore = usePostsStore()
 
 const summary = ref(null)
+const summaryError = ref('')
 const leaderboard = ref(null)
+const leaderboardLoading = ref(true)
+const leaderboardError = ref('')
 const boardIndex = ref(0)
 let autoTimer = null
 
 async function loadSummary() {
-  const { data } = await fetchHomeSummary()
-  summary.value = data
+  summaryError.value = ''
+  try {
+    const { data } = await fetchHomeSummary()
+    summary.value = data
+  } catch {
+    summaryError.value = '요약 정보를 불러오지 못했습니다.'
+  }
 }
 
 async function loadLeaderboard() {
-  const { data } = await fetchHomeLeaderboard()
-  leaderboard.value = data
+  leaderboardLoading.value = true
+  leaderboardError.value = ''
+  try {
+    const { data } = await fetchHomeLeaderboard()
+    leaderboard.value = data
+  } catch {
+    leaderboardError.value = '순위보드를 불러오지 못했습니다.'
+  } finally {
+    leaderboardLoading.value = false
+  }
+}
+
+// leaderboard[board.key]를 템플릿에서 직접 접근하지 않고 항상 배열을 보장해서 반환
+function boardEntries(key) {
+  return leaderboard.value?.[key] ?? []
 }
 
 function startAutoSlide() {
@@ -74,7 +95,7 @@ function handleLogin() {
 }
 
 function categoryCount(value) {
-  return summary.value?.categoryCounts.find((item) => item.category === value)?.count ?? 0
+  return summary.value?.categoryCounts?.find((item) => item.category === value)?.count ?? 0
 }
 
 function goToCategory(value) {
@@ -130,13 +151,14 @@ onUnmounted(() => {
     <p class="subtitle">SKALA 부트캠프 교육생을 위한 정보공유 아카이빙 서비스입니다</p>
 
     <div v-if="summary" class="stat-pills">
-      <div v-if="authStore.isAuthenticated" class="pill">
-        🎓 SKALA {{ authStore.user?.cohort }} <strong>{{ summary.cohortDay }}일째</strong>
+      <div v-if="authStore.isAuthenticated && authStore.user?.cohort" class="pill">
+        🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째</strong>
       </div>
-      <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount }}개</strong></div>
-      <div class="pill">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount }}개</strong></div>
+      <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong></div>
+      <div class="pill">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount ?? 0 }}개</strong></div>
       <div class="pill muted">🕐 마지막 동기화: {{ formatRelativeTime(summary.lastSyncedAt) }}</div>
     </div>
+    <div v-else-if="summaryError" class="status-message">{{ summaryError }}</div>
 
     <section class="section">
       <div class="section-header">
@@ -147,9 +169,11 @@ onUnmounted(() => {
           <div class="leaderboard-track" :style="{ transform: `translateX(-${boardIndex * 100}%)` }">
             <div v-for="board in BOARDS" :key="board.key" class="leaderboard-board">
               <div class="board-title">{{ board.label }}</div>
-              <div v-if="leaderboard" class="board-list">
+              <div v-if="leaderboardLoading" class="board-empty">불러오는 중...</div>
+              <div v-else-if="leaderboardError" class="board-empty">{{ leaderboardError }}</div>
+              <div v-else class="board-list">
                 <div
-                  v-for="(entry, idx) in leaderboard[board.key]"
+                  v-for="(entry, idx) in boardEntries(board.key)"
                   :key="entry.post.id"
                   class="board-row"
                   @click="goToPost(entry.post.id)"
@@ -158,7 +182,7 @@ onUnmounted(() => {
                   <span class="board-post-title">{{ previewText(entry.post.content) }}</span>
                   <span class="board-count">{{ entry.count }}{{ board.unit }}</span>
                 </div>
-                <div v-if="leaderboard[board.key].length === 0" class="board-empty">아직 데이터가 없습니다</div>
+                <div v-if="boardEntries(board.key).length === 0" class="board-empty">아직 데이터가 없습니다</div>
               </div>
             </div>
           </div>
@@ -276,6 +300,12 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.status-message {
+  margin-top: 20px;
+  color: #636e72;
+  font-size: 13px;
 }
 
 .pill {

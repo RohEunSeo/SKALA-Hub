@@ -18,27 +18,42 @@ const router = useRouter()
 const authStore = useAuthStore()
 const bookmarksStore = useBookmarksStore()
 const stats = ref(null)
+const statsLoading = ref(false)
+const statsError = ref('')
 const activeTab = ref('posts')
 const posts = ref([])
 const page = ref(0)
 const totalPages = ref(0)
 const loading = ref(false)
+const postsError = ref('')
 
 function categoryLabel(value) {
   return CATEGORIES.find((cat) => cat.value === value)?.shortLabel ?? value
 }
 
 async function loadStats() {
-  const { data } = await fetchMyStats()
-  stats.value = data
+  statsLoading.value = true
+  statsError.value = ''
+  try {
+    const { data } = await fetchMyStats()
+    stats.value = data
+  } catch {
+    statsError.value = '통계를 불러오지 못했습니다.'
+  } finally {
+    statsLoading.value = false
+  }
 }
 
 async function loadPosts() {
   loading.value = true
+  postsError.value = ''
   try {
     const { data } = await fetchMyPosts(activeTab.value, page.value, PAGE_SIZE)
-    posts.value = data.content
-    totalPages.value = data.totalPages
+    posts.value = data?.content ?? []
+    totalPages.value = data?.totalPages ?? 0
+  } catch {
+    postsError.value = '게시글을 불러오지 못했습니다.'
+    posts.value = []
   } finally {
     loading.value = false
   }
@@ -49,11 +64,15 @@ function goToPost(postId) {
 }
 
 async function unsave(postId) {
-  await removeBookmark(postId)
-  bookmarksStore.setBookmarks(bookmarksStore.bookmarkedPostIds.filter((id) => id !== postId))
-  posts.value = posts.value.filter((post) => post.id !== postId)
-  if (stats.value) {
-    stats.value = { ...stats.value, savedCount: Math.max(0, stats.value.savedCount - 1) }
+  try {
+    await removeBookmark(postId)
+    bookmarksStore.setBookmarks(bookmarksStore.bookmarkedPostIds.filter((id) => id !== postId))
+    posts.value = posts.value.filter((post) => post.id !== postId)
+    if (stats.value) {
+      stats.value = { ...stats.value, savedCount: Math.max(0, stats.value.savedCount - 1) }
+    }
+  } catch {
+    postsError.value = '저장 취소에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
 }
 
@@ -131,6 +150,8 @@ onMounted(() => {
           <div class="stat-label">반응한 글</div>
         </div>
       </div>
+      <div v-else-if="statsLoading" class="empty">불러오는 중...</div>
+      <div v-else-if="statsError" class="empty">{{ statsError }}</div>
 
       <div class="tabs">
         <div class="tab" :class="{ active: activeTab === 'posts' }" @click="setTab('posts')">내가 올린 글</div>
@@ -147,7 +168,9 @@ onMounted(() => {
           <div class="post-title">{{ stripSlackMarkdown(post.content).slice(0, 60) }}</div>
           <div class="post-stats">👍 {{ post.reactionCount ?? 0 }} 💬 댓글 {{ post.replyCount ?? 0 }}개</div>
         </div>
-        <div v-if="!loading && posts.length === 0" class="empty">아직 게시글이 없습니다.</div>
+        <div v-if="loading" class="empty">불러오는 중...</div>
+        <div v-else-if="postsError" class="empty">{{ postsError }}</div>
+        <div v-else-if="posts.length === 0" class="empty">아직 게시글이 없습니다.</div>
       </div>
 
       <div v-if="totalPages > 1" class="pagination">
