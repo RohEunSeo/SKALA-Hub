@@ -24,6 +24,7 @@ function onMonthChange(event) {
 <template>
   <div class="date-filter">
     <span class="label">📅 기간</span>
+    <div class="pill" :class="{ active: !postsStore.date }" @click="postsStore.setDate(null)">전체</div>
     <div class="pill" :class="{ active: postsStore.date === 'today' }" @click="select('today')">오늘</div>
     <div class="pill" :class="{ active: postsStore.date === 'week' }" @click="select('week')">이번 주</div>
     <div class="pill" :class="{ active: postsStore.date === 'month' }" @click="select('month')">이번 달</div>
