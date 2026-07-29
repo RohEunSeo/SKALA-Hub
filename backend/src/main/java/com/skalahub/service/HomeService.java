@@ -45,13 +45,18 @@ public class HomeService {
                 .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
 
+        List<CategoryCountDto> tagCounts = postRepository.countByTag().stream()
+                .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
+                .toList();
+
         return new HomeSummaryResponse(
                 postRepository.countByIsDeletedFalse(),
                 todayNewPostCount,
                 postRepository.findLastSyncedAt(),
                 Math.max(cohortDay, 0),
                 userRepository.count(),
-                categoryCounts);
+                categoryCounts,
+                tagCounts);
     }
 
     public HomeLeaderboardResponse getLeaderboard() {

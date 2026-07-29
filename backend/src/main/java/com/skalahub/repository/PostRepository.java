@@ -66,6 +66,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     List<Object[]> countByCategory();
 
+    // 학습자료 하위 태그(영상/블로그·글/깃허브)별 게시글 수 - 사이드바 하위 카테고리 개수 표시용
+    @Query(
+            value =
+                    "SELECT tag, count(*) FROM posts, unnest(tags) AS tag WHERE is_deleted = false GROUP BY tag",
+            nativeQuery = true)
+    List<Object[]> countByTag();
+
     Page<Post> findByUserSlackIdAndIsDeletedFalseOrderByCreatedAtDesc(String userSlackId, Pageable pageable);
 
     long countByUserSlackIdAndIsDeletedFalse(String userSlackId);

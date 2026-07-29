@@ -21,6 +21,7 @@ export const usePostsStore = defineStore('posts', () => {
 
   // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
   const categoryCounts = ref([])
+  const tagCounts = ref([])
   const totalPostCount = ref(0)
   const categoryCountsLoaded = ref(false)
 
@@ -44,17 +45,23 @@ export const usePostsStore = defineStore('posts', () => {
     try {
       const { data } = await fetchHomeSummary()
       categoryCounts.value = data?.categoryCounts ?? []
+      tagCounts.value = data?.tagCounts ?? []
       totalPostCount.value = data?.totalPostCount ?? 0
       categoryCountsLoaded.value = true
     } catch {
       // 사이드바 카테고리 개수는 부가 정보라 실패해도 조용히 무시(0개로 표시)하고 화면은 그대로 진행
       categoryCounts.value = []
+      tagCounts.value = []
       totalPostCount.value = 0
     }
   }
 
   function categoryCount(value) {
     return categoryCounts.value?.find((item) => item.category === value)?.count ?? 0
+  }
+
+  function tagCount(value) {
+    return tagCounts.value?.find((item) => item.category === value)?.count ?? 0
   }
 
   // 카테고리(및 학습자료 하위 태그) 필터 변경 - 목록 처음부터 다시 조회
@@ -120,6 +127,7 @@ export const usePostsStore = defineStore('posts', () => {
     hasMore,
     isFutureMonth,
     categoryCounts,
+    tagCounts,
     totalPostCount,
     setCategory,
     setSearch,
@@ -128,5 +136,6 @@ export const usePostsStore = defineStore('posts', () => {
     loadCategoryCounts,
     refreshCategoryCounts,
     categoryCount,
+    tagCount,
   }
 })
