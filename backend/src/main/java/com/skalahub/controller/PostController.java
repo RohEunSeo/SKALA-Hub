@@ -1,4 +1,4 @@
-// 피드 게시글 조회 API (누구나 접근 가능)
+// 피드 게시글 조회 API (SecurityConfig에서 로그인 필요로 설정됨)
 package com.skalahub.controller;
 
 import com.skalahub.dto.PostPageResponse;

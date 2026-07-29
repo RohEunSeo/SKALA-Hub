@@ -1,4 +1,4 @@
-// Security 설정 - /api/admin/**은 JWT의 role=admin만 허용, 나머지는 전체 허용
+// Security 설정 - /api/admin/**은 role=admin만, /api/posts/**·/api/bookmarks/**·/api/mypage/**는 로그인 필요, 나머지(홈 요약/순위보드 등)는 전체 허용
 package com.skalahub.config;
 
 import java.util.List;
@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/bookmarks/**").authenticated()
                 .requestMatchers("/api/mypage/**").authenticated()
+                .requestMatchers("/api/posts/**").authenticated()
                 .anyRequest().permitAll())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
