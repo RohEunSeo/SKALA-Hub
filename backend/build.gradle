@@ -40,3 +40,22 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// 로컬 실행(bootRun) 전용 - backend/.env가 있으면 그걸, 없으면 프로젝트 루트 .env를 읽어 환경변수로 주입 (Docker/Render 배포에는 영향 없음)
+tasks.named('bootRun') {
+	def localEnvFile = rootProject.file('.env')
+	def envFile = localEnvFile.exists() ? localEnvFile : rootProject.file('../.env')
+	if (envFile.exists()) {
+		envFile.readLines().each { rawLine ->
+			def line = rawLine.trim()
+			if (line && !line.startsWith('#') && line.contains('=')) {
+				def idx = line.indexOf('=')
+				def key = line.substring(0, idx).trim()
+				def value = line.substring(idx + 1).trim()
+				if (value) {
+					environment key, value
+				}
+			}
+		}
+	}
+}

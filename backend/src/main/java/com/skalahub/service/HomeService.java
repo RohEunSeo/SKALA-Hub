@@ -8,6 +8,7 @@ import com.skalahub.dto.LeaderboardEntryDto;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.UserRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -59,19 +60,19 @@ public class HomeService {
                 tagCounts);
     }
 
-    public HomeLeaderboardResponse getLeaderboard() {
-        List<LeaderboardEntryDto> topReactions = postRepository.findTop3ByIsDeletedFalseOrderByReactionCountDesc()
-                .stream()
+    public HomeLeaderboardResponse getLeaderboard(String period) {
+        LocalDateTime dateFrom = "week".equals(period) ? postService.resolveDateRange("week")[0] : null;
+
+        List<LeaderboardEntryDto> topReactions = postRepository.findTopReactions(dateFrom).stream()
                 .map(post -> new LeaderboardEntryDto(postService.toResponse(post), post.getReactionCount()))
                 .toList();
 
-        List<LeaderboardEntryDto> topComments = postRepository.findTop3ByIsDeletedFalseOrderByReplyCountDesc()
-                .stream()
+        List<LeaderboardEntryDto> topComments = postRepository.findTopComments(dateFrom).stream()
                 .map(post -> new LeaderboardEntryDto(postService.toResponse(post), post.getReplyCount()))
                 .toList();
 
         List<LeaderboardEntryDto> topSaves = new ArrayList<>();
-        for (Object[] row : postRepository.findTopSaveCounts()) {
+        for (Object[] row : postRepository.findTopSaveCounts(dateFrom)) {
             Long postId = ((Number) row[0]).longValue();
             long saveCount = ((Number) row[1]).longValue();
             postRepository.findById(postId).ifPresent(post -> {

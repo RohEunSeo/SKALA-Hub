@@ -7,7 +7,7 @@ import { useBookmarksStore } from '../stores/bookmarks'
 import { useToastStore } from '../stores/toast'
 import { fetchReplies } from '../api/posts'
 import { renderSlackText, highlightInHtml } from '../utils/renderSlackText'
-import { formatRelativeTime } from '../utils/relativeTime'
+import { formatRelativeTime, formatDateTime } from '../utils/relativeTime'
 import { getFileIcon } from '../utils/fileIcon'
 import { CATEGORIES } from '../constants/categories'
 
@@ -38,6 +38,7 @@ const renderedContent = computed(() =>
   highlightInHtml(renderSlackText(props.post.content), props.highlightKeyword),
 )
 const createdAtLabel = computed(() => formatRelativeTime(props.post.createdAt))
+const createdAtAbsolute = computed(() => formatDateTime(props.post.createdAt))
 const isBookmarked = computed(() => bookmarksStore.bookmarkedPostIds.includes(props.post.id))
 
 const imageFiles = computed(() => (props.post.files ?? []).filter((file) => file.isImage))
@@ -117,7 +118,13 @@ function openInSlack() {
         <span class="author-name">{{ post.userName }}</span>
         <span v-if="post.isInstructor" class="instructor-badge">· 전임교수</span>
       </div>
-      <span class="post-time">{{ createdAtLabel }}</span>
+      <div class="header-right">
+        <span class="post-time">{{ createdAtAbsolute }} · {{ createdAtLabel }}</span>
+        <span class="header-stats">
+          <span>👍 {{ post.reactionCount ?? 0 }}</span>
+          <span class="comment-link" @click="handleCommentsClick">💬 {{ post.replyCount ?? 0 }}</span>
+        </span>
+      </div>
     </div>
 
     <div class="badges">
@@ -237,14 +244,34 @@ function openInSlack() {
 
 .post-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .author {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #636e72;
+  flex-shrink: 0;
 }
 
 .avatar {
@@ -269,6 +296,9 @@ function openInSlack() {
   font-weight: 700;
   font-size: 14px;
   color: #1a1a2e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .instructor-badge {
@@ -279,6 +309,8 @@ function openInSlack() {
 .post-time {
   font-size: 12px;
   color: #636e72;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .badges {

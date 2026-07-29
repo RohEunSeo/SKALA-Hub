@@ -27,11 +27,13 @@ public class PostController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String author,
             @RequestParam(required = false) String date,
+            @RequestParam(required = false) String campus,
+            @RequestParam(defaultValue = "latest") String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 100));
-        return postService.search(category, tag, keyword, author, date, safePage, safeSize);
+        return postService.search(category, tag, keyword, author, date, campus, sort, safePage, safeSize);
     }
 
     @GetMapping("/api/posts/{id}")

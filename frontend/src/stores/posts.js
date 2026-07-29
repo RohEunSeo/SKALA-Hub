@@ -13,6 +13,8 @@ export const usePostsStore = defineStore('posts', () => {
   const keyword = ref('')
   const author = ref('')
   const date = ref(null)
+  const sort = ref('latest')
+  const campus = ref(null)
   const page = ref(0)
   const totalPages = ref(0)
   const lastSyncedAt = ref(null)
@@ -84,6 +86,18 @@ export const usePostsStore = defineStore('posts', () => {
     return fetchPosts(true)
   }
 
+  // 정렬(latest/popular/oldest) 변경 - 목록 처음부터 다시 조회
+  function setSort(newSort) {
+    sort.value = newSort
+    return fetchPosts(true)
+  }
+
+  // 캠퍼스(4층/5층) 필터 변경 - 목록 처음부터 다시 조회
+  function setCampus(newCampus) {
+    campus.value = newCampus
+    return fetchPosts(true)
+  }
+
   // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임("더보기")
   async function fetchPosts(reset = false) {
     loading.value = true
@@ -96,6 +110,8 @@ export const usePostsStore = defineStore('posts', () => {
         keyword: keyword.value || undefined,
         author: author.value || undefined,
         date: date.value || undefined,
+        campus: campus.value || undefined,
+        sort: sort.value !== 'latest' ? sort.value : undefined,
         page: targetPage,
         size: PAGE_SIZE,
       })
@@ -119,6 +135,8 @@ export const usePostsStore = defineStore('posts', () => {
     keyword,
     author,
     date,
+    sort,
+    campus,
     page,
     totalPages,
     lastSyncedAt,
@@ -132,6 +150,8 @@ export const usePostsStore = defineStore('posts', () => {
     setCategory,
     setSearch,
     setDate,
+    setSort,
+    setCampus,
     fetchPosts,
     loadCategoryCounts,
     refreshCategoryCounts,

@@ -5,6 +5,6 @@ export function fetchHomeSummary() {
   return http.get('/api/home/summary')
 }
 
-export function fetchHomeLeaderboard() {
-  return http.get('/api/home/leaderboard')
+export function fetchHomeLeaderboard(period = 'all') {
+  return http.get('/api/home/leaderboard', { params: { period } })
 }

@@ -106,7 +106,8 @@ function selectManageCategory(value) {
 }
 
 function categoryTagOptions(categoryValue) {
-  return CATEGORIES.find((cat) => cat.value === categoryValue)?.tags ?? []
+  const cat = CATEGORIES.find((c) => c.value === categoryValue)
+  return [...(cat?.tags ?? []), ...(cat?.adminOnlyTags ?? [])]
 }
 
 function categoryLabel(value) {

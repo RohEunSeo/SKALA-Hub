@@ -3,6 +3,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { fetchHomeSummary, fetchHomeLeaderboard } from '../api/home'
@@ -29,6 +30,7 @@ const summaryError = ref('')
 const leaderboard = ref(null)
 const leaderboardLoading = ref(true)
 const leaderboardError = ref('')
+const leaderboardPeriod = ref('all')
 const boardIndex = ref(0)
 let autoTimer = null
 
@@ -46,13 +48,20 @@ async function loadLeaderboard() {
   leaderboardLoading.value = true
   leaderboardError.value = ''
   try {
-    const { data } = await fetchHomeLeaderboard()
+    const { data } = await fetchHomeLeaderboard(leaderboardPeriod.value)
     leaderboard.value = data
   } catch {
     leaderboardError.value = '순위보드를 불러오지 못했습니다.'
   } finally {
     leaderboardLoading.value = false
   }
+}
+
+function selectPeriod(period) {
+  if (leaderboardPeriod.value === period) return
+  leaderboardPeriod.value = period
+  boardIndex.value = 0
+  loadLeaderboard()
 }
 
 // leaderboard[board.key]를 템플릿에서 직접 접근하지 않고 항상 배열을 보장해서 반환
@@ -186,12 +195,19 @@ onUnmounted(() => {
       <div class="pill muted">🕐 마지막 동기화: {{ formatRelativeTime(summary.lastSyncedAt) }}</div>
     </div>
     <div v-else-if="summaryError" class="status-message">{{ summaryError }}</div>
+    <div v-else class="stat-pills" aria-hidden="true">
+      <div class="pill" v-for="n in 4" :key="n"><SkeletonBlock width="120px" /></div>
+    </div>
 
     <section class="section">
       <div class="section-header">
         <span class="section-title">🏆 순위보드</span>
       </div>
       <div class="leaderboard-card">
+        <div class="period-tabs">
+          <span class="period-tab" :class="{ active: leaderboardPeriod === 'all' }" @click="selectPeriod('all')">전체</span>
+          <span class="period-tab" :class="{ active: leaderboardPeriod === 'week' }" @click="selectPeriod('week')">이번주</span>
+        </div>
         <div class="leaderboard-viewport">
           <div class="leaderboard-track" :style="{ transform: `translateX(-${boardIndex * 100}%)` }">
             <div v-for="board in BOARDS" :key="board.key" class="leaderboard-board">
@@ -388,6 +404,27 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
 }
 
+.period-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.period-tab {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #636e72;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.period-tab.active {
+  background: #4a3f8f;
+  color: #ffffff;
+}
+
 .leaderboard-viewport {
   overflow: hidden;
 }
@@ -519,9 +556,9 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 480px) {
   .category-grid {
-    grid-template-columns: 1fr;
+    gap: 12px;
   }
 }
 

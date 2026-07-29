@@ -4,6 +4,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { removeBookmark } from '../api/bookmarks'
@@ -150,8 +151,14 @@ onMounted(() => {
           <div class="stat-label">반응한 글</div>
         </div>
       </div>
-      <div v-else-if="statsLoading" class="empty">불러오는 중...</div>
       <div v-else-if="statsError" class="empty">{{ statsError }}</div>
+      <div v-else class="stats-grid" aria-hidden="true">
+        <div class="stat-card" v-for="n in 4" :key="n">
+          <div class="stat-icon"><SkeletonBlock width="22px" height="22px" radius="50%" /></div>
+          <div class="stat-value"><SkeletonBlock width="50px" height="20px" /></div>
+          <div class="stat-label"><SkeletonBlock width="70px" height="12px" /></div>
+        </div>
+      </div>
 
       <div class="tabs">
         <div class="tab" :class="{ active: activeTab === 'posts' }" @click="setTab('posts')">내가 올린 글</div>
