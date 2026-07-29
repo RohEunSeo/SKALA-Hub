@@ -301,11 +301,13 @@ onUnmounted(() => {
 }
 
 .top-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 14px;
-  margin-bottom: 20px;
 }
 
 .avatar {

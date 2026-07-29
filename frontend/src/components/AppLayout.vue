@@ -4,11 +4,15 @@ import { ref, computed } from 'vue'
 import Sidebar from './Sidebar.vue'
 
 const props = defineProps({
-  maxWidth: { type: Number, default: 900 },
+  // 기본 1040 - HomeView/AdminView와 동일한 폭. 다르게 하고 싶은 화면만 개별로 max-width를 넘기면 됨
+  maxWidth: { type: Number, default: 1040 },
+  // 사이드바 "홈" 버튼과 본문 시작 위치를 맞추기 위한 페이지별 상단 여백 - 필요할 때만 개별 조정
+  paddingTop: { type: Number, default: 85 },
 })
 
 const sidebarOpen = ref(false)
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
+const mainStyle = computed(() => ({ paddingTop: `${props.paddingTop}px` }))
 
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
@@ -26,7 +30,7 @@ function closeSidebar() {
       <Sidebar @navigate="closeSidebar" />
     </div>
     <button class="menu-toggle" aria-label="메뉴" @click="toggleSidebar">☰</button>
-    <main class="app-main">
+    <main class="app-main" :style="mainStyle">
       <div class="app-main-inner" :style="innerStyle">
         <slot />
       </div>
@@ -69,17 +73,20 @@ function closeSidebar() {
   min-width: 0;
   display: flex;
   justify-content: center;
-  padding: 36px 48px 72px;
+  /* padding-top은 :style="mainStyle"로 페이지별(paddingTop prop)로 넘어옴 */
+  padding: 0 48px 72px;
 }
 
 .app-main-inner {
   width: 100%;
   min-width: 0;
+  position: relative;
 }
 
 @media (max-width: 1024px) {
   .app-main {
-    padding: 28px 24px 56px;
+    padding: 0 24px 56px;
+    padding-top: 56px !important;
   }
 }
 
@@ -112,7 +119,8 @@ function closeSidebar() {
   }
 
   .app-main {
-    padding: 68px 16px 40px;
+    padding: 0 16px 40px;
+    padding-top: 68px !important;
   }
 }
 </style>

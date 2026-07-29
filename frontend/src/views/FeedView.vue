@@ -68,7 +68,7 @@ function loadMore() {
 </script>
 
 <template>
-  <AppLayout>
+  <AppLayout :padding-top="65">
     <AuthRequired v-if="!authStore.isAuthenticated" message="피드를 보려면 SKALA 교육생 인증이 필요합니다" />
     <template v-else>
       <SearchBar @search="handleSearch" />
