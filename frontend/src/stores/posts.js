@@ -26,6 +26,14 @@ export const usePostsStore = defineStore('posts', () => {
 
   const hasMore = computed(() => page.value + 1 < totalPages.value)
 
+  // 월별(yyyy-MM) 필터가 아직 오지 않은 미래 달을 가리키는지 - 게시글이 없는 이유를 화면에 다르게 안내하는 데 사용
+  const isFutureMonth = computed(() => {
+    if (!/^\d{4}-\d{2}$/.test(date.value ?? '')) return false
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return date.value > currentMonth
+  })
+
   async function loadCategoryCounts() {
     if (categoryCountsLoaded.value) return
     await refreshCategoryCounts()
@@ -110,6 +118,7 @@ export const usePostsStore = defineStore('posts', () => {
     loading,
     error,
     hasMore,
+    isFutureMonth,
     categoryCounts,
     totalPostCount,
     setCategory,

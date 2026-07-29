@@ -1,23 +1,18 @@
 <script setup>
-// 기간 필터 (오늘/이번주/이번달/월별)
-import { ref, computed } from 'vue'
+// 기간 필터 (오늘/이번주/월별) - 교육 기간이 7~12월이라 월별은 그 6개월만 고정 제공
 import { usePostsStore } from '../stores/posts'
 
 const postsStore = usePostsStore()
-const monthInput = ref('')
 
-const isMonthly = computed(() => /^\d{4}-\d{2}$/.test(postsStore.date ?? ''))
+const EDUCATION_MONTHS = [7, 8, 9, 10, 11, 12]
+const currentYear = new Date().getFullYear()
 
-function select(value) {
-  monthInput.value = ''
-  postsStore.setDate(postsStore.date === value ? null : value)
+function monthValue(month) {
+  return `${currentYear}-${String(month).padStart(2, '0')}`
 }
 
-function onMonthChange(event) {
-  monthInput.value = event.target.value
-  if (monthInput.value) {
-    postsStore.setDate(monthInput.value)
-  }
+function select(value) {
+  postsStore.setDate(postsStore.date === value ? null : value)
 }
 </script>
 
@@ -27,11 +22,15 @@ function onMonthChange(event) {
     <div class="pill" :class="{ active: !postsStore.date }" @click="postsStore.setDate(null)">전체</div>
     <div class="pill" :class="{ active: postsStore.date === 'today' }" @click="select('today')">오늘</div>
     <div class="pill" :class="{ active: postsStore.date === 'week' }" @click="select('week')">이번 주</div>
-    <div class="pill" :class="{ active: postsStore.date === 'month' }" @click="select('month')">이번 달</div>
-    <label class="pill month-pill" :class="{ active: isMonthly }">
-      월별 ▾
-      <input type="month" :value="monthInput" @change="onMonthChange" />
-    </label>
+    <div
+      v-for="month in EDUCATION_MONTHS"
+      :key="month"
+      class="pill"
+      :class="{ active: postsStore.date === monthValue(month) }"
+      @click="select(monthValue(month))"
+    >
+      {{ month }}월
+    </div>
   </div>
 </template>
 
@@ -71,17 +70,5 @@ function onMonthChange(event) {
 .pill.active {
   background: #4a3f8f;
   color: #ffffff;
-}
-
-.month-pill {
-  display: flex;
-  align-items: center;
-}
-
-.month-pill input[type='month'] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 </style>
