@@ -128,14 +128,14 @@ function handleLogout() {
 .logo {
   display: flex;
   align-items: center;
-  padding: 4px 8px 16px;
+  padding: 4px 8px 40px;
   text-decoration: none;
 }
 
 .logo-text {
   font-size: 21px;
   font-weight: 900;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.2px;
   color: #1a1a2e;
 }
 
@@ -154,7 +154,7 @@ function handleLogout() {
   padding: 7px 12px;
   border-radius: 9px;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 580;
   color: #1a1a2e;
   text-decoration: none;
   cursor: pointer;
@@ -207,7 +207,7 @@ function handleLogout() {
 }
 
 .category-item {
-  font-weight: 600;
+  font-weight: 580;
 }
 
 .category-item:hover:not(.active),
@@ -216,7 +216,7 @@ function handleLogout() {
 }
 
 .category-subitem {
-  padding: 4px 12px 4px 30px;
+  padding: 3px 14px 4px 30px;
   font-size: 12px;
   color: #636e72;
 }
