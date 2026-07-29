@@ -11,7 +11,7 @@ import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
 import { CATEGORIES } from '../constants/categories'
 
-const AUTO_SLIDE_MS = 3000
+const AUTO_SLIDE_MS = 4000
 
 const BOARDS = [
   { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '👍🏻' },

@@ -10,5 +10,6 @@ public record HomeSummaryResponse(
         LocalDateTime lastSyncedAt,
         long cohortDay,
         long userCount,
-        List<CategoryCountDto> categoryCounts) {
+        List<CategoryCountDto> categoryCounts,
+        List<CategoryCountDto> tagCounts) {
 }

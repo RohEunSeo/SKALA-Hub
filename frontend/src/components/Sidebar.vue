@@ -82,7 +82,7 @@ function handleLogout() {
             :class="{ active: isActiveCategory(cat.value, sub.value) }"
             @click="selectCategory(cat.value, sub.value)"
           >
-            └ {{ sub.label }}
+            └ {{ sub.label }} <span class="category-count">({{ postsStore.tagCount(sub.value) }})</span>
           </div>
         </template>
       </div>
@@ -205,7 +205,8 @@ function handleLogout() {
   font-size: 12px;
 }
 
-.category-item.active .category-count {
+.category-item.active .category-count,
+.category-subitem.active .category-count {
   color: #4a3f8f;
 }
 
