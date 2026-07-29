@@ -40,7 +40,7 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 
 <template>
   <div class="date-filter">
-    <span class="label">📅 기간</span>
+    <span class="label">📅 기간 : </span>
     <div class="pill" :class="{ active: !postsStore.date }" @click="postsStore.setDate(null)">전체</div>
     <div class="pill" :class="{ active: postsStore.date === 'today' }" @click="select('today')">오늘</div>
     <div class="pill" :class="{ active: postsStore.date === 'week' }" @click="select('week')">이번 주</div>
@@ -67,28 +67,27 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 .date-filter {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 5px;
   background: #ffffff;
   border: 1px solid rgba(26, 26, 46, 0.08);
   border-radius: 12px;
   padding: 6px;
-  margin-bottom: 28px;
   width: fit-content;
 }
 
 .label {
-  font-size: 12.5px;
+  font-size: 13px;
   color: #636e72;
-  padding: 0 6px 0 8px;
+  padding: 0 2px 0 6px;
   font-weight: 600;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .pill {
-  padding: 7px 12px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-size: 13px;
   font-weight: 600;
   color: #1a1a2e;
   cursor: pointer;
@@ -97,8 +96,8 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 }
 
 .pill.active {
-  background: #4a3f8f;
-  color: #ffffff;
+  background: #f1eefc;
+  color: #4a3f8f;
 }
 
 .month-dropdown-wrapper {
@@ -122,9 +121,9 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 }
 
 .month-option {
-  padding: 7px 12px;
+  padding: 9px 14px;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #1a1a2e;
   cursor: pointer;
@@ -136,7 +135,7 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 }
 
 .month-option.active {
-  background: #4a3f8f;
-  color: #ffffff;
+  background: #f1eefc;
+  color: #4a3f8f;
 }
 </style>

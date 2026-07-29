@@ -5,6 +5,7 @@ import com.skalahub.dto.HomeLeaderboardResponse;
 import com.skalahub.dto.HomeSummaryResponse;
 import com.skalahub.service.HomeService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -22,7 +23,7 @@ public class HomeController {
     }
 
     @GetMapping("/api/home/leaderboard")
-    public HomeLeaderboardResponse getLeaderboard() {
-        return homeService.getLeaderboard();
+    public HomeLeaderboardResponse getLeaderboard(@RequestParam(defaultValue = "all") String period) {
+        return homeService.getLeaderboard(period);
     }
 }

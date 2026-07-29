@@ -14,7 +14,27 @@ export const CATEGORIES = [
     ],
   },
   { value: '자격증·취업', label: '자격증·취업', shortLabel: '자격증·취업', icon: '🏆', color: '#E8A33D' },
-  { value: '교육생 서비스', label: '교육생 서비스', shortLabel: '교육생 서비스', icon: '🌐', color: '#34AEBF' },
+  {
+    value: '교육생 서비스',
+    label: '교육생 서비스',
+    shortLabel: '교육생 서비스',
+    icon: '🌐',
+    color: '#34AEBF',
+    // 사이드바에 노출되는 필터용 하위카테고리
+    tags: [
+      { value: '캠퍼스 생활 편의', label: '캠퍼스 생활 편의' },
+      { value: 'SKCT / SQLD', label: 'SKCT / SQLD' },
+      { value: '학습 및 스터디매칭', label: '학습 및 스터디매칭' },
+      { value: '개발 생산성 및 툴', label: '개발 생산성 및 툴' },
+      { value: '기타', label: '기타' },
+    ],
+    // 관리자 화면 전용 체크박스 - 사이드바에는 노출하지 않음
+    adminOnlyTags: [
+      { value: '사이트', label: '[사이트]' },
+      { value: '앱·툴', label: '[앱·툴]' },
+      { value: 'Extension', label: '[Extension]' },
+    ],
+  },
   { value: '교수님', label: '교수님 게시글', shortLabel: '교수님', icon: '🧑‍🏫', color: '#E0607D' },
   { value: '기타', label: '기타', shortLabel: '기타', icon: '💬', color: '#8890A3' },
 ]

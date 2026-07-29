@@ -31,6 +31,7 @@ function isActiveCategory(value, tagValue = null) {
 
 function selectCategory(value, tagValue = null) {
   postsStore.setCategory(value, tagValue)
+  window.scrollTo({ top: 0, behavior: 'auto' })
   if (route.name !== 'feed') {
     router.push({ name: 'feed' })
   }
@@ -117,7 +118,7 @@ function handleLogout() {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 24px 20px;
+  padding: 16px 20px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -127,7 +128,7 @@ function handleLogout() {
 .logo {
   display: flex;
   align-items: center;
-  padding: 4px 8px 24px;
+  padding: 4px 8px 16px;
   text-decoration: none;
 }
 
@@ -145,17 +146,23 @@ function handleLogout() {
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 20px;
+  gap: 1px;
+  margin-bottom: 12px;
 }
 
 .nav-item {
-  padding: 9px 12px;
+  padding: 7px 12px;
   border-radius: 9px;
   font-size: 13.5px;
+  font-weight: 600;
   color: #1a1a2e;
   text-decoration: none;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nav-item:hover:not(.active) {
+  background: rgba(26, 26, 46, 0.05);
 }
 
 .nav-item.active {
@@ -168,6 +175,10 @@ function handleLogout() {
   color: #e0607d;
 }
 
+.admin-nav-item:hover:not(.active) {
+  background: rgba(224, 96, 125, 0.08);
+}
+
 .admin-nav-item.active {
   background: #fbe9ee;
   color: #e0607d;
@@ -176,28 +187,43 @@ function handleLogout() {
 .divider {
   height: 1px;
   background: rgba(26, 26, 46, 0.06);
-  margin: 8px 0 16px;
+  margin: 6px 0 10px;
 }
 
 .category-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .category-item,
 .category-subitem {
-  padding: 9px 12px;
+  padding: 7px 12px;
   border-radius: 9px;
   font-size: 13.5px;
   color: #1a1a2e;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.category-item {
+  font-weight: 600;
+}
+
+.category-item:hover:not(.active),
+.category-subitem:hover:not(.active) {
+  background: rgba(26, 26, 46, 0.05);
 }
 
 .category-subitem {
-  padding-left: 26px;
-  font-size: 12.5px;
+  padding: 4px 12px 4px 30px;
+  font-size: 12px;
   color: #636e72;
+}
+
+/* 부모 카테고리 바로 다음에 오는 첫 하위항목만 간격을 더 좁혀서 그 카테고리 소속처럼 붙어보이게 함 */
+.category-item + .category-subitem {
+  padding-top: 1px;
 }
 
 .category-count {
@@ -225,13 +251,13 @@ function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 9px;
   border-radius: 12px;
   background: #fafafa;
 }
 
 .logout-link {
-  margin-top: 8px;
+  margin-top: 6px;
   text-align: center;
   font-size: 11.5px;
   color: #636e72;

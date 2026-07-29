@@ -8,8 +8,11 @@ import com.skalahub.dto.PostResponse;
 import com.skalahub.dto.ReplyResponse;
 import com.skalahub.entity.Post;
 import com.skalahub.entity.Reply;
+import com.skalahub.entity.User;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.ReplyRepository;
+import com.skalahub.repository.UserRepository;
+import com.skalahub.util.CampusResolver;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
@@ -19,6 +22,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,9 +36,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class PostService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    private static final Set<String> VALID_SORTS = Set.of("latest", "popular", "oldest");
 
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
+    private final UserRepository userRepository;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     private final String channelId;
@@ -43,17 +49,42 @@ public class PostService {
     public PostService(
             PostRepository postRepository,
             ReplyRepository replyRepository,
+            UserRepository userRepository,
             @Value("${slack.channel-id}") String channelId,
             @Value("${slack.workspace-url}") String workspaceUrl) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
+        this.userRepository = userRepository;
         this.channelId = channelId;
         this.workspaceUrl = workspaceUrl;
     }
 
     public PostPageResponse search(
-            String category, String tag, String keyword, String author, String date, int page, int size) {
+            String category,
+            String tag,
+            String keyword,
+            String author,
+            String date,
+            String campus,
+            String sort,
+            int page,
+            int size) {
         LocalDateTime[] range = resolveDateRange(date);
+        boolean campusActive = campus != null && !campus.isBlank();
+        List<String> campusSlackIds;
+        if (campusActive) {
+            String targetFloor = campus;
+            campusSlackIds = userRepository.findAll().stream()
+                    .filter(u -> targetFloor.equals(CampusResolver.resolveFloor(u.getClassNum())))
+                    .map(User::getSlackId)
+                    .toList();
+            if (campusSlackIds.isEmpty()) {
+                campusSlackIds = List.of("__no_match__");
+            }
+        } else {
+            campusSlackIds = List.of("__unused__");
+        }
+
         Page<Post> result = postRepository.search(
                 blankToNull(category),
                 blankToNull(tag),
@@ -61,9 +92,16 @@ public class PostService {
                 blankToNull(author),
                 range[0],
                 range[1],
+                campusActive,
+                campusSlackIds,
+                normalizeSort(sort),
                 PageRequest.of(page, size));
 
         return wrapPage(result);
+    }
+
+    private String normalizeSort(String sort) {
+        return VALID_SORTS.contains(sort) ? sort : "latest";
     }
 
     // Home/MyPage 등 다른 화면에서도 같은 매핑 로직을 재사용하기 위한 공개 메서드
@@ -175,7 +213,8 @@ public class PostService {
     }
 
     // date: "today"/"week"/"month"/"yyyy-MM" - 인식 불가하면 필터 없음 처리
-    private LocalDateTime[] resolveDateRange(String date) {
+    // Home 순위보드(이번주 필터)에서도 재사용하기 위해 public
+    public LocalDateTime[] resolveDateRange(String date) {
         if (date == null || date.isBlank()) {
             return new LocalDateTime[] {null, null};
         }

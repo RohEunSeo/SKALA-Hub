@@ -12,6 +12,7 @@ onMounted(() => {
 
 function select(value) {
   postsStore.setCategory(value, null)
+  window.scrollTo({ top: 0, behavior: 'auto' })
 }
 </script>
 

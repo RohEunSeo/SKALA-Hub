@@ -15,7 +15,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     Optional<Post> findBySlackTs(String slackTs);
 
-    // 카테고리/태그/키워드/작성자/기간 조건은 값이 없으면(null) 무시 - 최신순 고정
+    // 카테고리/태그/키워드/작성자/기간/캠퍼스 조건은 값이 없으면(null) 무시. 정렬은 sort 값에 따라 동적 분기
     @Query(
             value = """
             SELECT * FROM posts p
@@ -28,7 +28,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:author AS varchar) IS NULL OR p.user_name ILIKE CONCAT('%', CAST(:author AS varchar), '%'))
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
               AND (CAST(:dateTo AS timestamp) IS NULL OR p.created_at < CAST(:dateTo AS timestamp))
-            ORDER BY p.created_at DESC
+              AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
+            ORDER BY
+              CASE WHEN CAST(:sort AS varchar) = 'popular' THEN p.reaction_count END DESC NULLS LAST,
+              CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN p.created_at END ASC,
+              CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN NULL ELSE p.created_at END DESC
             """,
             countQuery = """
             SELECT count(*) FROM posts p
@@ -41,6 +45,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:author AS varchar) IS NULL OR p.user_name ILIKE CONCAT('%', CAST(:author AS varchar), '%'))
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
               AND (CAST(:dateTo AS timestamp) IS NULL OR p.created_at < CAST(:dateTo AS timestamp))
+              AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
             """,
             nativeQuery = true)
     Page<Post> search(
@@ -50,6 +55,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("author") String author,
             @Param("dateFrom") LocalDateTime dateFrom,
             @Param("dateTo") LocalDateTime dateTo,
+            @Param("campusActive") boolean campusActive,
+            @Param("campusSlackIds") List<String> campusSlackIds,
+            @Param("sort") String sort,
             Pageable pageable);
 
     @Query(value = "SELECT MAX(synced_at) FROM posts", nativeQuery = true)
@@ -95,10 +103,28 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     long countReactedByUser(@Param("slackId") String slackId);
 
-    // 홈 화면 순위보드 - 반응/댓글 많은 순 TOP3
-    List<Post> findTop3ByIsDeletedFalseOrderByReactionCountDesc();
+    // 홈 화면 순위보드 - 반응/댓글 많은 순 TOP3 (dateFrom이 null이면 전체 기간, 아니면 그 시점 이후만)
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.is_deleted = false
+              AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
+            ORDER BY p.reaction_count DESC
+            LIMIT 3
+            """,
+            nativeQuery = true)
+    List<Post> findTopReactions(@Param("dateFrom") LocalDateTime dateFrom);
 
-    List<Post> findTop3ByIsDeletedFalseOrderByReplyCountDesc();
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.is_deleted = false
+              AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
+            ORDER BY p.reply_count DESC
+            LIMIT 3
+            """,
+            nativeQuery = true)
+    List<Post> findTopComments(@Param("dateFrom") LocalDateTime dateFrom);
 
     // 저장(북마크) 많이 된 순 TOP3 - [post_id, save_count] 배열 목록
     @Query(
@@ -106,12 +132,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             SELECT p.id AS id, count(b.id) AS save_count FROM posts p
             JOIN bookmarks b ON b.post_id = p.id
             WHERE p.is_deleted = false
+              AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             GROUP BY p.id
             ORDER BY save_count DESC
             LIMIT 3
             """,
             nativeQuery = true)
-    List<Object[]> findTopSaveCounts();
+    List<Object[]> findTopSaveCounts(@Param("dateFrom") LocalDateTime dateFrom);
 
     // 관리자 - 미분류 게시글 (일괄 분류용 전체 목록 / 화면 표시용 페이지 목록)
     @Query(
