@@ -25,7 +25,8 @@ const userMeta = computed(() => {
 })
 
 function isActiveCategory(value, tagValue = null) {
-  return postsStore.category === value && postsStore.tag === tagValue
+  // 피드 화면을 벗어나면(홈/마이페이지 등) 보라색 활성 표시를 꺼서, 선택된 카테고리 상태는 유지하되 다른 화면에 잘못 남지 않게 함
+  return route.name === 'feed' && postsStore.category === value && postsStore.tag === tagValue
 }
 
 function selectCategory(value, tagValue = null) {
