@@ -46,6 +46,7 @@ public class SlackSyncService {
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
+    private final SlackBotReplyService slackBotReplyService;
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -62,12 +63,14 @@ public class SlackSyncService {
             PostRepository postRepository,
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
+            SlackBotReplyService slackBotReplyService,
             @Value("${slack.user-token}") String userToken,
             @Value("${slack.channel-id}") String channelId,
             @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
+        this.slackBotReplyService = slackBotReplyService;
         this.userToken = userToken;
         this.channelId = channelId;
         this.recentSyncWindowDays = recentSyncWindowDays;
@@ -129,9 +132,21 @@ public class SlackSyncService {
 
                 Optional<Post> existing = postRepository.findBySlackTs(slackTs);
                 boolean isNew = existing.isEmpty();
-                Post post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
+                // 신규 글은 저장/분류가 끝나기 전에 "동기화 중" 댓글을 먼저 달아두고, 끝나면 그 댓글을 수정한다
+                String syncCommentTs = isNew ? slackBotReplyService.notifySyncStarted(slackTs) : null;
+                Post post;
+                try {
+                    post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
+                } catch (Exception e) {
+                    log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
+                    if (isNew) {
+                        slackBotReplyService.notifySyncFailure(syncCommentTs);
+                    }
+                    continue;
+                }
                 if (isNew) {
                     newPosts++;
+                    slackBotReplyService.notifySyncSuccess(syncCommentTs, post.getId());
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);

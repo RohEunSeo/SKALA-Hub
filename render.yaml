@@ -19,6 +19,8 @@ services:
         sync: false
       - key: SLACK_USER_TOKEN
         sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
       - key: SLACK_CHANNEL_ID
         value: C0BHGGH7PT3
       - key: SLACK_REDIRECT_URI
