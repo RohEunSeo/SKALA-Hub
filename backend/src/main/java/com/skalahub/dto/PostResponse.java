@@ -15,6 +15,7 @@ public record PostResponse(
         Integer reactionCount,
         Integer replyCount,
         Boolean isPinned,
+        Boolean isEdited,
         LocalDateTime createdAt,
         String slackPermalink,
         List<LinkPreviewDto> attachments,

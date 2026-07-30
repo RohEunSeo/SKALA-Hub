@@ -239,6 +239,7 @@ public class SlackSyncService {
         post.setAttachments(toJsonOrNull(msg.path("attachments")));
         post.setFiles(toJsonOrNull(msg.path("files")));
         post.setReactedUserIds(extractReactedUserIds(msg));
+        post.setIsEdited(!msg.path("edited").isMissingNode());
         post.setCreatedAt(tsToLocalDateTime(slackTs));
         post.setSyncedAt(LocalDateTime.now());
         if (isNew) {

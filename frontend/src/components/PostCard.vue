@@ -150,7 +150,10 @@ function openInSlack() {
         <span v-if="post.isInstructor" class="instructor-badge">· 전임교수</span>
       </div>
       <div class="header-right">
-        <span class="post-time">{{ createdAtAbsolute }} · {{ createdAtLabel }}</span>
+        <span class="post-time">
+          {{ createdAtAbsolute }} · {{ createdAtLabel }}
+          <span v-if="post.isEdited" class="edited-badge">(편집됨)</span>
+        </span>
         <span class="header-stats">
           <span>👍 {{ post.reactionCount ?? 0 }}</span>
           <span class="comment-link" @click="handleCommentsClick">💬 {{ post.replyCount ?? 0 }}</span>
@@ -368,6 +371,10 @@ function openInSlack() {
   color: #636e72;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.edited-badge {
+  color: #a0a4b8;
 }
 
 .badges {
