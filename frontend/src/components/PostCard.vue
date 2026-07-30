@@ -395,6 +395,14 @@ function openInSlack() {
   text-decoration: underline;
 }
 
+.post-content :deep(.slack-link-line) {
+  display: inline-flex;
+  background: rgba(18, 100, 163, 0.06);
+  border-radius: 6px;
+  padding: 4px 10px;
+  margin: 4px 0;
+}
+
 .post-content :deep(.slack-mention) {
   color: #1264a3;
   background: #e8f5fa;
@@ -609,6 +617,14 @@ function openInSlack() {
 .comment-content :deep(.slack-link) {
   color: #1264a3;
   text-decoration: none;
+}
+
+.comment-content :deep(.slack-link-line) {
+  display: inline-flex;
+  background: rgba(18, 100, 163, 0.06);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin: 3px 0;
 }
 
 .comment-content :deep(.slack-mention) {
