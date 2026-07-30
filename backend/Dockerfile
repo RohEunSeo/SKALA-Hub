@@ -16,4 +16,5 @@ COPY --from=build /app/build/libs/*-SNAPSHOT.jar app.jar
 
 # Render가 PORT 환경변수로 리스닝 포트를 지정함 (application.yml에서 ${PORT} 참조)
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 컨테이너 기본 타임존이 UTC라서 LocalDateTime.now()가 UTC 벽시계 시각을 반환하는 문제 방지 → KST로 고정
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-jar", "app.jar"]
