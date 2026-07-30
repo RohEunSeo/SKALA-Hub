@@ -61,6 +61,10 @@ export function renderSlackText(raw) {
 
   let text = raw
 
+  // 0. 슬랙이 원문 text에서 &, <, > 를 HTML 엔티티로 이스케이프해서 보내주므로 먼저 디코딩
+  // (링크/멘션 마크업 <url|label>, <@ID|name> 등은 슬랙이 이스케이프하지 않은 채로 보내주므로 영향 없음)
+  text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+
   // 1. 코드블록(```...```) - 원문 상태에서 먼저 추출 (내부 텍스트만 escape)
   text = text.replace(/```([\s\S]*?)```/g, (_, code) => {
     codeBlocks.push(escapeHtml(code.replace(/^\n/, '').replace(/\n$/, '')))
@@ -161,6 +165,7 @@ export function stripSlackMarkdown(raw) {
   if (!raw) return ''
 
   let text = raw
+  text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
   text = text.replace(/```([\s\S]*?)```/g, (_, code) => code.trim())
   text = text.replace(/`([^`\n]+)`/g, '$1')
   text = text.replace(/<(https?:\/\/[^|>\s]+)\|([^>]+)>/g, '$2')
