@@ -1,6 +1,6 @@
 <script setup>
 // 게시글 피드(목록) 화면
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
 import SearchBar from '../components/SearchBar.vue'
@@ -30,6 +30,43 @@ const eduServiceTags = computed(
 const isEduService = computed(() => postsStore.category === '교육생 서비스')
 const showCampusFilter = computed(() => !postsStore.category || CAMPUS_CATEGORIES.includes(postsStore.category))
 const showDateFilter = computed(() => !postsStore.category || DATE_CATEGORIES.includes(postsStore.category))
+
+// 게시글 개수 대신 "체감 스크롤 길이"로 더보기를 끊기 위한 상태 - 텍스트가 짧은 글 20개와
+// 이미지 여러 장 붙은 긴 글 20개는 실제 스크롤 길이가 몇 배씩 차이 나서, 개수 기준으로는 매번 더보기까지의
+// 스크롤량이 들쑥날쑥해짐. 게시글마다 대략적인 세로 길이를 추정해 누적하고, 예산을 넘으면 그 지점에서 끊는다.
+const visibleCount = ref(0)
+const WEIGHT_BUDGET = 90
+
+function estimateWeight(post) {
+  const textWeight = (post.content?.length ?? 0) / 40
+  const imageCount = post.files?.filter((file) => file.isImage).length ?? 0
+  const otherFileCount = (post.files?.length ?? 0) - imageCount
+  const attachmentCount = post.attachments?.length ?? 0
+  return 6 + textWeight + imageCount * 12 + otherFileCount * 3 + attachmentCount * 8
+}
+
+// 이미 불러온 게시글 중 예산이 남아있는 만큼만 추가로 노출 (API 재조회 없이 로컬에서 처리)
+function revealMore() {
+  let budget = WEIGHT_BUDGET
+  while (visibleCount.value < postsStore.posts.length) {
+    const next = postsStore.posts[visibleCount.value]
+    visibleCount.value += 1
+    budget -= estimateWeight(next)
+    if (budget <= 0) break
+  }
+}
+
+const visiblePosts = computed(() => postsStore.posts.slice(0, visibleCount.value))
+const canShowMore = computed(() => visibleCount.value < postsStore.posts.length || postsStore.hasMore)
+
+// 필터/검색 등으로 목록이 처음부터 다시 조회될 때마다 노출 개수도 함께 리셋
+watch(
+  () => postsStore.resetToken,
+  () => {
+    visibleCount.value = 0
+    revealMore()
+  },
+)
 
 onMounted(() => {
   if (!authStore.isAuthenticated) return
@@ -62,8 +99,16 @@ function selectEduTag(tagValue) {
   postsStore.setCategory('교육생 서비스', postsStore.tag === tagValue ? null : tagValue)
 }
 
-function loadMore() {
-  postsStore.fetchPosts(false)
+async function loadMore() {
+  // 이미 불러온 게시글 중 아직 안 보여준 게 있으면 API 호출 없이 그것부터 마저 노출
+  if (visibleCount.value < postsStore.posts.length) {
+    revealMore()
+    return
+  }
+  if (postsStore.hasMore) {
+    await postsStore.fetchPosts(false)
+    revealMore()
+  }
 }
 </script>
 
@@ -104,7 +149,7 @@ function loadMore() {
 
       <div class="post-list">
         <PostCard
-          v-for="post in postsStore.posts"
+          v-for="post in visiblePosts"
           :key="post.id"
           :post="post"
           :highlight-keyword="postsStore.keyword"
@@ -118,7 +163,7 @@ function loadMore() {
       </div>
       <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
 
-      <div v-if="postsStore.hasMore && !postsStore.loading" class="load-more" @click="loadMore">더보기</div>
+      <div v-if="canShowMore && !postsStore.loading" class="load-more" @click="loadMore">더보기</div>
     </template>
   </AppLayout>
 </template>

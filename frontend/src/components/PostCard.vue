@@ -1,6 +1,6 @@
 <script setup>
 // 게시글 한 건을 카드 형태로 보여주는 컴포넌트 (슬랙 원본 렌더링 + 저장/댓글/딥링크)
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
@@ -48,15 +48,40 @@ function proxySrc(path) {
   return `${apiBase}${path}`
 }
 
-const lightboxSrc = ref(null)
+const lightboxIndex = ref(null)
+const lightboxSrc = computed(() =>
+  lightboxIndex.value === null ? null : proxySrc(imageFiles.value[lightboxIndex.value].proxyUrl),
+)
 
-function openImage(path) {
-  lightboxSrc.value = proxySrc(path)
+function openImage(index) {
+  lightboxIndex.value = index
 }
 
 function closeLightbox() {
-  lightboxSrc.value = null
+  lightboxIndex.value = null
 }
+
+function showPrevImage() {
+  lightboxIndex.value = (lightboxIndex.value - 1 + imageFiles.value.length) % imageFiles.value.length
+}
+
+function showNextImage() {
+  lightboxIndex.value = (lightboxIndex.value + 1) % imageFiles.value.length
+}
+
+function handleLightboxKeydown(e) {
+  if (lightboxIndex.value === null) return
+  if (e.key === 'Escape') closeLightbox()
+  else if (e.key === 'ArrowLeft') showPrevImage()
+  else if (e.key === 'ArrowRight') showNextImage()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleLightboxKeydown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleLightboxKeydown)
+})
 
 async function loadReplies() {
   if (repliesLoaded.value || repliesLoading.value) return
@@ -141,14 +166,14 @@ function openInSlack() {
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div class="post-content" v-html="renderedContent"></div>
 
-    <div v-if="imageFiles.length" class="image-files">
+    <div v-if="imageFiles.length" class="image-files" :class="{ 'single-image': imageFiles.length === 1 }">
       <img
-        v-for="file in imageFiles"
+        v-for="(file, index) in imageFiles"
         :key="file.proxyUrl"
         :src="proxySrc(file.proxyUrl)"
         :alt="file.name"
-        title="클릭하면 원본 크기로 열립니다"
-        @click="openImage(file.proxyUrl)"
+        title="클릭하면 크게 볼 수 있습니다"
+        @click="openImage(index)"
       />
     </div>
 
@@ -161,7 +186,27 @@ function openInSlack() {
 
     <Teleport to="body">
       <div v-if="lightboxSrc" class="lightbox-overlay" @click="closeLightbox">
+        <button
+          v-if="imageFiles.length > 1"
+          class="lightbox-nav lightbox-prev"
+          title="이전 이미지"
+          @click.stop="showPrevImage"
+        >
+          ‹
+        </button>
         <img :src="lightboxSrc" class="lightbox-image" alt="" @click.stop />
+        <button
+          v-if="imageFiles.length > 1"
+          class="lightbox-nav lightbox-next"
+          title="다음 이미지"
+          @click.stop="showNextImage"
+        >
+          ›
+        </button>
+        <div v-if="imageFiles.length > 1" class="lightbox-counter">
+          {{ lightboxIndex + 1 }} / {{ imageFiles.length }}
+        </div>
+        <button class="lightbox-close" title="닫기" @click.stop="closeLightbox">✕</button>
       </div>
     </Teleport>
 
@@ -418,7 +463,7 @@ function openInSlack() {
   padding: 0 2px;
 }
 
-/* 슬랙처럼 정사각 썸네일로 줄맞춰 나열 (원본 비율은 클릭 시 라이트박스에서 확인) */
+/* 사진 1장이면 크게, 여러 장이면 원본 비율 유지한 채 작은 썸네일로 줄맞춰 나열 (잘라내지 않음) */
 .image-files {
   margin-top: 14px;
   display: flex;
@@ -427,18 +472,28 @@ function openInSlack() {
 }
 
 .image-files img {
-  width: 140px;
-  height: 140px;
+  max-width: 220px;
+  max-height: 180px;
   border-radius: 10px;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   cursor: zoom-in;
+}
+
+.image-files.single-image img {
+  max-width: 100%;
+  max-height: 420px;
 }
 
 @media (max-width: 480px) {
   .image-files img {
-    width: 104px;
-    height: 104px;
+    max-width: 150px;
+    max-height: 130px;
+  }
+
+  .image-files.single-image img {
+    max-width: 100%;
+    max-height: 320px;
   }
 }
 
@@ -459,6 +514,69 @@ function openInSlack() {
   max-height: 100%;
   border-radius: 8px;
   cursor: default;
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-prev {
+  left: 16px;
+}
+
+.lightbox-next {
+  right: 16px;
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .attached-files {

@@ -20,6 +20,8 @@ export const usePostsStore = defineStore('posts', () => {
   const lastSyncedAt = ref(null)
   const loading = ref(false)
   const error = ref('')
+  // 목록이 처음부터(reset) 다시 조회될 때마다 증가 - 화면 쪽에서 "몇 개까지 보여줄지"를 리셋하는 신호로 사용
+  const resetToken = ref(0)
 
   // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
   const categoryCounts = ref([])
@@ -120,6 +122,7 @@ export const usePostsStore = defineStore('posts', () => {
       page.value = data?.page ?? 0
       totalPages.value = data?.totalPages ?? 0
       lastSyncedAt.value = data?.lastSyncedAt ?? null
+      if (reset) resetToken.value += 1
     } catch {
       error.value = '게시글을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
       if (reset) posts.value = []
@@ -142,6 +145,7 @@ export const usePostsStore = defineStore('posts', () => {
     lastSyncedAt,
     loading,
     error,
+    resetToken,
     hasMore,
     isFutureMonth,
     categoryCounts,
