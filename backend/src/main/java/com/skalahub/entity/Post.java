@@ -56,6 +56,9 @@ public class Post {
 
     private Boolean isPinned;
 
+    // 슬랙에서 수정된 메시지인지 (슬랙 응답의 edited 필드 유무로 판단)
+    private Boolean isEdited;
+
     // 슬랙 원본 attachments(링크 미리보기) raw JSON 문자열
     @JdbcTypeCode(SqlTypes.JSON)
     private String attachments;

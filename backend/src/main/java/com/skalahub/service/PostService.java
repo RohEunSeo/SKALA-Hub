@@ -154,6 +154,7 @@ public class PostService {
                 post.getReactionCount(),
                 post.getReplyCount(),
                 post.getIsPinned(),
+                post.getIsEdited(),
                 post.getCreatedAt(),
                 buildPermalink(post.getSlackTs()),
                 parseAttachments(post.getAttachments()),

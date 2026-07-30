@@ -5,6 +5,7 @@ import com.skalahub.entity.Post;
 import com.skalahub.entity.Reply;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.ReplyRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -50,6 +51,7 @@ public class SlackSyncService {
 
     private final String userToken;
     private final String channelId;
+    private final int recentSyncWindowDays;
 
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
@@ -61,31 +63,57 @@ public class SlackSyncService {
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
             @Value("${slack.user-token}") String userToken,
-            @Value("${slack.channel-id}") String channelId) {
+            @Value("${slack.channel-id}") String channelId,
+            @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
         this.userToken = userToken;
         this.channelId = channelId;
+        this.recentSyncWindowDays = recentSyncWindowDays;
     }
 
+    // 채널 전체를 매번 처음부터 재스캔하면 게시글이 쌓일수록 API 호출량/소요시간이 계속 늘어나므로,
+    // 짧은 주기(5분)에는 "최근 N일 이내" 글만 훑어서 새 글 감지는 물론 최근 글의 반응/댓글수·수정사항도
+    // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행
     @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
     public void scheduledSync() {
         try {
-            syncAll();
+            incrementalSync();
         } catch (Exception e) {
             log.error("자동 동기화 실패", e);
         }
     }
 
-    // 관리자 API(POST /api/admin/sync)와 스케줄러가 함께 호출하는 단일 진입점
+    @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
+    public void scheduledFullSync() {
+        try {
+            syncAll();
+        } catch (Exception e) {
+            log.error("전체 재동기화 실패", e);
+        }
+    }
+
+    // 최근 N일 이내 글만 재조회 - 이 범위 안에서는 새 글/댓글/반응수/수정 모두 이전과 동일하게 5분마다 반영됨.
+    // 그보다 오래된 글의 반응수 변화나 수정은 여기선 안 잡히고 하루 1회 전체 재동기화에서 잡힘
+    private SyncSummary incrementalSync() {
+        long cutoffEpochSeconds = Instant.now().minus(Duration.ofDays(recentSyncWindowDays)).getEpochSecond();
+        return runSync(String.valueOf(cutoffEpochSeconds));
+    }
+
+    // 관리자 API(POST /api/admin/sync)와 하루 1회 전체 재동기화 스케줄러가 함께 호출하는 전체 재스캔 진입점
     public SyncSummary syncAll() {
+        return runSync(null);
+    }
+
+    // oldest가 있으면 그 시점 이후 메시지만, null이면 채널 히스토리 전체를 조회
+    private SyncSummary runSync(String oldest) {
         if (!syncing.compareAndSet(false, true)) {
             throw new IllegalStateException("이미 동기화가 진행 중입니다");
         }
         long start = System.currentTimeMillis();
         try {
-            List<JsonNode> messages = fetchAllMessages();
+            List<JsonNode> messages = fetchAllMessages(oldest);
 
             int newPosts = 0;
             int repliesProcessed = 0;
@@ -112,31 +140,37 @@ public class SlackSyncService {
 
             long durationMs = System.currentTimeMillis() - start;
             SyncSummary summary = new SyncSummary(messages.size(), newPosts, repliesProcessed, durationMs);
-            log.info("슬랙 동기화 완료: {}", summary);
+            log.info("슬랙 동기화 완료 (oldest={}): {}", oldest, summary);
             return summary;
         } finally {
             syncing.set(false);
         }
     }
 
-    private List<JsonNode> fetchAllMessages() {
+    private List<JsonNode> fetchAllMessages(String oldest) {
         List<JsonNode> all = new ArrayList<>();
         String cursor = "";
         do {
-            JsonNode page = callHistoryPage(cursor);
+            JsonNode page = callHistoryPage(cursor, oldest);
             page.path("messages").forEach(all::add);
             cursor = page.path("response_metadata").path("next_cursor").asString("");
         } while (!cursor.isBlank());
         return all;
     }
 
-    private JsonNode callHistoryPage(String cursor) {
-        String uri = cursor.isBlank()
-                ? "https://slack.com/api/conversations.history?channel={channel}&limit=200"
-                : "https://slack.com/api/conversations.history?channel={channel}&limit=200&cursor={cursor}";
-        JsonNode response = cursor.isBlank()
-                ? getWithRetry(uri, channelId)
-                : getWithRetry(uri, channelId, cursor);
+    private JsonNode callHistoryPage(String cursor, String oldest) {
+        StringBuilder uri = new StringBuilder("https://slack.com/api/conversations.history?channel={channel}&limit=200");
+        List<Object> uriVars = new ArrayList<>();
+        uriVars.add(channelId);
+        if (oldest != null && !oldest.isBlank()) {
+            uri.append("&oldest={oldest}");
+            uriVars.add(oldest);
+        }
+        if (!cursor.isBlank()) {
+            uri.append("&cursor={cursor}");
+            uriVars.add(cursor);
+        }
+        JsonNode response = getWithRetry(uri.toString(), uriVars.toArray());
         if (!response.path("ok").asBoolean(false)) {
             throw new IllegalStateException("conversations.history 실패: " + describeError(response));
         }
@@ -205,6 +239,7 @@ public class SlackSyncService {
         post.setAttachments(toJsonOrNull(msg.path("attachments")));
         post.setFiles(toJsonOrNull(msg.path("files")));
         post.setReactedUserIds(extractReactedUserIds(msg));
+        post.setIsEdited(!msg.path("edited").isMissingNode());
         post.setCreatedAt(tsToLocalDateTime(slackTs));
         post.setSyncedAt(LocalDateTime.now());
         if (isNew) {
