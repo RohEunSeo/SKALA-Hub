@@ -28,6 +28,6 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRATION
-        value: "86400000"
+        value: "2592000000"
       - key: FRONTEND_URL
         sync: false

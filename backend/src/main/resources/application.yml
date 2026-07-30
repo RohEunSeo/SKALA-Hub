@@ -28,8 +28,12 @@ slack:
   user-token: ${SLACK_USER_TOKEN}
   channel-id: ${SLACK_CHANNEL_ID}
   redirect-uri: ${SLACK_REDIRECT_URI:http://localhost:8080/api/auth/slack/callback}
-  # 전체 채널을 다시 훑는 방식이라 너무 짧게 잡으면 슬랙 레이트리밋에 걸릴 수 있음 - 5분이 적당한 절충점
+  # 최근 N일 이내 글만 재조회하는 증분 동기화 주기 - 5분이 적당한 절충점
   sync-interval-ms: ${SLACK_SYNC_INTERVAL_MS:300000}
+  # 증분 동기화가 다시 훑는 범위 - 이 기간 안에서는 새 글/댓글/반응수/수정이 모두 5분마다 반영됨
+  sync-recent-window-days: ${SLACK_SYNC_RECENT_WINDOW_DAYS:7}
+  # 채널 전체(옛 글 포함)를 처음부터 다시 훑는 전체 재동기화 주기 - 새벽 4시(한산한 시간)
+  full-sync-cron: ${SLACK_FULL_SYNC_CRON:0 0 4 * * *}
   workspace-url: ${SLACK_WORKSPACE_URL:https://theskala.slack.com}
 
 # Claude API (게시글 자동 분류)
