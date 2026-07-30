@@ -138,9 +138,9 @@ export function renderSlackText(raw) {
   text = text.replace(/_([^_\n]+)_/g, '<em>$1</em>')
   text = text.replace(/~([^~\n]+)~/g, '<del>$1</del>')
 
-  // 8. 남은 줄바꿈 처리 - 슬랙이 블록 사이에 넣어주는 빈 줄(연속 개행)은 한 줄로 축소해서
-  // 슬랙 UI와 비슷한 문단 간격을 유지 (코드블록 내부 줄바꿈은 플레이스홀더 복원 전이라 영향 없음)
-  text = text.replace(/\n{2,}/g, '\n')
+  // 8. 남은 줄바꿈 처리 - 빈 줄 1개(문단 구분, \n\n)는 그대로 유지하고, 슬랙이 섹션 사이에
+  // 과하게 넣어주는 빈 줄 2개 이상(\n\n\n+)만 빈 줄 1개로 축소 (코드블록 내부 줄바꿈은 플레이스홀더 복원 전이라 영향 없음)
+  text = text.replace(/\n{3,}/g, '\n\n')
   text = text.replace(/\n/g, '<br>')
 
   // 9. 플레이스홀더 복원
@@ -158,6 +158,18 @@ export function renderSlackText(raw) {
   })
   text = text.replace(/@@EMOJI(\d+)@@/g, (_, i) => emojis[i])
   text = text.replace(/@@MENTION(\d+)@@/g, (_, i) => `<span class="slack-mention">${escapeHtml(mentions[i])}</span>`)
+
+  // 10. 링크 하나만 단독으로 있는 줄은 슬랙처럼 카드형 칩으로 표시 (빈 줄이 없어도 살짝 여백이 생김)
+  text = text
+    .split('<br>')
+    .map((line) => {
+      const trimmed = line.trim()
+      if (/^<a class="slack-link"[^>]*>.*<\/a>$/.test(trimmed)) {
+        return `<span class="slack-link-line">${trimmed}</span>`
+      }
+      return line
+    })
+    .join('<br>')
 
   return text
 }
