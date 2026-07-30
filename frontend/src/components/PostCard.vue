@@ -48,8 +48,14 @@ function proxySrc(path) {
   return `${apiBase}${path}`
 }
 
+const lightboxSrc = ref(null)
+
 function openImage(path) {
-  window.open(proxySrc(path), '_blank', 'noopener,noreferrer')
+  lightboxSrc.value = proxySrc(path)
+}
+
+function closeLightbox() {
+  lightboxSrc.value = null
 }
 
 async function loadReplies() {
@@ -152,6 +158,12 @@ function openInSlack() {
       </div>
       <div class="file-notice">* 원본 파일은 슬랙에서 다운받아 주세요.</div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="lightboxSrc" class="lightbox-overlay" @click="closeLightbox">
+        <img :src="lightboxSrc" class="lightbox-image" alt="" @click.stop />
+      </div>
+    </Teleport>
 
     <div v-if="post.attachments?.length" class="link-previews">
       <a
@@ -343,6 +355,8 @@ function openInSlack() {
   color: #1a1a2e;
   line-height: 1.6;
   word-break: break-word;
+  white-space: pre-wrap;
+  tab-size: 2;
 }
 
 .post-content :deep(.slack-inline-code) {
@@ -369,7 +383,6 @@ function openInSlack() {
 .post-content :deep(.slack-quote) {
   border-left: 3px solid rgba(26, 26, 46, 0.15);
   padding-left: 12px;
-  color: #636e72;
   margin: 8px 0;
 }
 
@@ -397,7 +410,7 @@ function openInSlack() {
   padding: 0 2px;
 }
 
-/* 슬랙처럼 이미지 원본 비율 그대로, 화면 너비에 따라 알아서 옆으로 나열되다가 줄바꿈됨 */
+/* 슬랙처럼 정사각 썸네일로 줄맞춰 나열 (원본 비율은 클릭 시 라이트박스에서 확인) */
 .image-files {
   margin-top: 14px;
   display: flex;
@@ -406,19 +419,38 @@ function openInSlack() {
 }
 
 .image-files img {
-  flex: 0 1 auto;
-  max-width: 100%;
-  max-height: 320px;
+  width: 140px;
+  height: 140px;
   border-radius: 10px;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
   cursor: zoom-in;
 }
 
 @media (max-width: 480px) {
   .image-files img {
-    max-height: 220px;
+    width: 104px;
+    height: 104px;
   }
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  cursor: zoom-out;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  cursor: default;
 }
 
 .attached-files {
@@ -561,6 +593,8 @@ function openInSlack() {
   color: #1a1a2e;
   line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
+  tab-size: 2;
 }
 
 .comment-content :deep(.slack-inline-code) {
