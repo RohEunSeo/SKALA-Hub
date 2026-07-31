@@ -16,7 +16,7 @@ const AUTO_SLIDE_MS = 4000
 
 const BOARDS = [
   { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '👍🏻' },
-  { key: 'topComments', label: '💬 가장 댓글이 많은 글', unit: '💬' },
+  { key: 'topComments', label: '💬 가장 댓글이 많은 글', unit: '💬', note: '* 슬랙봇이 남긴 댓글은 집계에서 제외됩니다' },
   { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '🔖' },
 ]
 
@@ -213,6 +213,7 @@ onUnmounted(() => {
           <div class="leaderboard-track" :style="{ transform: `translateX(-${boardIndex * 100}%)` }">
             <div v-for="board in BOARDS" :key="board.key" class="leaderboard-board">
               <div class="board-title">{{ board.label }}</div>
+              <div v-if="board.note" class="board-note">{{ board.note }}</div>
               <div v-if="leaderboardLoading" class="board-empty">불러오는 중...</div>
               <div v-else-if="leaderboardError" class="board-empty">{{ leaderboardError }}</div>
               <div v-else class="board-list">
@@ -447,6 +448,12 @@ onUnmounted(() => {
   font-weight: 700;
   color: #1a1a2e;
   margin-bottom: 10px;
+}
+
+.board-note {
+  font-size: 11.5px;
+  color: #636e72;
+  margin: -6px 0 10px;
 }
 
 .board-list {

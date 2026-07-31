@@ -24,6 +24,9 @@ public class SlackBotReplyService {
     private final String frontendUrl;
     private final boolean testMode;
 
+    // 봇 자신의 슬랙 user_id - 한 번 조회하면 안 바뀌므로 캐싱 (동기화 중 봇 댓글을 걸러내는 데 사용)
+    private volatile String cachedBotUserId;
+
     public SlackBotReplyService(
             @Value("${slack.bot-token:}") String botToken,
             @Value("${slack.channel-id}") String channelId,
@@ -46,6 +49,33 @@ public class SlackBotReplyService {
 
     public void notifySyncFailure(String threadTs) {
         postThreadReply(threadTs, "⚠️ SKALA-Hub 동기화에 실패했습니다. 관리자에게 문의해주세요!");
+    }
+
+    // 봇이 스레드에 남긴 댓글을 실제 학생 댓글과 구분하기 위한 봇 자신의 user_id 조회 (SlackSyncService가 사용)
+    // 조회 실패 시 null - 호출부는 null이면 걸러내지 않고 그냥 넘어가야 함
+    public String resolveBotUserId() {
+        if (testMode || botToken.isBlank()) {
+            return null;
+        }
+        String cached = cachedBotUserId;
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            JsonNode response = restClient.post()
+                    .uri("https://slack.com/api/auth.test")
+                    .header("Authorization", "Bearer " + botToken)
+                    .retrieve()
+                    .body(JsonNode.class);
+            if (response.path("ok").asBoolean(false)) {
+                cachedBotUserId = response.path("user_id").asString(null);
+                return cachedBotUserId;
+            }
+            log.warn("봇 user_id 조회 실패: {}", describeError(response));
+        } catch (Exception e) {
+            log.warn("봇 user_id 조회 실패", e);
+        }
+        return null;
     }
 
     // 관리자가 봇 댓글을 직접 지울 때 사용 (AdminController에서 호출) - 실패하면 예외를 그대로 던져서 API 응답에 반영

@@ -194,6 +194,7 @@ public class SlackSyncService {
 
     private int syncReplies(Post post, String threadTs, Map<String, SlackUserInfo> userInfoCache) {
         List<JsonNode> replies = fetchAllReplies(threadTs);
+        String botUserId = slackBotReplyService.resolveBotUserId();
         int count = 0;
         // 0번째는 부모 게시글 자신이므로 1번부터 순회
         for (int i = 1; i < replies.size(); i++) {
@@ -202,8 +203,14 @@ public class SlackSyncService {
             if (slackTs.isBlank()) {
                 continue;
             }
-            Reply entity = replyRepository.findBySlackTs(slackTs).orElseGet(Reply::new);
             String userId = reply.path("user").asString(null);
+            // 봇이 동기화 완료/실패 안내로 남긴 댓글은 실제 학생 댓글이 아니므로 댓글수·순위보드 집계에서 제외.
+            // 이전에 이미 잘못 저장된 봇 댓글이 있으면 이번 기회에 지워서 정리
+            if (botUserId != null && botUserId.equals(userId)) {
+                replyRepository.findBySlackTs(slackTs).ifPresent(replyRepository::delete);
+                continue;
+            }
+            Reply entity = replyRepository.findBySlackTs(slackTs).orElseGet(Reply::new);
             SlackUserInfo userInfo = resolveUserInfo(userId, userInfoCache);
             entity.setPost(post);
             entity.setSlackTs(slackTs);
@@ -214,6 +221,11 @@ public class SlackSyncService {
             entity.setCreatedAt(tsToLocalDateTime(slackTs));
             replyRepository.save(entity);
             count++;
+        }
+        // 슬랙이 알려준 reply_count는 봇 댓글까지 포함된 값이라, 실제(봇 제외) 개수로 바로잡음
+        if (post.getReplyCount() == null || post.getReplyCount() != count) {
+            post.setReplyCount(count);
+            postRepository.save(post);
         }
         return count;
     }
