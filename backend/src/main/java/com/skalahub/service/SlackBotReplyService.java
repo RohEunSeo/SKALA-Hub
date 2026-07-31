@@ -17,9 +17,6 @@ public class SlackBotReplyService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackBotReplyService.class);
 
-    // 버그 제보/건의사항/피드백 접수용 익명 설문폼 - 비밀 정보가 아니므로 상수로 고정
-    private static final String SURVEY_FORM_URL = "https://tally.so/r/gDX4G4";
-
     private final RestClient restClient = RestClient.create();
 
     private final String botToken;
@@ -43,8 +40,7 @@ public class SlackBotReplyService {
     public void notifySyncSuccess(String threadTs, Long postId) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         String message = "✅ SKALA-Hub에 동기화되었습니다! (" + timestamp + ")\n"
-                + "🔗 바로가기: " + frontendUrl + "/posts/" + postId + "\n"
-                + "📌 버그 제보·건의사항·피드백은 익명 설문폼으로 편하게 남겨주세요! " + SURVEY_FORM_URL;
+                + "🔗 바로가기: " + frontendUrl + "/posts/" + postId;
         postThreadReply(threadTs, message);
     }
 
@@ -52,7 +48,43 @@ public class SlackBotReplyService {
         postThreadReply(threadTs, "⚠️ SKALA-Hub 동기화에 실패했습니다. 관리자에게 문의해주세요!");
     }
 
-    // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음
+    // 관리자가 봇 댓글을 직접 지울 때 사용 (AdminController에서 호출) - 실패하면 예외를 그대로 던져서 API 응답에 반영
+    public void deleteReply(String ts) {
+        if (testMode) {
+            log.info("[TEST_MODE] 슬랙 댓글 삭제 스킵 - ts={}", ts);
+            return;
+        }
+        JsonNode response = restClient.post()
+                .uri("https://slack.com/api/chat.delete")
+                .header("Authorization", "Bearer " + botToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("channel", channelId, "ts", ts))
+                .retrieve()
+                .body(JsonNode.class);
+        if (!response.path("ok").asBoolean(false)) {
+            throw new IllegalStateException("슬랙 댓글 삭제 실패: " + describeError(response));
+        }
+    }
+
+    // 관리자가 봇 댓글 내용을 직접 고칠 때 사용 (AdminController에서 호출) - 실패하면 예외를 그대로 던져서 API 응답에 반영
+    public void updateReply(String ts, String text) {
+        if (testMode) {
+            log.info("[TEST_MODE] 슬랙 댓글 수정 스킵 - ts={}, text={}", ts, text);
+            return;
+        }
+        JsonNode response = restClient.post()
+                .uri("https://slack.com/api/chat.update")
+                .header("Authorization", "Bearer " + botToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("channel", channelId, "ts", ts, "text", text))
+                .retrieve()
+                .body(JsonNode.class);
+        if (!response.path("ok").asBoolean(false)) {
+            throw new IllegalStateException("슬랙 댓글 수정 실패: " + describeError(response));
+        }
+    }
+
+    // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음 (동기화 흐름 전용)
     private void postThreadReply(String threadTs, String text) {
         if (testMode) {
             log.info("[TEST_MODE] 슬랙 댓글 전송 스킵 - threadTs={}, text={}", threadTs, text);
