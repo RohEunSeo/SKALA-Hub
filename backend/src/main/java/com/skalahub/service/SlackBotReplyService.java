@@ -63,7 +63,12 @@ public class SlackBotReplyService {
                     .uri("https://slack.com/api/chat.postMessage")
                     .header("Authorization", "Bearer " + botToken)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("channel", channelId, "thread_ts", threadTs, "text", text))
+                    .body(Map.of(
+                            "channel", channelId,
+                            "thread_ts", threadTs,
+                            "text", text,
+                            "unfurl_links", false,
+                            "unfurl_media", false))
                     .retrieve()
                     .body(JsonNode.class);
             if (!response.path("ok").asBoolean(false)) {
