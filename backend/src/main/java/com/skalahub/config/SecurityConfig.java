@@ -20,7 +20,9 @@ public class SecurityConfig {
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter, @Value("${app.frontend-url}") String frontendUrl) {
         this.jwtAuthFilter = jwtAuthFilter;
-        this.frontendUrl = frontendUrl;
+        // CORS Origin 매칭은 완전 일치라서, 환경변수 끝에 "/"가 붙어있으면(브라우저 Origin 헤더는
+        // 절대 "/"로 안 끝남) 모든 요청이 조용히 CORS로 막힘 - 방어적으로 제거
+        this.frontendUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
     }
 
     @Bean

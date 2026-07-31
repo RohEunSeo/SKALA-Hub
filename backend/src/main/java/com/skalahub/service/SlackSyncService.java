@@ -132,21 +132,23 @@ public class SlackSyncService {
 
                 Optional<Post> existing = postRepository.findBySlackTs(slackTs);
                 boolean isNew = existing.isEmpty();
-                // 신규 글은 저장/분류가 끝나기 전에 "동기화 중" 댓글을 먼저 달아두고, 끝나면 그 댓글을 수정한다
-                String syncCommentTs = isNew ? slackBotReplyService.notifySyncStarted(slackTs) : null;
+                // 신규 글은 저장/분류가 끝나기 전에 "동기화 중" 댓글을 먼저 달고, 끝나면 별도의 "완료" 댓글을 단다
+                if (isNew) {
+                    slackBotReplyService.notifySyncStarted(slackTs);
+                }
                 Post post;
                 try {
                     post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
                 } catch (Exception e) {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
                     if (isNew) {
-                        slackBotReplyService.notifySyncFailure(syncCommentTs);
+                        slackBotReplyService.notifySyncFailure(slackTs);
                     }
                     continue;
                 }
                 if (isNew) {
                     newPosts++;
-                    slackBotReplyService.notifySyncSuccess(syncCommentTs, post.getId());
+                    slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);

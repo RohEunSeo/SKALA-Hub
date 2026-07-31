@@ -17,10 +17,6 @@ public class SlackBotReplyService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackBotReplyService.class);
 
-    // TEST_MODE에서 postThreadReply가 실제로는 ts를 못 받아오므로 downstream(notifySyncSuccess/Failure)이
-    // "시작 알림 자체가 실패했다"고 오인해 로그를 건너뛰지 않도록 쓰는 더미 값
-    private static final String TEST_MODE_COMMENT_TS = "TEST_MODE_TS";
-
     // 버그 제보/건의사항/피드백 접수용 익명 설문폼 - 비밀 정보가 아니므로 상수로 고정
     private static final String SURVEY_FORM_URL = "https://tally.so/r/gDX4G4";
 
@@ -38,33 +34,35 @@ public class SlackBotReplyService {
             @Value("${test-mode:false}") boolean testMode) {
         this.botToken = botToken;
         this.channelId = channelId;
-        this.frontendUrl = frontendUrl;
+        // FRONTEND_URL 환경변수 끝에 "/"가 붙어있어도(예: https://x.com/) 링크가 "//posts/.."로
+        // 겹치지 않도록 방어
+        this.frontendUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
         this.testMode = testMode;
     }
 
-    // 글 감지 직후 "동기화 중" 댓글을 먼저 달고, 나중에 notifySyncSuccess/Failure에서 이 댓글을 수정한다.
-    // 반환값은 이 댓글 자신의 ts(수정 대상 식별자) - 전송 자체가 실패하면 null
-    public String notifySyncStarted(String threadTs) {
-        return postThreadReply(threadTs, "🔄 SKALA-Hub 동기화 중입니다 . . .");
+    // 글 감지 직후 "동기화 중" 댓글을 단다. notifySyncSuccess/Failure는 이 댓글을 고쳐쓰지 않고
+    // 완전히 별도의 새 댓글을 달아서, 스레드에 "동기화 중 → 완료"가 각각 남아있도록 한다.
+    public void notifySyncStarted(String threadTs) {
+        postThreadReply(threadTs, "🔄 SKALA-Hub 동기화 중입니다 . . .");
     }
 
-    public void notifySyncSuccess(String commentTs, Long postId) {
+    public void notifySyncSuccess(String threadTs, Long postId) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         String message = "✅ SKALA-Hub에 동기화되었습니다! (" + timestamp + ")\n"
                 + "🔗 바로가기: " + frontendUrl + "/posts/" + postId + "\n"
                 + "📌 버그 제보·건의사항·피드백은 익명 설문폼으로 편하게 남겨주세요! " + SURVEY_FORM_URL;
-        updateReply(commentTs, message);
+        postThreadReply(threadTs, message);
     }
 
-    public void notifySyncFailure(String commentTs) {
-        updateReply(commentTs, "⚠️ SKALA-Hub 동기화에 실패했습니다. 관리자에게 문의해주세요!");
+    public void notifySyncFailure(String threadTs) {
+        postThreadReply(threadTs, "⚠️ SKALA-Hub 동기화에 실패했습니다. 관리자에게 문의해주세요!");
     }
 
     // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음
-    private String postThreadReply(String threadTs, String text) {
+    private void postThreadReply(String threadTs, String text) {
         if (testMode) {
             log.info("[TEST_MODE] 슬랙 댓글 전송 스킵 - threadTs={}, text={}", threadTs, text);
-            return TEST_MODE_COMMENT_TS;
+            return;
         }
         try {
             JsonNode response = restClient.post()
@@ -76,38 +74,9 @@ public class SlackBotReplyService {
                     .body(JsonNode.class);
             if (!response.path("ok").asBoolean(false)) {
                 log.error("슬랙 스레드 댓글 전송 실패 (threadTs={}): {}", threadTs, describeError(response));
-                return null;
             }
-            return response.path("ts").asString(null);
         } catch (Exception e) {
             log.error("슬랙 스레드 댓글 전송 실패 (threadTs={})", threadTs, e);
-            return null;
-        }
-    }
-
-    // 댓글 수정 실패도 동기화 흐름을 막으면 안 되므로 어떤 예외도 밖으로 던지지 않음
-    private void updateReply(String commentTs, String text) {
-        if (testMode) {
-            log.info("[TEST_MODE] 슬랙 댓글 수정 스킵 - commentTs={}, text={}", commentTs, text);
-            return;
-        }
-        if (commentTs == null) {
-            log.warn("수정할 슬랙 댓글이 없어 건너뜁니다 (동기화 중 알림 전송에 실패했던 것으로 보임) - text={}", text);
-            return;
-        }
-        try {
-            JsonNode response = restClient.post()
-                    .uri("https://slack.com/api/chat.update")
-                    .header("Authorization", "Bearer " + botToken)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("channel", channelId, "ts", commentTs, "text", text))
-                    .retrieve()
-                    .body(JsonNode.class);
-            if (!response.path("ok").asBoolean(false)) {
-                log.error("슬랙 댓글 수정 실패 (commentTs={}): {}", commentTs, describeError(response));
-            }
-        } catch (Exception e) {
-            log.error("슬랙 댓글 수정 실패 (commentTs={})", commentTs, e);
         }
     }
 

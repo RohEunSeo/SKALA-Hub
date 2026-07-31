@@ -61,7 +61,8 @@ public class HomeService {
     }
 
     public HomeLeaderboardResponse getLeaderboard(String period) {
-        LocalDateTime dateFrom = "week".equals(period) ? postService.resolveDateRange("week")[0] : null;
+        // resolveDateRange가 인식 못 하는 값("all" 등)은 알아서 {null, null}을 반환하므로 별도 분기 불필요
+        LocalDateTime dateFrom = postService.resolveDateRange(period)[0];
 
         List<LeaderboardEntryDto> topReactions = postRepository.findTopReactions(dateFrom).stream()
                 .map(post -> new LeaderboardEntryDto(postService.toResponse(post), post.getReactionCount()))
