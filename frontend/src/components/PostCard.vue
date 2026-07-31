@@ -44,8 +44,10 @@ const isBookmarked = computed(() => bookmarksStore.bookmarkedPostIds.includes(pr
 const imageFiles = computed(() => (props.post.files ?? []).filter((file) => file.isImage))
 const otherFiles = computed(() => (props.post.files ?? []).filter((file) => !file.isImage))
 
+// /api/files/proxy는 인증이 필요한데 <img src>는 브라우저가 직접 요청해서 Authorization 헤더를
+// 못 붙이므로, 쿼리 파라미터로 토큰을 실어 보낸다 (JwtAuthFilter가 헤더 없으면 이 파라미터를 봐줌)
 function proxySrc(path) {
-  return `${apiBase}${path}`
+  return authStore.token ? `${apiBase}${path}&token=${authStore.token}` : `${apiBase}${path}`
 }
 
 const lightboxIndex = ref(null)
