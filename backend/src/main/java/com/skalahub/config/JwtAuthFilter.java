@@ -28,10 +28,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
-        if (header != null && header.startsWith("Bearer ")) {
+        String token = extractToken(request);
+        if (token != null) {
             try {
-                Claims claims = jwtService.parseToken(header.substring(7));
+                Claims claims = jwtService.parseToken(token);
                 String role = claims.get("role", String.class);
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
                 var authentication =
@@ -42,5 +42,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    // 대부분은 Authorization 헤더로 오지만, <img src>처럼 브라우저가 헤더를 못 붙이는
+    // 요청(파일 프록시)을 위해 쿼리 파라미터(token)도 보조 수단으로 허용
+    private String extractToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+        String queryToken = request.getParameter("token");
+        return (queryToken != null && !queryToken.isBlank()) ? queryToken : null;
     }
 }
