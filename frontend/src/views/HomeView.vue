@@ -206,7 +206,6 @@ onUnmounted(() => {
       <div class="leaderboard-card">
         <div class="period-tabs">
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'all' }" @click="selectPeriod('all')">전체</span>
-          <span class="period-tab" :class="{ active: leaderboardPeriod === 'today' }" @click="selectPeriod('today')">오늘</span>
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'week' }" @click="selectPeriod('week')">이번주</span>
         </div>
         <div class="leaderboard-viewport">
