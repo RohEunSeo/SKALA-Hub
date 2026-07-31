@@ -40,12 +40,6 @@ public class SlackBotReplyService {
         this.testMode = testMode;
     }
 
-    // 글 감지 직후 "동기화 중" 댓글을 단다. notifySyncSuccess/Failure는 이 댓글을 고쳐쓰지 않고
-    // 완전히 별도의 새 댓글을 달아서, 스레드에 "동기화 중 → 완료"가 각각 남아있도록 한다.
-    public void notifySyncStarted(String threadTs) {
-        postThreadReply(threadTs, "🔄 SKALA-Hub 동기화 중입니다 . . .");
-    }
-
     public void notifySyncSuccess(String threadTs, Long postId) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         String message = "✅ SKALA-Hub에 동기화되었습니다! (" + timestamp + ")\n"
@@ -69,7 +63,12 @@ public class SlackBotReplyService {
                     .uri("https://slack.com/api/chat.postMessage")
                     .header("Authorization", "Bearer " + botToken)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("channel", channelId, "thread_ts", threadTs, "text", text))
+                    .body(Map.of(
+                            "channel", channelId,
+                            "thread_ts", threadTs,
+                            "text", text,
+                            "unfurl_links", false,
+                            "unfurl_media", false))
                     .retrieve()
                     .body(JsonNode.class);
             if (!response.path("ok").asBoolean(false)) {
