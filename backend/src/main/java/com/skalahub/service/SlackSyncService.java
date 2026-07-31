@@ -132,10 +132,8 @@ public class SlackSyncService {
 
                 Optional<Post> existing = postRepository.findBySlackTs(slackTs);
                 boolean isNew = existing.isEmpty();
-                // 신규 글은 저장/분류가 끝나기 전에 "동기화 중" 댓글을 먼저 달고, 끝나면 별도의 "완료" 댓글을 단다
-                if (isNew) {
-                    slackBotReplyService.notifySyncStarted(slackTs);
-                }
+                // "동기화 중" 댓글을 따로 달았었는데, 저장+분류가 1~2초 안에 끝나서 완료 댓글과 거의
+                // 동시에 뜨는 바람에 의미가 없었음 - 완료(또는 실패) 댓글 하나만 남김
                 Post post;
                 try {
                     post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
