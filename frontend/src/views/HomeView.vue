@@ -21,8 +21,8 @@ const BOARDS = [
     key: 'topComments',
     label: '💬 가장 댓글이 많은 글',
     unit: '💬',
-    note: '* 슬랙봇이 남긴 댓글은 집계에서 제외됩니다',
-    emptyText: '아직 댓글 달린 글이 없습니다 (슬랙봇 댓글 제외)',
+    note: '* 슬랙봇이 남긴 댓글은 집계에서 제외됩니다 (댓글 수가 동일한 경우, 먼저 등록된 글이 우선)',
+    emptyText: '아직 교육생 댓글이 달린 글이 없습니다',
   },
   { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '🔖', emptyText: '아직 저장된 글이 없습니다' },
 ]
