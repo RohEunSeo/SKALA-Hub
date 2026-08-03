@@ -123,10 +123,9 @@ public class PostService {
         return toResponse(post);
     }
 
+    // 존재 확인 쿼리를 따로 두지 않고 바로 조회 - 프론트에서 이미 로드된 게시글에 대해서만 호출되므로
+    // 없는 postId가 들어올 일이 없고, DB가 원격(Supabase)이라 왕복 쿼리를 하나라도 줄이는 게 체감 속도에 큼
     public List<ReplyResponse> getReplies(Long postId) {
-        if (!postRepository.existsById(postId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다");
-        }
         return replyRepository.findByPost_IdOrderByCreatedAtAsc(postId).stream()
                 .map(this::toReplyResponse)
                 .toList();
