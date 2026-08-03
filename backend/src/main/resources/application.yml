@@ -54,4 +54,4 @@ jwt:
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   # 홈 화면 "SKALA N기 D일째" 계산 기준일
-  cohort-start-date: ${SKALA_COHORT_START_DATE:2026-07-14}
+  cohort-start-date: ${SKALA_COHORT_START_DATE:2026-07-13}
