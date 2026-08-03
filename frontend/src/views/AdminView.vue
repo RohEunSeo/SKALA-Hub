@@ -6,6 +6,8 @@ import AuthRequired from '../components/AuthRequired.vue'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 import { usePostsStore } from '../stores/posts'
+import { useHomeStore } from '../stores/home'
+import { useMyPageStore } from '../stores/mypage'
 import { fetchPosts } from '../api/posts'
 import {
   triggerSync,
@@ -24,6 +26,15 @@ const MANAGE_PAGE_SIZE = 30
 const authStore = useAuthStore()
 const toastStore = useToastStore()
 const postsStore = usePostsStore()
+const homeStore = useHomeStore()
+const myPageStore = useMyPageStore()
+
+// 동기화로 게시글/댓글/반응 데이터가 바뀌었으니, 피드·홈·마이페이지 캐시를 무효화해서 다음 방문 때 새로 불러오게 함
+function invalidateFeedCaches() {
+  postsStore.invalidateCache()
+  homeStore.invalidateCache()
+  myPageStore.invalidateCache()
+}
 
 // 동기화 (최근 N일 - 평소에 쓰는 가벼운 동기화)
 const syncing = ref(false)
@@ -37,6 +48,7 @@ async function runSync() {
   try {
     const { data } = await triggerSync()
     syncResult.value = data
+    invalidateFeedCaches()
   } catch (error) {
     syncError.value = error.response?.data?.error || '동기화 중 오류가 발생했습니다.'
   } finally {
@@ -56,6 +68,7 @@ async function runFullSync() {
   try {
     const { data } = await triggerFullSync()
     syncFullResult.value = data
+    invalidateFeedCaches()
   } catch (error) {
     syncFullError.value = error.response?.data?.error || '전체 재수집 중 오류가 발생했습니다.'
   } finally {

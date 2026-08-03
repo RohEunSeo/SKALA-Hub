@@ -22,6 +22,8 @@ export const usePostsStore = defineStore('posts', () => {
   const error = ref('')
   // 목록이 처음부터(reset) 다시 조회될 때마다 증가 - 화면 쪽에서 "몇 개까지 보여줄지"를 리셋하는 신호로 사용
   const resetToken = ref(0)
+  // 현재 필터 조건으로 한 번이라도 성공적으로 불러왔는지 - 피드 탭을 벗어났다 돌아왔을 때 재조회를 건너뛰는 기준
+  const postsLoaded = ref(false)
 
   // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
   const categoryCounts = ref([])
@@ -122,13 +124,29 @@ export const usePostsStore = defineStore('posts', () => {
       page.value = data?.page ?? 0
       totalPages.value = data?.totalPages ?? 0
       lastSyncedAt.value = data?.lastSyncedAt ?? null
-      if (reset) resetToken.value += 1
+      if (reset) {
+        resetToken.value += 1
+        postsLoaded.value = true
+      }
     } catch {
       error.value = '게시글을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
       if (reset) posts.value = []
     } finally {
       loading.value = false
     }
+  }
+
+  // 피드 화면 마운트 시 호출 - 이미 같은 조건으로 불러온 적 있으면 API 재호출 없이 캐시된 데이터를 그대로 사용.
+  // 실제로 새로 불러왔으면 true, 캐시를 그대로 썼으면 false를 반환 (호출부가 화면 노출량을 채울지 판단하는 데 사용)
+  async function ensureLoaded() {
+    if (postsLoaded.value) return false
+    await fetchPosts(true)
+    return true
+  }
+
+  // 동기화로 게시글 데이터가 바뀌었을 때 호출 - 다음 피드 방문 시 다시 불러오게 함
+  function invalidateCache() {
+    postsLoaded.value = false
   }
 
   return {
@@ -146,6 +164,7 @@ export const usePostsStore = defineStore('posts', () => {
     loading,
     error,
     resetToken,
+    postsLoaded,
     hasMore,
     isFutureMonth,
     categoryCounts,
@@ -157,6 +176,8 @@ export const usePostsStore = defineStore('posts', () => {
     setSort,
     setCampus,
     fetchPosts,
+    ensureLoaded,
+    invalidateCache,
     loadCategoryCounts,
     refreshCategoryCounts,
     categoryCount,

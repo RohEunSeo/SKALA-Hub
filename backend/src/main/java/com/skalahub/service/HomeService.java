@@ -24,19 +24,16 @@ public class HomeService {
     private final PostRepository postRepository;
     private final PostService postService;
     private final UserRepository userRepository;
-    private final SlackBotReplyService slackBotReplyService;
     private final LocalDate cohortStartDate;
 
     public HomeService(
             PostRepository postRepository,
             PostService postService,
             UserRepository userRepository,
-            SlackBotReplyService slackBotReplyService,
             @Value("${app.cohort-start-date}") String cohortStartDate) {
         this.postRepository = postRepository;
         this.postService = postService;
         this.userRepository = userRepository;
-        this.slackBotReplyService = slackBotReplyService;
         this.cohortStartDate = LocalDate.parse(cohortStartDate);
     }
 
@@ -77,9 +74,9 @@ public class HomeService {
                 .map(post -> new LeaderboardEntryDto(postService.toResponse(post), post.getReactionCount()))
                 .toList();
 
-        String botUserId = slackBotReplyService.resolveBotUserId();
         List<LeaderboardEntryDto> topComments = new ArrayList<>();
-        for (Object[] row : postRepository.findTopComments(dateFrom, botUserId)) {
+        for (Object[] row : postRepository.findTopComments(
+                dateFrom, SlackBotReplyService.SYNC_SUCCESS_MARKER, SlackBotReplyService.SYNC_FAILURE_MARKER)) {
             Long postId = ((Number) row[0]).longValue();
             long commentCount = ((Number) row[1]).longValue();
             postRepository.findById(postId).ifPresent(post -> {
