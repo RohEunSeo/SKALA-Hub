@@ -39,20 +39,36 @@ public class AdminController {
         this.slackBotReplyService = slackBotReplyService;
     }
 
-    // 슬랙 채널 전체 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류)
+    // 최근 N일 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류) - API 호출량이 적어 자주 눌러도 부담 없음
     @PostMapping("/sync")
     public ResponseEntity<Map<String, Object>> sync() {
         try {
-            SlackSyncService.SyncSummary summary = slackSyncService.syncAll();
-            return ResponseEntity.ok(Map.of(
-                    "postsProcessed", summary.postsProcessed(),
-                    "newPosts", summary.newPosts(),
-                    "repliesProcessed", summary.repliesProcessed(),
-                    "durationMs", summary.durationMs()));
+            SlackSyncService.SyncSummary summary = slackSyncService.incrementalSync();
+            return ResponseEntity.ok(toSyncResponse(summary));
         } catch (IllegalStateException alreadyRunning) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", alreadyRunning.getMessage()));
         }
+    }
+
+    // 채널 히스토리 전체 재수집 - 평소엔 매일 새벽 자동 실행되므로 과거 데이터 복구 등 급할 때만 수동 실행
+    @PostMapping("/sync-full")
+    public ResponseEntity<Map<String, Object>> syncFull() {
+        try {
+            SlackSyncService.SyncSummary summary = slackSyncService.syncAll();
+            return ResponseEntity.ok(toSyncResponse(summary));
+        } catch (IllegalStateException alreadyRunning) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", alreadyRunning.getMessage()));
+        }
+    }
+
+    private Map<String, Object> toSyncResponse(SlackSyncService.SyncSummary summary) {
+        return Map.of(
+                "postsProcessed", summary.postsProcessed(),
+                "newPosts", summary.newPosts(),
+                "repliesProcessed", summary.repliesProcessed(),
+                "durationMs", summary.durationMs());
     }
 
     // 미분류(카테고리 없음) 게시글 목록
