@@ -15,9 +15,15 @@ import { CATEGORIES } from '../constants/categories'
 const AUTO_SLIDE_MS = 4000
 
 const BOARDS = [
-  { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '👍🏻' },
-  { key: 'topComments', label: '💬 가장 댓글이 많은 글', unit: '💬', note: '* 슬랙봇이 남긴 댓글은 집계에서 제외됩니다' },
-  { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '🔖' },
+  { key: 'topReactions', label: '🔥 가장 반응이 많은 글', unit: '👍🏻', emptyText: '아직 반응이 달린 글이 없습니다' },
+  {
+    key: 'topComments',
+    label: '💬 가장 댓글이 많은 글',
+    unit: '💬',
+    note: '* 슬랙봇이 남긴 댓글은 집계에서 제외됩니다',
+    emptyText: '아직 댓글 달린 글이 없습니다 (슬랙봇 댓글 제외)',
+  },
+  { key: 'topSaves', label: '🔖 가장 많이 저장된 글', unit: '🔖', emptyText: '아직 저장된 글이 없습니다' },
 ]
 
 const route = useRoute()
@@ -226,7 +232,7 @@ onUnmounted(() => {
                   <span class="board-post-title">{{ previewText(entry.post.content) }}</span>
                   <span class="board-count">{{ entry.count }} {{ board.unit }}</span>
                 </div>
-                <div v-if="boardEntries(board.key).length === 0" class="board-empty">아직 데이터가 없습니다</div>
+                <div v-if="boardEntries(board.key).length === 0" class="board-empty">{{ board.emptyText }}</div>
               </div>
             </div>
           </div>
