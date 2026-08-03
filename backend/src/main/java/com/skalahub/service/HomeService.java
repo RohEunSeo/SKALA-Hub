@@ -41,8 +41,11 @@ public class HomeService {
         LocalDate today = LocalDate.now(ZONE);
         long todayNewPostCount = postRepository.countCreatedSince(today.atStartOfDay());
         long cohortDay = ChronoUnit.DAYS.between(cohortStartDate, today) + 1;
-        // 7일 단위로 끊어서 몇 주차인지 계산 (1~7일째 1주차, 8~14일째 2주차, ...)
-        long cohortWeek = cohortDay > 0 ? (cohortDay - 1) / 7 + 1 : 0;
+        // 주차는 시작일이 속한 주의 월요일을 기준으로 계산 (시작일이 화요일이어도 그 주가 1주차)
+        LocalDate cohortWeekAnchor = cohortStartDate.minusDays(cohortStartDate.getDayOfWeek().getValue() - 1);
+        long cohortWeek = today.isBefore(cohortWeekAnchor)
+                ? 0
+                : ChronoUnit.DAYS.between(cohortWeekAnchor, today) / 7 + 1;
 
         List<CategoryCountDto> categoryCounts = postRepository.countByCategory().stream()
                 .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
