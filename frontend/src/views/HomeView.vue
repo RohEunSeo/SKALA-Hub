@@ -1,12 +1,13 @@
 <script setup>
 // 메인 홈 화면 - 요약 통계 + 카테고리별 아카이브 (별도 로그인 페이지 없이 여기서 슬랙 OAuth 콜백도 받음)
 import { ref, onMounted, onUnmounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
-import { fetchHomeSummary, fetchHomeLeaderboard } from '../api/home'
+import { useHomeStore } from '../stores/home'
 import { getSlackLoginUrl } from '../api/auth'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
@@ -30,44 +31,16 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
+const homeStore = useHomeStore()
+const { summary, summaryError, leaderboard, leaderboardLoading, leaderboardError, leaderboardPeriod } =
+  storeToRefs(homeStore)
 
-const summary = ref(null)
-const summaryError = ref('')
-const leaderboard = ref(null)
-const leaderboardLoading = ref(true)
-const leaderboardError = ref('')
-const leaderboardPeriod = ref('all')
 const boardIndex = ref(0)
 let autoTimer = null
 
-async function loadSummary() {
-  summaryError.value = ''
-  try {
-    const { data } = await fetchHomeSummary()
-    summary.value = data
-  } catch {
-    summaryError.value = '요약 정보를 불러오지 못했습니다.'
-  }
-}
-
-async function loadLeaderboard() {
-  leaderboardLoading.value = true
-  leaderboardError.value = ''
-  try {
-    const { data } = await fetchHomeLeaderboard(leaderboardPeriod.value)
-    leaderboard.value = data
-  } catch {
-    leaderboardError.value = '순위보드를 불러오지 못했습니다.'
-  } finally {
-    leaderboardLoading.value = false
-  }
-}
-
 function selectPeriod(period) {
-  if (leaderboardPeriod.value === period) return
-  leaderboardPeriod.value = period
   boardIndex.value = 0
-  loadLeaderboard()
+  homeStore.selectPeriod(period)
 }
 
 // leaderboard[board.key]를 템플릿에서 직접 접근하지 않고 항상 배열을 보장해서 반환
@@ -153,8 +126,7 @@ onMounted(() => {
     console.error('슬랙 로그인 실패:', error)
   }
 
-  loadSummary()
-  loadLeaderboard()
+  homeStore.ensureLoaded()
   startAutoSlide()
 })
 

@@ -1,63 +1,28 @@
 <script setup>
 // 마이페이지 - 프로필/통계/내가 올린 글·저장한 글
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
+import { useMyPageStore } from '../stores/mypage'
 import { removeBookmark } from '../api/bookmarks'
-import { fetchMyStats, fetchMyPosts } from '../api/mypage'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
 import { CATEGORIES } from '../constants/categories'
 
-const PAGE_SIZE = 5
-
 const router = useRouter()
 const authStore = useAuthStore()
 const bookmarksStore = useBookmarksStore()
-const stats = ref(null)
-const statsLoading = ref(false)
-const statsError = ref('')
-const activeTab = ref('posts')
-const posts = ref([])
-const page = ref(0)
-const totalPages = ref(0)
-const loading = ref(false)
-const postsError = ref('')
+const myPageStore = useMyPageStore()
+const { stats, statsError, activeTab, posts, page, totalPages, loading, postsError } =
+  storeToRefs(myPageStore)
 
 function categoryLabel(value) {
   return CATEGORIES.find((cat) => cat.value === value)?.shortLabel ?? value
-}
-
-async function loadStats() {
-  statsLoading.value = true
-  statsError.value = ''
-  try {
-    const { data } = await fetchMyStats()
-    stats.value = data
-  } catch {
-    statsError.value = '통계를 불러오지 못했습니다.'
-  } finally {
-    statsLoading.value = false
-  }
-}
-
-async function loadPosts() {
-  loading.value = true
-  postsError.value = ''
-  try {
-    const { data } = await fetchMyPosts(activeTab.value, page.value, PAGE_SIZE)
-    posts.value = data?.content ?? []
-    totalPages.value = data?.totalPages ?? 0
-  } catch {
-    postsError.value = '게시글을 불러오지 못했습니다.'
-    posts.value = []
-  } finally {
-    loading.value = false
-  }
 }
 
 function goToPost(postId) {
@@ -78,30 +43,20 @@ async function unsave(postId) {
 }
 
 function setTab(tab) {
-  if (activeTab.value === tab) return
-  activeTab.value = tab
-  page.value = 0
-  loadPosts()
+  myPageStore.setTab(tab)
 }
 
 function prevPage() {
-  if (page.value > 0) {
-    page.value -= 1
-    loadPosts()
-  }
+  myPageStore.prevPage()
 }
 
 function nextPage() {
-  if (page.value + 1 < totalPages.value) {
-    page.value += 1
-    loadPosts()
-  }
+  myPageStore.nextPage()
 }
 
 onMounted(() => {
   if (!authStore.isAuthenticated) return
-  loadStats()
-  loadPosts()
+  myPageStore.ensureLoaded()
 })
 </script>
 
@@ -166,7 +121,14 @@ onMounted(() => {
         <div class="tab" :class="{ active: activeTab === 'reacted' }" @click="setTab('reacted')">반응한 글</div>
       </div>
 
-      <div class="post-list">
+      <div v-if="loading && posts.length === 0" class="post-list" aria-hidden="true">
+        <div class="post-row-skeleton" v-for="n in 3" :key="n">
+          <SkeletonBlock width="50%" height="12px" />
+          <SkeletonBlock width="80%" height="15px" />
+          <SkeletonBlock width="30%" height="12px" />
+        </div>
+      </div>
+      <div v-else class="post-list">
         <div v-for="post in posts" :key="post.id" class="post-row" @click="goToPost(post.id)">
           <div class="post-row-header">
             <div class="post-meta">{{ categoryLabel(post.category) }} · {{ formatRelativeTime(post.createdAt) }}</div>
@@ -293,6 +255,16 @@ onMounted(() => {
   flex-direction: column;
   gap: 14px;
   min-height: 200px;
+}
+
+.post-row-skeleton {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 18px 22px;
+  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .post-row {

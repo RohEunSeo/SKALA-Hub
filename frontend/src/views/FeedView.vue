@@ -9,6 +9,7 @@ import SortFilter from '../components/SortFilter.vue'
 import CampusFilter from '../components/CampusFilter.vue'
 import DateFilter from '../components/DateFilter.vue'
 import PostCard from '../components/PostCard.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useAuthStore } from '../stores/auth'
@@ -72,9 +73,12 @@ watch(
   },
 )
 
-onMounted(() => {
+onMounted(async () => {
   if (!authStore.isAuthenticated) return
-  postsStore.fetchPosts(true)
+  // 캐시된 데이터를 그대로 쓴 경우(false 반환)는 fetchPosts가 호출되지 않아 resetToken이 안 바뀌므로
+  // 위 watch가 노출량을 못 채움 - 여기서 직접 채워준다
+  const didFetch = await postsStore.ensureLoaded()
+  if (!didFetch) revealMore()
   bookmarksStore.loadBookmarks()
 })
 
@@ -151,7 +155,15 @@ async function loadMore() {
         <SortFilter />
       </div>
 
-      <div class="post-list">
+      <div v-if="postsStore.loading && postsStore.posts.length === 0" class="post-list" aria-hidden="true">
+        <div class="post-card-skeleton" v-for="n in 3" :key="n">
+          <SkeletonBlock width="70%" height="16px" />
+          <SkeletonBlock width="100%" height="13px" />
+          <SkeletonBlock width="90%" height="13px" />
+          <SkeletonBlock width="40%" height="13px" />
+        </div>
+      </div>
+      <div v-else class="post-list">
         <PostCard
           v-for="post in visiblePosts"
           :key="post.id"
@@ -160,7 +172,7 @@ async function loadMore() {
         />
       </div>
 
-      <div v-if="postsStore.loading" class="status-message">불러오는 중...</div>
+      <div v-if="postsStore.loading && postsStore.posts.length > 0" class="status-message">불러오는 중...</div>
       <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
       <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
         아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
@@ -243,6 +255,16 @@ async function loadMore() {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.post-card-skeleton {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .status-message {
