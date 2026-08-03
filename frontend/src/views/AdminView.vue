@@ -97,10 +97,22 @@ const editState = reactive({})
 const savingId = ref(null)
 const savedId = ref(null)
 const manageCategoryFilter = ref('') // '' = 전체 카테고리
+const manageTagFilter = ref(null) // 선택된 카테고리의 하위 태그 필터, null = 전체
 const allPostsHasMore = computed(() => allPostsPage.value + 1 < allPostsTotalPages.value)
+const manageCategoryTags = computed(
+  () => CATEGORIES.find((cat) => cat.value === manageCategoryFilter.value)?.tags ?? [],
+)
+const savingAll = ref(false)
 
 function selectManageCategory(value) {
   manageCategoryFilter.value = value
+  manageTagFilter.value = null
+  allPostsPage.value = 0
+  loadAllPosts(true)
+}
+
+function selectManageTag(value) {
+  manageTagFilter.value = manageTagFilter.value === value ? null : value
   allPostsPage.value = 0
   loadAllPosts(true)
 }
@@ -148,6 +160,7 @@ async function loadAllPosts(reset = false) {
   try {
     const { data } = await fetchPosts({
       category: manageCategoryFilter.value || undefined,
+      tag: manageTagFilter.value || undefined,
       page: allPostsPage.value,
       size: MANAGE_PAGE_SIZE,
     })
@@ -202,6 +215,38 @@ async function savePost(postId) {
     toastStore.show('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     savingId.value = null
+  }
+}
+
+// 현재 목록에 보이는 게시글을 순서대로 하나씩 저장 - 체크박스만 눌러두고 개별 저장 버튼을 매번 누르지 않아도 되게 함
+async function saveAllPosts() {
+  savingAll.value = true
+  let successCount = 0
+  let failCount = 0
+  try {
+    for (const post of allPosts.value) {
+      const state = editState[post.id]
+      if (!state) continue
+      try {
+        await updatePostAsAdmin(post.id, {
+          category: state.category || null,
+          tags: state.tags,
+          isPinned: state.isPinned,
+        })
+        successCount += 1
+      } catch {
+        failCount += 1
+      }
+    }
+    await loadAllPosts(true)
+    postsStore.refreshCategoryCounts()
+    toastStore.show(
+      failCount === 0
+        ? `${successCount}개 게시글이 저장되었습니다`
+        : `${successCount}개 저장되었습니다 (${failCount}개 실패, 잠시 후 다시 시도해주세요)`,
+    )
+  } finally {
+    savingAll.value = false
   }
 }
 
@@ -281,6 +326,33 @@ onMounted(() => {
             @click="selectManageCategory(cat.value)"
             >{{ cat.icon }} {{ cat.shortLabel }}</span
           >
+        </div>
+
+        <div v-if="manageCategoryTags.length" class="category-chips sub-chips">
+          <span
+            class="chip"
+            :class="{ active: !manageTagFilter }"
+            @click="selectManageTag(null)"
+            >전체</span
+          >
+          <span
+            v-for="sub in manageCategoryTags"
+            :key="sub.value"
+            class="chip"
+            :class="{ active: manageTagFilter === sub.value }"
+            @click="selectManageTag(sub.value)"
+            >{{ sub.label }}</span
+          >
+        </div>
+
+        <div class="bulk-actions">
+          <button
+            class="primary-btn"
+            :disabled="savingAll || allPosts.length === 0"
+            @click="saveAllPosts"
+          >
+            {{ savingAll ? '저장 중...' : `현재 목록 ${allPosts.length}개 전체 저장` }}
+          </button>
         </div>
 
         <div v-if="allPostsLoading" class="status-message">불러오는 중...</div>
@@ -495,6 +567,21 @@ onMounted(() => {
 .chip.active {
   background: #4a3f8f;
   color: #ffffff;
+}
+
+.sub-chips {
+  margin-top: -6px;
+  margin-bottom: 16px;
+}
+
+.sub-chips .chip {
+  font-size: 11.5px;
+  padding: 6px 12px;
+  background: #fafafa;
+}
+
+.bulk-actions {
+  margin-bottom: 16px;
 }
 
 .post-manage-list {
