@@ -639,12 +639,20 @@ function openInSlack() {
   font-size: 13px;
   color: #4a3f8f;
   font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .link-text {
   margin-top: 2px;
   font-size: 12px;
   color: #636e72;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .stats {
