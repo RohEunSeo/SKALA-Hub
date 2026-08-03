@@ -98,13 +98,16 @@ public class SlackSyncService {
     }
 
     // 최근 N일 이내 글만 재조회 - 이 범위 안에서는 새 글/댓글/반응수/수정 모두 이전과 동일하게 5분마다 반영됨.
-    // 그보다 오래된 글의 반응수 변화나 수정은 여기선 안 잡히고 하루 1회 전체 재동기화에서 잡힘
-    private SyncSummary incrementalSync() {
+    // 그보다 오래된 글의 반응수 변화나 수정은 여기선 안 잡히고 하루 1회 전체 재동기화에서 잡힘.
+    // 관리자 API(POST /api/admin/sync)의 기본 동기화도 이 메서드를 호출 - API 호출량이 적어 자주 눌러도 부담 없음
+    public SyncSummary incrementalSync() {
         long cutoffEpochSeconds = Instant.now().minus(Duration.ofDays(recentSyncWindowDays)).getEpochSecond();
         return runSync(String.valueOf(cutoffEpochSeconds));
     }
 
-    // 관리자 API(POST /api/admin/sync)와 하루 1회 전체 재동기화 스케줄러가 함께 호출하는 전체 재스캔 진입점
+    // 관리자 API(POST /api/admin/sync-full)와 하루 1회 전체 재동기화 스케줄러가 호출하는 전체 재스캔 진입점.
+    // 채널 히스토리 전체를 다시 훑어 API 호출량이 많으므로 평소엔 필요 없고, 오래된 글의 반응수/수정 보정이나
+    // 과거 데이터 일괄 복구가 필요할 때만 사용
     public SyncSummary syncAll() {
         return runSync(null);
     }

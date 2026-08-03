@@ -9,6 +9,7 @@ import { usePostsStore } from '../stores/posts'
 import { fetchPosts } from '../api/posts'
 import {
   triggerSync,
+  triggerFullSync,
   fetchUncategorizedPosts,
   updatePostAsAdmin,
   classifyAllUncategorized,
@@ -24,7 +25,7 @@ const authStore = useAuthStore()
 const toastStore = useToastStore()
 const postsStore = usePostsStore()
 
-// 전체 동기화
+// 동기화 (최근 N일 - 평소에 쓰는 가벼운 동기화)
 const syncing = ref(false)
 const syncResult = ref(null)
 const syncError = ref('')
@@ -40,6 +41,25 @@ async function runSync() {
     syncError.value = error.response?.data?.error || '동기화 중 오류가 발생했습니다.'
   } finally {
     syncing.value = false
+  }
+}
+
+// 전체 재수집 (무거움 - 채널 히스토리 전체를 다시 훑음, 매일 새벽 자동 실행되므로 급할 때만 수동 실행)
+const syncingFull = ref(false)
+const syncFullResult = ref(null)
+const syncFullError = ref('')
+
+async function runFullSync() {
+  syncingFull.value = true
+  syncFullError.value = ''
+  syncFullResult.value = null
+  try {
+    const { data } = await triggerFullSync()
+    syncFullResult.value = data
+  } catch (error) {
+    syncFullError.value = error.response?.data?.error || '전체 재수집 중 오류가 발생했습니다.'
+  } finally {
+    syncingFull.value = false
   }
 }
 
@@ -268,17 +288,32 @@ onMounted(() => {
       <h1 class="page-title">🛡️ 관리자 모드</h1>
 
       <section class="section">
-        <div class="section-title">🔄 전체 동기화</div>
+        <div class="section-title">🔄 동기화</div>
         <div class="card">
-          <p class="card-desc">슬랙 채널의 전체 게시글/댓글을 다시 수집하고 미분류 게시글을 분류합니다.</p>
+          <p class="card-desc">최근 7일 이내 게시글/댓글만 다시 수집하고 미분류 게시글을 분류합니다. API 호출량이 적어 자주 눌러도 괜찮습니다.</p>
           <button class="primary-btn" :disabled="syncing" @click="runSync">
-            {{ syncing ? '동기화 중...' : '지금 전체 동기화' }}
+            {{ syncing ? '동기화 중...' : '지금 동기화' }}
           </button>
           <div v-if="syncResult" class="result-box">
             처리 {{ syncResult.postsProcessed }}건 · 신규 {{ syncResult.newPosts }}건 · 댓글
             {{ syncResult.repliesProcessed }}건 · {{ (syncResult.durationMs / 1000).toFixed(1) }}초 소요
           </div>
           <div v-if="syncError" class="result-box error">{{ syncError }}</div>
+
+          <div class="full-sync-row">
+            <p class="card-desc small">
+              채널 히스토리 전체를 다시 훑어야 하는 경우(과거 데이터 복구 등)만 아래를 사용하세요.
+              평소엔 매일 새벽 4시에 자동으로 실행됩니다.
+            </p>
+            <button class="secondary-btn" :disabled="syncingFull" @click="runFullSync">
+              {{ syncingFull ? '전체 재수집 중...' : '전체 재수집 (느림)' }}
+            </button>
+            <div v-if="syncFullResult" class="result-box">
+              처리 {{ syncFullResult.postsProcessed }}건 · 신규 {{ syncFullResult.newPosts }}건 · 댓글
+              {{ syncFullResult.repliesProcessed }}건 · {{ (syncFullResult.durationMs / 1000).toFixed(1) }}초 소요
+            </div>
+            <div v-if="syncFullError" class="result-box error">{{ syncFullError }}</div>
+          </div>
         </div>
       </section>
 
@@ -488,6 +523,36 @@ onMounted(() => {
 
 .primary-btn:not(:disabled):hover {
   background: #6c5ce7;
+}
+
+.full-sync-row {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(26, 26, 46, 0.06);
+}
+
+.card-desc.small {
+  font-size: 12px;
+}
+
+.secondary-btn {
+  padding: 9px 18px;
+  background: #ffffff;
+  color: #636e72;
+  border: 1px solid rgba(26, 26, 46, 0.15);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary-btn:disabled {
+  color: #b0b0b0;
+  cursor: not-allowed;
+}
+
+.secondary-btn:not(:disabled):hover {
+  background: #fafafa;
 }
 
 .result-box {
