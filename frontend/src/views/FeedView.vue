@@ -19,15 +19,19 @@ import { CATEGORIES } from '../constants/categories'
 const CAMPUS_CATEGORIES = ['개발 툴·환경', '학습자료']
 // 기간 필터가 의미 있는 카테고리 - 자격증·취업/교수님/기타/교육생 서비스는 게시글 수가 적어 기간 필터 실익이 낮음
 const DATE_CATEGORIES = ['개발 툴·환경', '학습자료']
+// "🗂️ 분류" 하위 태그 필터 버튼을 보여줄 카테고리 - 학습자료는 사이드바 필터만 쓰고 있어 제외
+const SUBCATEGORY_FILTER_CATEGORIES = ['교육생 서비스', '기타']
 
 const postsStore = usePostsStore()
 const bookmarksStore = useBookmarksStore()
 const authStore = useAuthStore()
 
-const eduServiceTags = computed(
-  () => CATEGORIES.find((cat) => cat.value === '교육생 서비스')?.tags ?? [],
+const activeCategoryTags = computed(
+  () => CATEGORIES.find((cat) => cat.value === postsStore.category)?.tags ?? [],
 )
-const isEduService = computed(() => postsStore.category === '교육생 서비스')
+const hasSubcategoryFilter = computed(
+  () => SUBCATEGORY_FILTER_CATEGORIES.includes(postsStore.category) && activeCategoryTags.value.length > 0,
+)
 const showCampusFilter = computed(() => !postsStore.category || CAMPUS_CATEGORIES.includes(postsStore.category))
 const showDateFilter = computed(() => !postsStore.category || DATE_CATEGORIES.includes(postsStore.category))
 
@@ -95,8 +99,8 @@ function handleSearch(payload) {
   postsStore.setSearch(payload)
 }
 
-function selectEduTag(tagValue) {
-  postsStore.setCategory('교육생 서비스', postsStore.tag === tagValue ? null : tagValue)
+function selectSubTag(tagValue) {
+  postsStore.setCategory(postsStore.category, postsStore.tag === tagValue ? null : tagValue)
 }
 
 async function loadMore() {
@@ -119,17 +123,17 @@ async function loadMore() {
       <SearchBar @search="handleSearch" />
       <CategoryFilter />
 
-      <div v-if="isEduService" class="edu-category-filter">
+      <div v-if="hasSubcategoryFilter" class="edu-category-filter">
         <span class="label">🗂️ 분류 : </span>
-        <div class="pill" :class="{ active: !postsStore.tag }" @click="selectEduTag(null)">
-          전체 ({{ postsStore.categoryCount('교육생 서비스') }})
+        <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
+          전체 ({{ postsStore.categoryCount(postsStore.category) }})
         </div>
         <div
-          v-for="sub in eduServiceTags"
+          v-for="sub in activeCategoryTags"
           :key="sub.value"
           class="pill"
           :class="{ active: postsStore.tag === sub.value }"
-          @click="selectEduTag(sub.value)"
+          @click="selectSubTag(sub.value)"
         >
           {{ sub.label }} ({{ postsStore.tagCount(sub.value) }})
         </div>
