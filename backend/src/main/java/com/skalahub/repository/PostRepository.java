@@ -116,17 +116,24 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     List<Post> findTopReactions(@Param("dateFrom") LocalDateTime dateFrom);
 
+    // 댓글 랭킹은 화면에 보이는 reply_count(봇 댓글 포함)와 달리 봇 댓글을 제외하고 집계해야 해서
+    // posts.reply_count를 그대로 못 쓰고, replies 테이블에서 봇을 뺀 개수를 직접 세어 정렬한다
     @Query(
             value = """
-            SELECT * FROM posts p
+            SELECT p.id AS id, count(r.id) AS comment_count
+            FROM posts p
+            LEFT JOIN replies r ON r.post_id = p.id
+              AND (CAST(:botUserId AS varchar) IS NULL OR r.user_slack_id IS DISTINCT FROM CAST(:botUserId AS varchar))
             WHERE p.is_deleted = false
-              AND p.reply_count > 0
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
-            ORDER BY p.reply_count DESC
+            GROUP BY p.id
+            HAVING count(r.id) > 0
+            ORDER BY comment_count DESC
             LIMIT 3
             """,
             nativeQuery = true)
-    List<Post> findTopComments(@Param("dateFrom") LocalDateTime dateFrom);
+    List<Object[]> findTopComments(
+            @Param("dateFrom") LocalDateTime dateFrom, @Param("botUserId") String botUserId);
 
     // 저장(북마크) 많이 된 순 TOP3 - [post_id, save_count] 배열 목록
     @Query(

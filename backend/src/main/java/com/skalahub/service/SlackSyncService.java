@@ -195,9 +195,10 @@ public class SlackSyncService {
         return response;
     }
 
+    // 화면에 보이는 댓글 수(post.replyCount)는 봇 댓글을 포함한 실제 댓글 총수 - 봇 댓글 제외는
+    // 랭킹보드 집계 쪽(PostRepository.findTopComments)에서만 별도로 처리
     private int syncReplies(Post post, String threadTs, Map<String, SlackUserInfo> userInfoCache) {
         List<JsonNode> replies = fetchAllReplies(threadTs);
-        String botUserId = slackBotReplyService.resolveBotUserId();
         int count = 0;
         // 0번째는 부모 게시글 자신이므로 1번부터 순회
         for (int i = 1; i < replies.size(); i++) {
@@ -217,14 +218,8 @@ public class SlackSyncService {
             entity.setContent(resolveMentions(reply.path("text").asString(""), userInfoCache));
             entity.setCreatedAt(tsToLocalDateTime(slackTs));
             replyRepository.save(entity);
-            // 봇이 동기화 완료/실패 안내로 남긴 댓글은 슬랙 화면에는 그대로 보여주되,
-            // 실제 학생 댓글이 아니므로 댓글수·순위보드 집계에서만 제외
-            boolean isBotReply = botUserId != null && botUserId.equals(userId);
-            if (!isBotReply) {
-                count++;
-            }
+            count++;
         }
-        // 슬랙이 알려준 reply_count는 봇 댓글까지 포함된 값이라, 실제(봇 제외) 개수로 바로잡음
         if (post.getReplyCount() == null || post.getReplyCount() != count) {
             post.setReplyCount(count);
             postRepository.save(post);
