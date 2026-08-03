@@ -117,13 +117,15 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findTopReactions(@Param("dateFrom") LocalDateTime dateFrom);
 
     // 댓글 랭킹은 화면에 보이는 reply_count(봇 댓글 포함)와 달리 봇 댓글을 제외하고 집계해야 해서
-    // posts.reply_count를 그대로 못 쓰고, replies 테이블에서 봇을 뺀 개수를 직접 세어 정렬한다
+    // posts.reply_count를 그대로 못 쓰고, replies 테이블에서 봇 안내 댓글(고정 문구로 시작)을 뺀 개수를
+    // 직접 세어 정렬한다 - 슬랙 API로 봇 user_id를 조회하는 방식은 API 실패 시 조용히 봇을 못 걸러내서 사용하지 않음
     @Query(
             value = """
             SELECT p.id AS id, count(r.id) AS comment_count
             FROM posts p
             LEFT JOIN replies r ON r.post_id = p.id
-              AND (CAST(:botUserId AS varchar) IS NULL OR r.user_slack_id IS DISTINCT FROM CAST(:botUserId AS varchar))
+              AND r.content NOT LIKE CONCAT('%', CAST(:successMarker AS varchar), '%')
+              AND r.content NOT LIKE CONCAT('%', CAST(:failureMarker AS varchar), '%')
             WHERE p.is_deleted = false
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             GROUP BY p.id
@@ -133,7 +135,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """,
             nativeQuery = true)
     List<Object[]> findTopComments(
-            @Param("dateFrom") LocalDateTime dateFrom, @Param("botUserId") String botUserId);
+            @Param("dateFrom") LocalDateTime dateFrom,
+            @Param("successMarker") String successMarker,
+            @Param("failureMarker") String failureMarker);
 
     // 저장(북마크) 많이 된 순 TOP3 - [post_id, save_count] 배열 목록
     @Query(

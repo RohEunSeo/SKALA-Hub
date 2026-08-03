@@ -17,15 +17,19 @@ public class SlackBotReplyService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackBotReplyService.class);
 
+    // 봇이 남기는 안내 댓글은 항상 이 문구를 포함 - 댓글수·랭킹보드 집계에서 봇 댓글을 걸러낼 때
+    // 슬랙 API로 봇 user_id를 매번 조회하는 대신 이 문구로 판별한다 (API 호출/장애에 의존하지 않음).
+    // 앞에 붙는 이모지(✅/⚠️)는 conversations.replies로 다시 읽어올 때 슬랙이 ":white_check_mark:" 같은
+    // 콜론 코드 형태로 바꿔 돌려줄 수 있어서, 이모지 없이 이 뒷부분 문구만으로 판별한다
+    public static final String SYNC_SUCCESS_MARKER = "SKALA-Hub에 동기화되었습니다";
+    public static final String SYNC_FAILURE_MARKER = "SKALA-Hub 동기화에 실패했습니다";
+
     private final RestClient restClient = RestClient.create();
 
     private final String botToken;
     private final String channelId;
     private final String frontendUrl;
     private final boolean testMode;
-
-    // 봇 자신의 슬랙 user_id - 한 번 조회하면 안 바뀌므로 캐싱 (동기화 중 봇 댓글을 걸러내는 데 사용)
-    private volatile String cachedBotUserId;
 
     public SlackBotReplyService(
             @Value("${slack.bot-token:}") String botToken,
@@ -42,40 +46,13 @@ public class SlackBotReplyService {
 
     public void notifySyncSuccess(String threadTs, Long postId) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
-        String message = "✅ SKALA-Hub에 동기화되었습니다! (" + timestamp + ")\n"
+        String message = "✅ " + SYNC_SUCCESS_MARKER + "! (" + timestamp + ")\n"
                 + "🔗 바로가기: " + frontendUrl + "/posts/" + postId;
         postThreadReply(threadTs, message);
     }
 
     public void notifySyncFailure(String threadTs) {
-        postThreadReply(threadTs, "⚠️ SKALA-Hub 동기화에 실패했습니다. 관리자에게 문의해주세요!");
-    }
-
-    // 봇이 스레드에 남긴 댓글을 실제 학생 댓글과 구분하기 위한 봇 자신의 user_id 조회 (SlackSyncService가 사용)
-    // 조회 실패 시 null - 호출부는 null이면 걸러내지 않고 그냥 넘어가야 함
-    public String resolveBotUserId() {
-        if (testMode || botToken.isBlank()) {
-            return null;
-        }
-        String cached = cachedBotUserId;
-        if (cached != null) {
-            return cached;
-        }
-        try {
-            JsonNode response = restClient.post()
-                    .uri("https://slack.com/api/auth.test")
-                    .header("Authorization", "Bearer " + botToken)
-                    .retrieve()
-                    .body(JsonNode.class);
-            if (response.path("ok").asBoolean(false)) {
-                cachedBotUserId = response.path("user_id").asString(null);
-                return cachedBotUserId;
-            }
-            log.warn("봇 user_id 조회 실패: {}", describeError(response));
-        } catch (Exception e) {
-            log.warn("봇 user_id 조회 실패", e);
-        }
-        return null;
+        postThreadReply(threadTs, "⚠️ " + SYNC_FAILURE_MARKER + ". 관리자에게 문의해주세요!");
     }
 
     // 관리자가 봇 댓글을 직접 지울 때 사용 (AdminController에서 호출) - 실패하면 예외를 그대로 던져서 API 응답에 반영
