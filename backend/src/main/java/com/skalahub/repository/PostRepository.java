@@ -108,6 +108,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             value = """
             SELECT * FROM posts p
             WHERE p.is_deleted = false
+              AND p.reaction_count > 0
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             ORDER BY p.reaction_count DESC
             LIMIT 3
@@ -119,6 +120,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             value = """
             SELECT * FROM posts p
             WHERE p.is_deleted = false
+              AND p.reply_count > 0
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             ORDER BY p.reply_count DESC
             LIMIT 3
