@@ -41,6 +41,8 @@ public class HomeService {
         LocalDate today = LocalDate.now(ZONE);
         long todayNewPostCount = postRepository.countCreatedSince(today.atStartOfDay());
         long cohortDay = ChronoUnit.DAYS.between(cohortStartDate, today) + 1;
+        // 7일 단위로 끊어서 몇 주차인지 계산 (1~7일째 1주차, 8~14일째 2주차, ...)
+        long cohortWeek = cohortDay > 0 ? (cohortDay - 1) / 7 + 1 : 0;
 
         List<CategoryCountDto> categoryCounts = postRepository.countByCategory().stream()
                 .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
@@ -55,6 +57,7 @@ public class HomeService {
                 todayNewPostCount,
                 postRepository.findLastSyncedAt(),
                 Math.max(cohortDay, 0),
+                Math.max(cohortWeek, 0),
                 userRepository.count(),
                 categoryCounts,
                 tagCounts);

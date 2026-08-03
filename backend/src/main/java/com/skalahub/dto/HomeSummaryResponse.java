@@ -9,6 +9,7 @@ public record HomeSummaryResponse(
         long todayNewPostCount,
         LocalDateTime lastSyncedAt,
         long cohortDay,
+        long cohortWeek,
         long userCount,
         List<CategoryCountDto> categoryCounts,
         List<CategoryCountDto> tagCounts) {
