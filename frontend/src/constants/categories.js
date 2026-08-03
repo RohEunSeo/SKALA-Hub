@@ -36,5 +36,17 @@ export const CATEGORIES = [
     ],
   },
   { value: '교수님', label: '교수님 게시글', shortLabel: '교수님', icon: '🧑‍🏫', color: '#E0607D' },
-  { value: '기타', label: '기타', shortLabel: '기타', icon: '💬', color: '#8890A3' },
+  {
+    value: '기타',
+    label: '기타',
+    shortLabel: '기타',
+    icon: '💬',
+    color: '#8890A3',
+    tags: [
+      { value: '인사이트·경험 공유', label: '인사이트·경험 공유' },
+      { value: '오류 해결', label: '오류 해결' },
+      { value: '분실물', label: '분실물' },
+      { value: '그 외', label: '그 외' },
+    ],
+  },
 ]
