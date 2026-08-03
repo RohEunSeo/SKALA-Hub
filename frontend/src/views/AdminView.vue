@@ -580,6 +580,11 @@ onMounted(() => {
   background: #fafafa;
 }
 
+.sub-chips .chip.active {
+  background: #4a3f8f;
+  color: #ffffff;
+}
+
 .bulk-actions {
   margin-bottom: 16px;
 }
