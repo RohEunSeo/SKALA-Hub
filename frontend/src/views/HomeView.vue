@@ -193,7 +193,7 @@ onUnmounted(() => {
 
     <div v-if="summary" class="stat-pills">
       <div v-if="authStore.isAuthenticated && authStore.user?.cohort" class="pill">
-        🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째</strong>
+        🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째 ({{ summary.cohortWeek }}주차)</strong>
       </div>
       <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong></div>
       <div class="pill">👥 함께하는 교육생 <strong>{{ summary.userCount ?? 0 }}명</strong></div>
