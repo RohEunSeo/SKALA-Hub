@@ -25,3 +25,23 @@ export function updatePostAsAdmin(id, payload) {
 export function classifyAllUncategorized() {
   return http.post('/api/admin/posts/classify-all')
 }
+
+// 동기화 실패 목록 (슬랙에는 알리지 않고 관리자 모드에서만 확인)
+export function fetchSyncFailures() {
+  return http.get('/api/admin/sync-failures')
+}
+
+// 슬랙 봇이 남긴 동기화 안내 댓글 목록
+export function fetchBotReplies() {
+  return http.get('/api/admin/bot-replies')
+}
+
+// 봇 댓글 삭제 (ts로 식별)
+export function deleteBotReply(ts) {
+  return http.delete('/api/admin/bot-replies', { params: { ts } })
+}
+
+// 봇 댓글 내용 수정
+export function updateBotReply(ts, content) {
+  return http.put('/api/admin/bot-replies', { content }, { params: { ts } })
+}

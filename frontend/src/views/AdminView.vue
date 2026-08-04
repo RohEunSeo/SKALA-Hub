@@ -15,6 +15,10 @@ import {
   fetchUncategorizedPosts,
   updatePostAsAdmin,
   classifyAllUncategorized,
+  fetchSyncFailures,
+  fetchBotReplies,
+  deleteBotReply,
+  updateBotReply,
 } from '../api/admin'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -49,6 +53,8 @@ async function runSync() {
     const { data } = await triggerSync()
     syncResult.value = data
     invalidateFeedCaches()
+    loadSyncFailures()
+    loadBotReplies()
   } catch (error) {
     syncError.value = error.response?.data?.error || '동기화 중 오류가 발생했습니다.'
   } finally {
@@ -69,10 +75,87 @@ async function runFullSync() {
     const { data } = await triggerFullSync()
     syncFullResult.value = data
     invalidateFeedCaches()
+    loadSyncFailures()
+    loadBotReplies()
   } catch (error) {
     syncFullError.value = error.response?.data?.error || '전체 재수집 중 오류가 발생했습니다.'
   } finally {
     syncingFull.value = false
+  }
+}
+
+// 동기화 실패 목록 - 슬랙엔 알리지 않고 여기서만 확인. 원인 고친 뒤 위 "지금 동기화"를 다시 누르면
+// 성공한 항목은 자동으로 이 목록에서 빠짐
+const syncFailures = ref([])
+const syncFailuresLoading = ref(false)
+const syncFailuresError = ref('')
+
+async function loadSyncFailures() {
+  syncFailuresLoading.value = true
+  syncFailuresError.value = ''
+  try {
+    const { data } = await fetchSyncFailures()
+    syncFailures.value = data ?? []
+  } catch {
+    syncFailuresError.value = '동기화 실패 목록을 불러오지 못했습니다.'
+  } finally {
+    syncFailuresLoading.value = false
+  }
+}
+
+// 슬랙 봇이 남긴 동기화 안내 댓글 - 슬랙 채널에서는 수정/삭제가 안 돼서 여기서 관리
+const botReplies = ref([])
+const botRepliesLoading = ref(false)
+const botRepliesError = ref('')
+const editingReplyId = ref(null)
+const editingContent = ref('')
+const botReplyActionError = ref('')
+
+async function loadBotReplies() {
+  botRepliesLoading.value = true
+  botRepliesError.value = ''
+  try {
+    const { data } = await fetchBotReplies()
+    botReplies.value = data ?? []
+  } catch {
+    botRepliesError.value = '봇 댓글 목록을 불러오지 못했습니다.'
+  } finally {
+    botRepliesLoading.value = false
+  }
+}
+
+function startEditReply(reply) {
+  editingReplyId.value = reply.id
+  editingContent.value = reply.content
+  botReplyActionError.value = ''
+}
+
+function cancelEditReply() {
+  editingReplyId.value = null
+  editingContent.value = ''
+}
+
+async function saveEditReply(reply) {
+  botReplyActionError.value = ''
+  try {
+    await updateBotReply(reply.ts, editingContent.value)
+    reply.content = editingContent.value
+    cancelEditReply()
+    toastStore.show('댓글을 수정했습니다')
+  } catch {
+    botReplyActionError.value = '댓글 수정에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  }
+}
+
+async function removeBotReply(reply) {
+  if (!window.confirm('이 댓글을 슬랙에서 삭제할까요?')) return
+  botReplyActionError.value = ''
+  try {
+    await deleteBotReply(reply.ts)
+    botReplies.value = botReplies.value.filter((item) => item.id !== reply.id)
+    toastStore.show('댓글을 삭제했습니다')
+  } catch {
+    botReplyActionError.value = '댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
 }
 
@@ -287,6 +370,8 @@ onMounted(() => {
   if (authStore.user?.role !== 'admin') return
   loadUncategorized()
   loadAllPosts(true)
+  loadSyncFailures()
+  loadBotReplies()
 })
 </script>
 
@@ -326,6 +411,64 @@ onMounted(() => {
               {{ syncFullResult.repliesProcessed }}건 · {{ (syncFullResult.durationMs / 1000).toFixed(1) }}초 소요
             </div>
             <div v-if="syncFullError" class="result-box error">{{ syncFullError }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">⚠️ 동기화 실패 목록 ({{ syncFailures.length }}건)</div>
+        <div class="card">
+          <p class="card-desc">
+            저장에 실패한 게시글입니다. 슬랙 채널에는 알리지 않고 여기서만 보입니다. 원인을 고친 뒤 위
+            "지금 동기화"를 다시 누르면 성공한 항목은 자동으로 목록에서 빠집니다.
+          </p>
+          <div v-if="syncFailuresLoading" class="status-message">불러오는 중...</div>
+          <div v-else-if="syncFailuresError" class="status-message error">{{ syncFailuresError }}</div>
+          <div v-else-if="syncFailures.length === 0" class="status-message">현재 실패한 동기화가 없습니다.</div>
+          <div v-else class="uncategorized-list">
+            <div v-for="failure in syncFailures" :key="failure.slackTs" class="uncategorized-row">
+              <div class="manage-header">
+                <span class="row-author">ts: {{ failure.slackTs }}</span>
+                <span class="row-time">{{ formatRelativeTime(failure.failedAt) }}</span>
+              </div>
+              <div class="row-preview">{{ failure.contentPreview }}</div>
+              <div class="row-preview error-text">{{ failure.errorMessage }}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">🤖 슬랙 봇 댓글 관리 ({{ botReplies.length }}건)</div>
+        <div class="card">
+          <p class="card-desc">
+            봇이 스레드에 남긴 동기화 안내 댓글입니다. 슬랙에서는 직접 수정·삭제가 안 되니 여기서 관리하세요.
+          </p>
+          <div v-if="botReplyActionError" class="result-box error">{{ botReplyActionError }}</div>
+          <div v-if="botRepliesLoading" class="status-message">불러오는 중...</div>
+          <div v-else-if="botRepliesError" class="status-message error">{{ botRepliesError }}</div>
+          <div v-else-if="botReplies.length === 0" class="status-message">봇 댓글이 없습니다.</div>
+          <div v-else class="uncategorized-list">
+            <div v-for="reply in botReplies" :key="reply.id" class="uncategorized-row">
+              <div class="manage-header">
+                <span class="row-author">게시글: {{ reply.postPreview }}</span>
+                <span class="row-time">{{ formatRelativeTime(reply.createdAt) }}</span>
+              </div>
+              <template v-if="editingReplyId === reply.id">
+                <textarea v-model="editingContent" class="tag-input reply-edit-textarea" rows="3"></textarea>
+                <div class="control-row">
+                  <button class="save-btn" @click="saveEditReply(reply)">저장</button>
+                  <button class="secondary-btn" @click="cancelEditReply">취소</button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="row-preview">{{ reply.content }}</div>
+                <div class="control-row">
+                  <button class="secondary-btn" @click="startEditReply(reply)">수정</button>
+                  <button class="secondary-btn" @click="removeBotReply(reply)">삭제</button>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
       </section>
@@ -803,6 +946,22 @@ onMounted(() => {
   font-size: 12.5px;
   color: #2bb3a3;
   font-weight: 600;
+}
+
+.error-text {
+  color: #e01e5a;
+  margin-top: 4px;
+}
+
+.reply-edit-textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
 }
 
 .load-more {

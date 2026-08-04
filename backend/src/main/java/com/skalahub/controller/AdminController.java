@@ -2,12 +2,13 @@
 package com.skalahub.controller;
 
 import com.skalahub.dto.AdminPostUpdateRequest;
+import com.skalahub.dto.BotReplyResponse;
 import com.skalahub.dto.BotReplyUpdateRequest;
 import com.skalahub.dto.PostPageResponse;
 import com.skalahub.dto.PostResponse;
 import com.skalahub.service.AdminPostService;
-import com.skalahub.service.SlackBotReplyService;
 import com.skalahub.service.SlackSyncService;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,15 +29,10 @@ public class AdminController {
 
     private final SlackSyncService slackSyncService;
     private final AdminPostService adminPostService;
-    private final SlackBotReplyService slackBotReplyService;
 
-    public AdminController(
-            SlackSyncService slackSyncService,
-            AdminPostService adminPostService,
-            SlackBotReplyService slackBotReplyService) {
+    public AdminController(SlackSyncService slackSyncService, AdminPostService adminPostService) {
         this.slackSyncService = slackSyncService;
         this.adminPostService = adminPostService;
-        this.slackBotReplyService = slackBotReplyService;
     }
 
     // 최근 N일 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류) - API 호출량이 적어 자주 눌러도 부담 없음
@@ -91,11 +87,23 @@ public class AdminController {
         return Map.of("classified", classified);
     }
 
+    // 동기화 실패 목록 - 슬랙 채널에는 알리지 않고 여기서만 확인
+    @GetMapping("/sync-failures")
+    public List<SlackSyncService.SyncFailure> getSyncFailures() {
+        return slackSyncService.getSyncFailures();
+    }
+
+    // 슬랙 봇이 남긴 동기화 안내 댓글 목록
+    @GetMapping("/bot-replies")
+    public List<BotReplyResponse> getBotReplies() {
+        return adminPostService.getBotReplies();
+    }
+
     // 슬랙 봇이 남긴 댓글 삭제 (ts로 식별) - 쿼리 파라미터로 받음: ts에 "."이 있어 경로변수로 쓰면 라우팅이 꼬일 수 있음
     @DeleteMapping("/bot-replies")
     public ResponseEntity<?> deleteBotReply(@RequestParam String ts) {
         try {
-            slackBotReplyService.deleteReply(ts);
+            adminPostService.deleteBotReply(ts);
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
@@ -107,7 +115,7 @@ public class AdminController {
     public ResponseEntity<?> updateBotReply(
             @RequestParam String ts, @RequestBody BotReplyUpdateRequest request) {
         try {
-            slackBotReplyService.updateReply(ts, request.content());
+            adminPostService.updateBotReply(ts, request.content());
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
