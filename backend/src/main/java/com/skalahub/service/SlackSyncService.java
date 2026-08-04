@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,11 @@ public class SlackSyncService {
     // 유저 이름/프로필사진은 거의 안 바뀌므로 동기화 실행 간에도 재사용 - 매번 재조회하지 않아 API 호출량/소요시간 절감
     private final Map<String, SlackUserInfo> userInfoCache = new ConcurrentHashMap<>();
 
+    // 동기화 실패는 슬랙 채널에 알리지 않고 관리자 모드에서만 보이도록 여기 기록한다 - slackTs를 키로 써서
+    // 같은 글이 반복 실패해도 매번 새 항목이 쌓이는 게 아니라 최신 실패 정보로만 덮어써지고,
+    // 나중에 저장이 성공하면 자동으로 이 목록에서 빠진다 (서버 재시작 시 초기화되는 건 의도된 동작 - 영구 기록이 목적이 아님)
+    private final Map<String, SyncFailure> syncFailures = new ConcurrentHashMap<>();
+
     public SlackSyncService(
             PostRepository postRepository,
             ReplyRepository replyRepository,
@@ -79,8 +85,7 @@ public class SlackSyncService {
     // 채널 전체를 매번 처음부터 재스캔하면 게시글이 쌓일수록 API 호출량/소요시간이 계속 늘어나므로,
     // 짧은 주기(5분)에는 "최근 N일 이내" 글만 훑어서 새 글 감지는 물론 최근 글의 반응/댓글수·수정사항도
     // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행
-    // 슬랙봇 동기화 스케줄러 즉시 중단 - 필요 시 @Scheduled 주석 해제
-    // @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
+    @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
     public void scheduledSync() {
         try {
             incrementalSync();
@@ -89,7 +94,7 @@ public class SlackSyncService {
         }
     }
 
-    // @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
+    @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
     public void scheduledFullSync() {
         try {
             syncAll();
@@ -111,6 +116,21 @@ public class SlackSyncService {
     // 과거 데이터 일괄 복구가 필요할 때만 사용
     public SyncSummary syncAll() {
         return runSync(null);
+    }
+
+    // 관리자 모드 "동기화 실패 목록"에서 조회 - 최근 실패한 순서대로 반환
+    public List<SyncFailure> getSyncFailures() {
+        return syncFailures.values().stream()
+                .sorted(Comparator.comparing(SyncFailure::failedAt).reversed())
+                .toList();
+    }
+
+    private void recordSyncFailure(String slackTs, JsonNode msg, Exception e) {
+        String text = msg.path("text").asString("");
+        String preview = text.length() > 120 ? text.substring(0, 120) + "..." : text;
+        syncFailures.put(
+                slackTs,
+                new SyncFailure(slackTs, preview, e.getMessage(), LocalDateTime.now(ZoneId.of("Asia/Seoul"))));
     }
 
     // oldest가 있으면 그 시점 이후 메시지만, null이면 채널 히스토리 전체를 조회
@@ -141,18 +161,15 @@ public class SlackSyncService {
                 Post post;
                 try {
                     post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
+                    syncFailures.remove(slackTs);
                 } catch (Exception e) {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
-                    // 슬랙 메시지 전송 중단 - 필요 시 주석 해제
-                    // if (isNew) {
-                    //     slackBotReplyService.notifySyncFailure(slackTs);
-                    // }
+                    recordSyncFailure(slackTs, msg, e);
                     continue;
                 }
                 if (isNew) {
                     newPosts++;
-                    // 슬랙 메시지 전송 중단 - 필요 시 주석 해제
-                    // slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                    slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);
@@ -401,5 +418,8 @@ public class SlackSyncService {
     }
 
     public record SyncSummary(int postsProcessed, int newPosts, int repliesProcessed, long durationMs) {
+    }
+
+    public record SyncFailure(String slackTs, String contentPreview, String errorMessage, LocalDateTime failedAt) {
     }
 }
