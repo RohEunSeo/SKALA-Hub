@@ -107,6 +107,9 @@ public class AdminController {
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "슬랙은 삭제됐지만 서버 반영 중 오류: " + e.getMessage()));
         }
     }
 
@@ -119,6 +122,9 @@ public class AdminController {
             return ResponseEntity.noContent().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "슬랙은 수정됐지만 서버 반영 중 오류: " + e.getMessage()));
         }
     }
 }
