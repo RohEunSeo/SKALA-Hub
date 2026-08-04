@@ -159,6 +159,7 @@ function openInSlack() {
         <span class="header-stats">
           <span>👍 {{ post.reactionCount ?? 0 }}</span>
           <span class="comment-link" @click="handleCommentsClick">💬 {{ post.replyCount ?? 0 }}</span>
+          <span>🔖 {{ post.bookmarkCount ?? 0 }}</span>
         </span>
       </div>
     </div>
@@ -235,6 +236,7 @@ function openInSlack() {
     <div class="stats">
       <span>👍 {{ post.reactionCount ?? 0 }}</span>
       <span class="comment-link" @click="handleCommentsClick"> 💬 댓글 {{ post.replyCount ?? 0 }}개 </span>
+      <span>🔖 저장 {{ post.bookmarkCount ?? 0 }}개</span>
     </div>
 
     <div v-if="showComments" class="comments">

@@ -31,6 +31,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
             ORDER BY
               CASE WHEN CAST(:sort AS varchar) = 'popular' THEN p.reaction_count END DESC NULLS LAST,
+              CASE WHEN CAST(:sort AS varchar) = 'saved' THEN p.bookmark_count END DESC NULLS LAST,
               CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN p.created_at END ASC,
               CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN NULL ELSE p.created_at END DESC
             """,
@@ -116,20 +117,20 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     List<Post> findTopReactions(@Param("dateFrom") LocalDateTime dateFrom);
 
-    // 댓글 랭킹은 화면에 보이는 reply_count(봇 댓글 포함)와 달리 봇 댓글을 제외하고 집계해야 해서
-    // posts.reply_count를 그대로 못 쓰고, replies 테이블에서 봇 안내 댓글(고정 문구로 시작)을 뺀 개수를
-    // 직접 세어 정렬한다 - 슬랙 API로 봇 user_id를 조회하는 방식은 API 실패 시 조용히 봇을 못 걸러내서 사용하지 않음
+    // 댓글 랭킹 진입 조건은 교육생(비봇) 댓글이 1개 이상 있어야 하고(그래야 동기화 안내 댓글 1개만 달린
+    // 글이 바로 랭킹에 뜨는 걸 막음), 일단 랭킹에 뜨면 표시/정렬은 화면과 동일하게 봇 댓글 포함 전체 수(reply_count)를 쓴다
     @Query(
             value = """
-            SELECT p.id AS id, count(r.id) AS comment_count
+            SELECT p.id AS id, p.reply_count AS comment_count
             FROM posts p
-            LEFT JOIN replies r ON r.post_id = p.id
-              AND r.content NOT LIKE CONCAT('%', CAST(:successMarker AS varchar), '%')
-              AND r.content NOT LIKE CONCAT('%', CAST(:failureMarker AS varchar), '%')
             WHERE p.is_deleted = false
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
-            GROUP BY p.id
-            HAVING count(r.id) > 0
+              AND EXISTS (
+                  SELECT 1 FROM replies r
+                  WHERE r.post_id = p.id
+                    AND r.content NOT LIKE CONCAT('%', CAST(:successMarker AS varchar), '%')
+                    AND r.content NOT LIKE CONCAT('%', CAST(:failureMarker AS varchar), '%')
+              )
             ORDER BY comment_count DESC
             LIMIT 3
             """,

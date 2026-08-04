@@ -14,6 +14,7 @@ public record PostResponse(
         List<String> tags,
         Integer reactionCount,
         Integer replyCount,
+        Integer bookmarkCount,
         Boolean isPinned,
         Boolean isEdited,
         LocalDateTime createdAt,

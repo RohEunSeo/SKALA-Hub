@@ -36,7 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class PostService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
-    private static final Set<String> VALID_SORTS = Set.of("latest", "popular", "oldest");
+    private static final Set<String> VALID_SORTS = Set.of("latest", "popular", "oldest", "saved");
 
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
@@ -152,6 +152,7 @@ public class PostService {
                 post.getTags(),
                 post.getReactionCount(),
                 post.getReplyCount(),
+                post.getBookmarkCount(),
                 post.getIsPinned(),
                 post.getIsEdited(),
                 post.getCreatedAt(),

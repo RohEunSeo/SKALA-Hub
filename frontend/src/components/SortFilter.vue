@@ -10,6 +10,7 @@ const SORTS = [
   { value: 'latest', label: '최신순' },
   { value: 'popular', label: '인기순' },
   { value: 'oldest', label: '오래된순' },
+  { value: 'saved', label: '저장순' },
 ]
 
 const currentLabel = computed(() => SORTS.find((opt) => opt.value === postsStore.sort)?.label ?? '최신순')
