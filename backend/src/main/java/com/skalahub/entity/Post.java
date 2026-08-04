@@ -52,7 +52,7 @@ public class Post {
 
     private Integer replyCount;
 
-    private Integer bookmarkCount;
+    private Integer bookmarkCount = 0;
 
     private Boolean isDeleted;
 
