@@ -142,8 +142,8 @@ async function saveEditReply(reply) {
     reply.content = editingContent.value
     cancelEditReply()
     toastStore.show('댓글을 수정했습니다')
-  } catch {
-    botReplyActionError.value = '댓글 수정에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  } catch (error) {
+    botReplyActionError.value = error.response?.data?.error || '댓글 수정에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
 }
 
@@ -154,8 +154,8 @@ async function removeBotReply(reply) {
     await deleteBotReply(reply.ts)
     botReplies.value = botReplies.value.filter((item) => item.id !== reply.id)
     toastStore.show('댓글을 삭제했습니다')
-  } catch {
-    botReplyActionError.value = '댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  } catch (error) {
+    botReplyActionError.value = error.response?.data?.error || '댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
 }
 
