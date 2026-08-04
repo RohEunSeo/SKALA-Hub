@@ -79,7 +79,8 @@ public class SlackSyncService {
     // 채널 전체를 매번 처음부터 재스캔하면 게시글이 쌓일수록 API 호출량/소요시간이 계속 늘어나므로,
     // 짧은 주기(5분)에는 "최근 N일 이내" 글만 훑어서 새 글 감지는 물론 최근 글의 반응/댓글수·수정사항도
     // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행
-    @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
+    // 슬랙봇 동기화 스케줄러 즉시 중단 - 필요 시 @Scheduled 주석 해제
+    // @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
     public void scheduledSync() {
         try {
             incrementalSync();
@@ -88,7 +89,7 @@ public class SlackSyncService {
         }
     }
 
-    @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
+    // @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
     public void scheduledFullSync() {
         try {
             syncAll();
@@ -142,14 +143,16 @@ public class SlackSyncService {
                     post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
                 } catch (Exception e) {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
-                    if (isNew) {
-                        slackBotReplyService.notifySyncFailure(slackTs);
-                    }
+                    // 슬랙 메시지 전송 중단 - 필요 시 주석 해제
+                    // if (isNew) {
+                    //     slackBotReplyService.notifySyncFailure(slackTs);
+                    // }
                     continue;
                 }
                 if (isNew) {
                     newPosts++;
-                    slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                    // 슬랙 메시지 전송 중단 - 필요 시 주석 해제
+                    // slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);
