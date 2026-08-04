@@ -51,10 +51,21 @@ public class BookmarkService {
         bookmark.setPost(post);
         bookmark.setSavedAt(LocalDateTime.now());
         bookmarkRepository.save(bookmark);
+
+        post.setBookmarkCount(post.getBookmarkCount() == null ? 1 : post.getBookmarkCount() + 1);
+        postRepository.save(post);
     }
 
     @Transactional
     public void remove(String slackId, Long postId) {
+        if (bookmarkRepository.findByUser_SlackIdAndPost_Id(slackId, postId).isEmpty()) {
+            return; // 이미 없는 경우 - idempotent
+        }
         bookmarkRepository.deleteByUser_SlackIdAndPost_Id(slackId, postId);
+
+        postRepository.findById(postId).ifPresent(post -> {
+            post.setBookmarkCount(Math.max(0, (post.getBookmarkCount() == null ? 0 : post.getBookmarkCount()) - 1));
+            postRepository.save(post);
+        });
     }
 }

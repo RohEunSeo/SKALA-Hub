@@ -135,7 +135,9 @@ onMounted(() => {
             <span v-if="activeTab === 'saved'" class="unsave-btn" @click.stop="unsave(post.id)">저장 취소</span>
           </div>
           <div class="post-title">{{ stripSlackMarkdown(post.content).slice(0, 60) }}</div>
-          <div class="post-stats">👍 {{ post.reactionCount ?? 0 }} 💬 댓글 {{ post.replyCount ?? 0 }}개</div>
+          <div class="post-stats">
+            👍 {{ post.reactionCount ?? 0 }} 💬 댓글 {{ post.replyCount ?? 0 }}개 🔖 저장 {{ post.bookmarkCount ?? 0 }}개
+          </div>
         </div>
         <div v-if="loading" class="empty">불러오는 중...</div>
         <div v-else-if="postsError" class="empty">{{ postsError }}</div>

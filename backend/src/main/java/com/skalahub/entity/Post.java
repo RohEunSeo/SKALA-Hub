@@ -52,6 +52,8 @@ public class Post {
 
     private Integer replyCount;
 
+    private Integer bookmarkCount;
+
     private Boolean isDeleted;
 
     private Boolean isPinned;

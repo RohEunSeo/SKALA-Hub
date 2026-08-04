@@ -31,6 +31,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
             ORDER BY
               CASE WHEN CAST(:sort AS varchar) = 'popular' THEN p.reaction_count END DESC NULLS LAST,
+              CASE WHEN CAST(:sort AS varchar) = 'saved' THEN p.bookmark_count END DESC NULLS LAST,
               CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN p.created_at END ASC,
               CASE WHEN CAST(:sort AS varchar) = 'oldest' THEN NULL ELSE p.created_at END DESC
             """,
