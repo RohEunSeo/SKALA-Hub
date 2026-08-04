@@ -4,6 +4,7 @@ package com.skalahub.service;
 import com.skalahub.entity.Post;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,7 +30,7 @@ public class CategoryClassifier {
             - 교수님: 교수님 또는 전임교수가 작성한 글
             - 기타: 위에 해당 없는 것
             
-            태그 (학습자료일 때는 해당되는 것 모두 선택 / 기타일 때는 아래 4가지 중 하나만 선택, 반드시 하나는 선택):
+            태그 (학습자료일 때는 해당되는 것 모두 선택 / 기타일 때는 아래 4가지 중 하나만 선택, 반드시 하나는 선택 / 그 외 카테고리는 태그 없음, tags: []):
             - 영상: youtube.com 링크 포함된 것
             - 블로그·글: velog, tistory, medium, 블로그, 아티클 링크
             - 깃허브: github.com 링크 포함된 것
@@ -64,6 +65,11 @@ public class CategoryClassifier {
             "additionalProperties": false
             }
             """;
+    // 카테고리별로 허용되는 태그만 남기고 나머지는 버림 - Claude가 프롬프트를 무시하고
+    // 학습자료/기타가 아닌 카테고리에 기타 하위태그(인사이트·경험 공유 등)를 붙이는 경우 방지
+    private static final Set<String> STUDY_TAGS = Set.of("영상", "블로그·글", "깃허브");
+    private static final Set<String> ETC_TAGS = Set.of("인사이트·경험 공유", "오류 해결", "분실물", "그 외");
+
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -91,14 +97,24 @@ public class CategoryClassifier {
 
         try {
             JsonNode result = callClaude(post.getContent());
-            post.setCategory(result.path("category").asString("기타"));
+            String category = result.path("category").asString("기타");
+            post.setCategory(category);
             List<String> tags = new ArrayList<>();
             result.path("tags").forEach(tag -> tags.add(tag.asString()));
-            post.setTags(tags);
+            post.setTags(filterTagsForCategory(category, tags));
         } catch (Exception e) {
             // 실패 시 category를 비워둬서 다음 스케줄 동기화 때 재시도되게 함
             log.warn("게시글 분류 실패 (slackTs={})", post.getSlackTs(), e);
         }
+    }
+
+    private List<String> filterTagsForCategory(String category, List<String> tags) {
+        Set<String> allowed = switch (category) {
+            case "학습자료" -> STUDY_TAGS;
+            case "기타" -> ETC_TAGS;
+            default -> Set.of();
+        };
+        return tags.stream().filter(allowed::contains).toList();
     }
 
     private boolean isInstructor(String userName) {
