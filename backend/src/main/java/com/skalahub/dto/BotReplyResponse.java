@@ -3,6 +3,7 @@ package com.skalahub.dto;
 
 import java.time.LocalDateTime;
 
+// status: "success" | "failure" | "pending" - pending은 실제 슬랙 댓글이 아직 없는 상태라 id·ts가 null
 public record BotReplyResponse(
         Long id,
         String ts,
@@ -11,5 +12,5 @@ public record BotReplyResponse(
         Long postId,
         String postAuthor,
         String postPreview,
-        boolean success) {
+        String status) {
 }

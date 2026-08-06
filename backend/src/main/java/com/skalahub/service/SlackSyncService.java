@@ -180,7 +180,14 @@ public class SlackSyncService {
                 }
                 if (isNew) {
                     newPosts++;
-                    slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                    if (slackBotReplyService.isLocalFrontendUrl()) {
+                        // 로컬 환경에서 동기화되면 배포 링크를 만들 수 없으므로 알림을 보류하고 표시만 해둠 -
+                        // 관리자 모드 "대기" 목록에서 배포 환경 확인 후 수동으로 전송
+                        post.setPendingNotification(true);
+                        postRepository.save(post);
+                    } else {
+                        slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                    }
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);

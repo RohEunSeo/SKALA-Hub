@@ -45,6 +45,12 @@ public class SlackBotReplyService {
         this.testMode = testMode;
     }
 
+    // FRONTEND_URL이 로컬 개발 주소면 슬랙 알림에 배포 링크가 아닌 localhost 링크가 달리게 되므로,
+    // 호출부(SlackSyncService)가 이걸로 먼저 확인해서 로컬이면 알림을 보내지 않고 "대기" 상태로 남겨야 함
+    public boolean isLocalFrontendUrl() {
+        return frontendUrl.contains("localhost") || frontendUrl.contains("127.0.0.1");
+    }
+
     public void notifySyncSuccess(String threadTs, Long postId) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         String message = "✅ " + SYNC_SUCCESS_MARKER + "! (" + timestamp + ")\n"

@@ -45,3 +45,8 @@ export function deleteBotReply(ts) {
 export function updateBotReply(ts, content) {
   return http.put('/api/admin/bot-replies', { content }, { params: { ts } })
 }
+
+// 로컬 환경 동기화로 보류된 성공 알림을 배포 환경에서 지금 전송
+export function sendPendingNotification(postId) {
+  return http.post(`/api/admin/pending-notifications/${postId}/send`)
+}

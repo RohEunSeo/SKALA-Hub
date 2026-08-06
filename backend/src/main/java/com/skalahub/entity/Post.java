@@ -54,6 +54,10 @@ public class Post {
 
     private Integer bookmarkCount = 0;
 
+    // 동기화는 완료됐지만 FRONTEND_URL이 로컬 주소여서 슬랙 성공 알림을 보류한 상태 - true인 동안은
+    // 관리자가 "지금 전송"을 눌러야만 슬랙에 안내 댓글이 달림
+    private Boolean pendingNotification = false;
+
     private Boolean isDeleted;
 
     private Boolean isPinned;

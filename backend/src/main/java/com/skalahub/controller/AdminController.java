@@ -132,4 +132,15 @@ public class AdminController {
                     .body(Map.of("error", "슬랙은 수정됐지만 서버 반영 중 오류: " + e.getMessage()));
         }
     }
+
+    // 로컬 환경 동기화로 보류됐던 성공 알림을 배포 환경에서 지금 보냄
+    @PostMapping("/pending-notifications/{postId}/send")
+    public ResponseEntity<?> sendPendingNotification(@PathVariable Long postId) {
+        try {
+            adminPostService.sendPendingNotification(postId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
+        }
+    }
 }
