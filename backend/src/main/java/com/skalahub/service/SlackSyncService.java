@@ -3,14 +3,15 @@ package com.skalahub.service;
 
 import com.skalahub.entity.Post;
 import com.skalahub.entity.Reply;
+import com.skalahub.entity.SyncFailure;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.ReplyRepository;
+import com.skalahub.repository.SyncFailureRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,10 +45,15 @@ public class SlackSyncService {
             "channel_name", "channel_archive", "channel_unarchive",
             "bot_add", "bot_remove", "pinned_item", "unpinned_item");
 
+    // 전체 동기화 자체(fetchAllMessages)가 실패했을 때 sync_failures 테이블에 기록하는 고정 키 -
+    // 개별 게시글 실패와 같은 목록에 같이 뜨지만 contentPreview로 구분 가능
+    private static final String WHOLE_SYNC_ERROR_KEY = "__SYNC_ERROR__";
+
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
     private final SlackBotReplyService slackBotReplyService;
+    private final SyncFailureRepository syncFailureRepository;
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -60,16 +66,12 @@ public class SlackSyncService {
     // 유저 이름/프로필사진은 거의 안 바뀌므로 동기화 실행 간에도 재사용 - 매번 재조회하지 않아 API 호출량/소요시간 절감
     private final Map<String, SlackUserInfo> userInfoCache = new ConcurrentHashMap<>();
 
-    // 동기화 실패는 슬랙 채널에 알리지 않고 관리자 모드에서만 보이도록 여기 기록한다 - slackTs를 키로 써서
-    // 같은 글이 반복 실패해도 매번 새 항목이 쌓이는 게 아니라 최신 실패 정보로만 덮어써지고,
-    // 나중에 저장이 성공하면 자동으로 이 목록에서 빠진다 (서버 재시작 시 초기화되는 건 의도된 동작 - 영구 기록이 목적이 아님)
-    private final Map<String, SyncFailure> syncFailures = new ConcurrentHashMap<>();
-
     public SlackSyncService(
             PostRepository postRepository,
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
             SlackBotReplyService slackBotReplyService,
+            SyncFailureRepository syncFailureRepository,
             @Value("${slack.user-token}") String userToken,
             @Value("${slack.channel-id}") String channelId,
             @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
@@ -77,6 +79,7 @@ public class SlackSyncService {
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
         this.slackBotReplyService = slackBotReplyService;
+        this.syncFailureRepository = syncFailureRepository;
         this.userToken = userToken;
         this.channelId = channelId;
         this.recentSyncWindowDays = recentSyncWindowDays;
@@ -120,27 +123,35 @@ public class SlackSyncService {
 
     // 관리자 모드 "동기화 실패 목록"에서 조회 - 최근 실패한 순서대로 반환
     public List<SyncFailure> getSyncFailures() {
-        return syncFailures.values().stream()
-                .sorted(Comparator.comparing(SyncFailure::failedAt).reversed())
-                .toList();
+        return syncFailureRepository.findAllByOrderByFailedAtDesc();
     }
 
     private void recordSyncFailure(String slackTs, JsonNode msg, Exception e) {
         String text = msg.path("text").asString("");
         String preview = text.length() > 120 ? text.substring(0, 120) + "..." : text;
-        syncFailures.put(
-                slackTs,
+        recordSyncFailure(slackTs, preview, e);
+    }
+
+    private void recordSyncFailure(String slackTs, String preview, Exception e) {
+        syncFailureRepository.save(
                 new SyncFailure(slackTs, preview, e.getMessage(), LocalDateTime.now(ZoneId.of("Asia/Seoul"))));
     }
 
     // oldest가 있으면 그 시점 이후 메시지만, null이면 채널 히스토리 전체를 조회
     private SyncSummary runSync(String oldest) {
         if (!syncing.compareAndSet(false, true)) {
-            throw new IllegalStateException("이미 동기화가 진행 중입니다");
+            throw new SyncAlreadyRunningException("이미 동기화가 진행 중입니다");
         }
         long start = System.currentTimeMillis();
         try {
-            List<JsonNode> messages = fetchAllMessages(oldest);
+            List<JsonNode> messages;
+            try {
+                messages = fetchAllMessages(oldest);
+                syncFailureRepository.deleteBySlackTs(WHOLE_SYNC_ERROR_KEY);
+            } catch (Exception e) {
+                recordSyncFailure(WHOLE_SYNC_ERROR_KEY, "⚠️ 전체 동기화 자체 실패 (토큰 만료·슬랙 장애 등 의심)", e);
+                throw e;
+            }
 
             int newPosts = 0;
             int repliesProcessed = 0;
@@ -161,7 +172,7 @@ public class SlackSyncService {
                 Post post;
                 try {
                     post = upsertPost(existing.orElseGet(Post::new), isNew, msg, userInfoCache);
-                    syncFailures.remove(slackTs);
+                    syncFailureRepository.deleteBySlackTs(slackTs);
                 } catch (Exception e) {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
                     recordSyncFailure(slackTs, msg, e);
@@ -420,6 +431,11 @@ public class SlackSyncService {
     public record SyncSummary(int postsProcessed, int newPosts, int repliesProcessed, long durationMs) {
     }
 
-    public record SyncFailure(String slackTs, String contentPreview, String errorMessage, LocalDateTime failedAt) {
+    // "이미 동기화 중"과 그 외 IllegalStateException(슬랙 API 실패 등)을 구분하기 위한 전용 타입 -
+    // AdminController가 이것만 409로, 나머지는 502로 응답하도록 분리
+    public static class SyncAlreadyRunningException extends IllegalStateException {
+        public SyncAlreadyRunningException(String message) {
+            super(message);
+        }
     }
 }

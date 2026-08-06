@@ -60,15 +60,33 @@ public class AdminPostService {
         return postService.toResponse(post);
     }
 
-    // 미분류 게시글 전체를 Claude로 재분류 - 관리자가 수동으로 트리거
+    // 미분류 게시글 전체를 Claude로 재분류 - 관리자가 수동으로 트리거. 하나씩 try-catch로 감싸서
+    // 특정 글에서 Claude API 호출이 실패해도 나머지 글은 계속 처리되게 함 (실패한 글은 category가
+    // 계속 비어있어서 다음 "일괄 분류" 클릭 때 자동으로 재시도 대상에 포함됨)
     @Transactional
-    public int classifyAllUncategorized() {
+    public ClassifyResult classifyAllUncategorized() {
         List<Post> uncategorized = postRepository.findAllUncategorized();
+        int classified = 0;
+        int failed = 0;
         for (Post post : uncategorized) {
-            categoryClassifier.classify(post);
-            postRepository.save(post);
+            try {
+                categoryClassifier.classify(post);
+                postRepository.save(post);
+                // classify()는 Claude API 실패 시에도 예외를 던지지 않고 category를 비워둔 채로
+                // 조용히 반환하므로(다음 재시도를 위해), 실제 성공 여부는 category가 채워졌는지로 판단
+                if (post.getCategory() != null && !post.getCategory().isBlank()) {
+                    classified++;
+                } else {
+                    failed++;
+                }
+            } catch (Exception e) {
+                failed++;
+            }
         }
-        return uncategorized.size();
+        return new ClassifyResult(classified, failed);
+    }
+
+    public record ClassifyResult(int classified, int failed) {
     }
 
     // 슬랙 봇이 남긴 동기화 안내 댓글 목록 - 관리자 모드에서 슬랙 채널 대신 여기서 확인/관리
