@@ -91,6 +91,15 @@ function goToCategory(value) {
   router.push({ name: 'feed' })
 }
 
+// "오늘 새 글" 뱃지 클릭 - 카테고리 필터는 초기화하고 기간만 오늘로 설정한 채 피드로 이동
+function goToTodayFeed() {
+  postsStore.category = null
+  postsStore.tag = null
+  postsStore.date = 'today'
+  postsStore.fetchPosts(true)
+  router.push({ name: 'feed' })
+}
+
 // 카테고리 원색(cat.color)을 그대로 쓰면 너무 쨍해서, 흰색/검은색을 섞어 연한 파스텔 톤으로 가공
 function hexToRgb(hex) {
   const value = hex.replace('#', '')
@@ -167,9 +176,9 @@ onUnmounted(() => {
       <div v-if="authStore.isAuthenticated && authStore.user?.cohort" class="pill">
         🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째 ({{ summary.cohortWeek }}주차)</strong>
       </div>
+      <div class="pill pill-action" @click="goToTodayFeed">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount ?? 0 }}개</strong> ›</div>
       <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong></div>
       <div class="pill">👥 함께하는 교육생 <strong>{{ summary.userCount ?? 0 }}명</strong></div>
-      <div class="pill">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount ?? 0 }}개</strong></div>
       <div class="pill muted">🕐 마지막 동기화: {{ formatRelativeTime(summary.lastSyncedAt) }}</div>
     </div>
     <div v-else-if="summaryError" class="status-message">{{ summaryError }}</div>
@@ -359,6 +368,22 @@ onUnmounted(() => {
 
 .pill.muted {
   color: #636e72;
+}
+
+.pill-action {
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pill-action strong {
+  color: #4a3f8f;
+}
+
+.pill-action:hover {
+  background: #e3ddf7;
 }
 
 .section {
