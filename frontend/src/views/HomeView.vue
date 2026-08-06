@@ -147,7 +147,11 @@ onUnmounted(() => {
 <template>
   <AppLayout :max-width="1040">
     <div v-if="!authStore.isAuthenticated" class="login-banner">
-      <span>👋 SKALA 교육생이신가요? 로그인하면 피드·마이페이지를 모두 이용할 수 있어요.</span>
+      <div class="login-banner-text">
+        <span>👋 SKALA 교육생이신가요? 로그인하면 피드·마이페이지를 모두 이용할 수 있어요.</span>
+        <span class="login-banner-sub">1. SKALA 워크스페이스에 가입된 계정으로 로그인해주세요.</span>
+        <span class="login-banner-sub">2. 워크스페이스 입력 화면이 뜨면 <strong>'theskala'</strong>를 입력해주세요.</span>
+      </div>
       <button class="login-btn" @click="handleLogin">Slack으로 로그인</button>
     </div>
 
@@ -270,6 +274,18 @@ onUnmounted(() => {
   font-size: 13.5px;
   color: #4a3f8f;
   font-weight: 600;
+}
+
+.login-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.login-banner-sub {
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0.75;
 }
 
 .login-btn {

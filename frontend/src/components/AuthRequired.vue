@@ -3,7 +3,7 @@
 import { getSlackLoginUrl } from '../api/auth'
 
 defineProps({
-  message: { type: String, default: 'SKALA 교육생 인증이 필요합니다' },
+  message: { type: String, default: 'SKALA 판교 캠퍼스 교육생 인증이 필요합니다' },
 })
 
 function handleLogin() {
@@ -15,7 +15,8 @@ function handleLogin() {
   <div class="auth-required">
     <div class="auth-icon">🔒</div>
     <div class="auth-message">{{ message }}</div>
-    <div class="auth-sub">SKALA Hub은 부트캠프 교육생만 이용할 수 있어요. 로그인 후 이용해주세요.</div>
+    <div class="auth-sub"><strong>SKALA 워크스페이스에 가입된 계정</strong>으로 로그인 후 이용해주세요.</div>
+    <div class="auth-sub auth-sub-small">* 워크스페이스 입력 화면이 뜬다면 <strong>'theskala'</strong>를 입력해주세요.</div>
     <button class="auth-login-btn" @click="handleLogin">Slack으로 로그인</button>
   </div>
 </template>
@@ -48,6 +49,15 @@ function handleLogin() {
   font-size: 13.5px;
   color: #636e72;
   line-height: 1.5;
+}
+
+.auth-sub strong {
+  color: #4a3f8f;
+}
+
+.auth-sub-small {
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 .auth-login-btn {
