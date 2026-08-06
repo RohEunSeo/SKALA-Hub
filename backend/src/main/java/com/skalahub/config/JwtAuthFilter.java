@@ -33,10 +33,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtService.parseToken(token);
                 String role = claims.get("role", String.class);
-                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
-                var authentication =
-                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (role != null) {
+                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
+                    var authentication =
+                            new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             } catch (Exception e) {
                 // 토큰이 없거나 유효하지 않으면 인증 없이 통과 (permitAll 라우트는 영향 없음)
             }

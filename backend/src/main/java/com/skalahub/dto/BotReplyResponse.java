@@ -9,5 +9,7 @@ public record BotReplyResponse(
         String content,
         LocalDateTime createdAt,
         Long postId,
-        String postPreview) {
+        String postAuthor,
+        String postPreview,
+        boolean success) {
 }

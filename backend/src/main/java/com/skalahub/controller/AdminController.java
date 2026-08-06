@@ -6,6 +6,7 @@ import com.skalahub.dto.BotReplyResponse;
 import com.skalahub.dto.BotReplyUpdateRequest;
 import com.skalahub.dto.PostPageResponse;
 import com.skalahub.dto.PostResponse;
+import com.skalahub.entity.SyncFailure;
 import com.skalahub.service.AdminPostService;
 import com.skalahub.service.SlackSyncService;
 import java.util.List;
@@ -41,9 +42,11 @@ public class AdminController {
         try {
             SlackSyncService.SyncSummary summary = slackSyncService.incrementalSync();
             return ResponseEntity.ok(toSyncResponse(summary));
-        } catch (IllegalStateException alreadyRunning) {
+        } catch (SlackSyncService.SyncAlreadyRunningException alreadyRunning) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", alreadyRunning.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
         }
     }
 
@@ -53,9 +56,11 @@ public class AdminController {
         try {
             SlackSyncService.SyncSummary summary = slackSyncService.syncAll();
             return ResponseEntity.ok(toSyncResponse(summary));
-        } catch (IllegalStateException alreadyRunning) {
+        } catch (SlackSyncService.SyncAlreadyRunningException alreadyRunning) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", alreadyRunning.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
         }
     }
 
@@ -83,13 +88,13 @@ public class AdminController {
     // 미분류 게시글 전체를 Claude로 일괄 재분류
     @PostMapping("/posts/classify-all")
     public Map<String, Object> classifyAll() {
-        int classified = adminPostService.classifyAllUncategorized();
-        return Map.of("classified", classified);
+        AdminPostService.ClassifyResult result = adminPostService.classifyAllUncategorized();
+        return Map.of("classified", result.classified(), "failed", result.failed());
     }
 
     // 동기화 실패 목록 - 슬랙 채널에는 알리지 않고 여기서만 확인
     @GetMapping("/sync-failures")
-    public List<SlackSyncService.SyncFailure> getSyncFailures() {
+    public List<SyncFailure> getSyncFailures() {
         return slackSyncService.getSyncFailures();
     }
 

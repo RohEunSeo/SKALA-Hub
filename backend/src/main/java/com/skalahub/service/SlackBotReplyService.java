@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
@@ -91,31 +92,62 @@ public class SlackBotReplyService {
         }
     }
 
-    // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음 (동기화 흐름 전용)
+    // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음 (동기화 흐름 전용).
+    // 429 레이트리밋은 SlackSyncService.getWithRetry와 같은 방식으로 1회 재시도 - 새벽 전체 재동기화가
+    // 한꺼번에 여러 성공 알림을 쏠 때 레이트리밋에 걸려 알림이 조용히 누락되는 걸 방지
     private void postThreadReply(String threadTs, String text) {
         if (testMode) {
             log.info("[TEST_MODE] 슬랙 댓글 전송 스킵 - threadTs={}, text={}", threadTs, text);
             return;
         }
         try {
-            JsonNode response = restClient.post()
-                    .uri("https://slack.com/api/chat.postMessage")
-                    .header("Authorization", "Bearer " + botToken)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "channel", channelId,
-                            "thread_ts", threadTs,
-                            "text", text,
-                            "unfurl_links", false,
-                            "unfurl_media", false))
-                    .retrieve()
-                    .body(JsonNode.class);
+            JsonNode response = postMessageWithRetry(threadTs, text);
             if (!response.path("ok").asBoolean(false)) {
                 log.error("슬랙 스레드 댓글 전송 실패 (threadTs={}): {}", threadTs, describeError(response));
             }
         } catch (Exception e) {
             log.error("슬랙 스레드 댓글 전송 실패 (threadTs={})", threadTs, e);
         }
+    }
+
+    private JsonNode postMessageWithRetry(String threadTs, String text) {
+        try {
+            return postMessage(threadTs, text);
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            long waitSeconds = 1;
+            String retryAfter = e.getResponseHeaders() != null
+                    ? e.getResponseHeaders().getFirst("Retry-After")
+                    : null;
+            if (retryAfter != null) {
+                try {
+                    waitSeconds = Long.parseLong(retryAfter);
+                } catch (NumberFormatException ignored) {
+                    // 기본 1초 대기 유지
+                }
+            }
+            log.warn("슬랙 레이트리밋 - {}초 대기 후 댓글 재전송 (threadTs={})", waitSeconds, threadTs);
+            try {
+                Thread.sleep(waitSeconds * 1000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            return postMessage(threadTs, text);
+        }
+    }
+
+    private JsonNode postMessage(String threadTs, String text) {
+        return restClient.post()
+                .uri("https://slack.com/api/chat.postMessage")
+                .header("Authorization", "Bearer " + botToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "channel", channelId,
+                        "thread_ts", threadTs,
+                        "text", text,
+                        "unfurl_links", false,
+                        "unfurl_media", false))
+                .retrieve()
+                .body(JsonNode.class);
     }
 
     private String describeError(JsonNode response) {
