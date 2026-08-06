@@ -266,6 +266,7 @@ const savingId = ref(null)
 const savedId = ref(null)
 const manageCategoryFilter = ref('') // '' = 전체 카테고리
 const manageTagFilter = ref(null) // 선택된 카테고리의 하위 태그 필터, null = 전체
+const manageDateFilter = ref('all') // 'all' | 'today' - 오늘 올라온 글만 모아서 태그 관리할 때 사용
 const expandedPostIds = ref(new Set())
 const manageCategoryTags = computed(
   () => CATEGORIES.find((cat) => cat.value === manageCategoryFilter.value)?.tags ?? [],
@@ -281,6 +282,12 @@ function selectManageCategory(value) {
 
 function selectManageTag(value) {
   manageTagFilter.value = manageTagFilter.value === value ? null : value
+  allPostsPage.value = 0
+  loadAllPosts()
+}
+
+function selectManageDateFilter(value) {
+  manageDateFilter.value = value
   allPostsPage.value = 0
   loadAllPosts()
 }
@@ -346,6 +353,7 @@ async function loadAllPosts() {
     const { data } = await fetchPosts({
       category: manageCategoryFilter.value || undefined,
       tag: manageTagFilter.value || undefined,
+      date: manageDateFilter.value === 'today' ? 'today' : undefined,
       page: allPostsPage.value,
       size: MANAGE_PAGE_SIZE,
     })
@@ -651,6 +659,21 @@ onMounted(() => {
             :class="{ active: manageCategoryFilter === cat.value }"
             @click="selectManageCategory(cat.value)"
             >{{ cat.icon }} {{ cat.shortLabel }}</span
+          >
+        </div>
+
+        <div class="category-chips sub-chips">
+          <span
+            class="chip"
+            :class="{ active: manageDateFilter === 'all' }"
+            @click="selectManageDateFilter('all')"
+            >전체 기간</span
+          >
+          <span
+            class="chip"
+            :class="{ active: manageDateFilter === 'today' }"
+            @click="selectManageDateFilter('today')"
+            >오늘</span
           >
         </div>
 
