@@ -19,6 +19,7 @@ import {
   fetchBotReplies,
   deleteBotReply,
   updateBotReply,
+  sendPendingNotification,
 } from '../api/admin'
 import { stripSlackMarkdown, renderSlackText } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -112,9 +113,10 @@ const botRepliesError = ref('')
 const editingReplyId = ref(null)
 const editingContent = ref('')
 const botReplyActionError = ref('')
-const botReplyTypeFilter = ref('all') // 'all' | 'success' | 'failure'
+const botReplyTypeFilter = ref('all') // 'all' | 'success' | 'failure' | 'pending'
 const botReplyDateFilter = ref('all') // 'all' | 'today'
 const botReplyPage = ref(0)
+const sendingPendingId = ref(null)
 
 function isToday(dateStr) {
   const d = new Date(dateStr)
@@ -126,8 +128,7 @@ function isToday(dateStr) {
 
 const filteredBotReplies = computed(() =>
   botReplies.value.filter((reply) => {
-    const typeMatch =
-      botReplyTypeFilter.value === 'all' || reply.success === (botReplyTypeFilter.value === 'success')
+    const typeMatch = botReplyTypeFilter.value === 'all' || reply.status === botReplyTypeFilter.value
     const dateMatch = botReplyDateFilter.value === 'all' || isToday(reply.createdAt)
     return typeMatch && dateMatch
   }),
@@ -206,6 +207,21 @@ async function removeBotReply(reply) {
     toastStore.show('댓글을 삭제했습니다')
   } catch (error) {
     botReplyActionError.value = error.response?.data?.error || '댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  }
+}
+
+// 로컬 환경에서 동기화되어 보류된 알림을 배포 환경에서 지금 전송 - 여전히 로컬이면 서버가 막아줌
+async function sendPending(reply) {
+  sendingPendingId.value = reply.postId
+  botReplyActionError.value = ''
+  try {
+    await sendPendingNotification(reply.postId)
+    await loadBotReplies()
+    toastStore.show('슬랙에 동기화 완료 댓글을 보냈습니다')
+  } catch (error) {
+    botReplyActionError.value = error.response?.data?.error || '전송에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  } finally {
+    sendingPendingId.value = null
   }
 }
 
@@ -542,13 +558,19 @@ onMounted(() => {
               class="chip"
               :class="{ active: botReplyTypeFilter === 'success' }"
               @click="selectBotReplyTypeFilter('success')"
-              >✅ 성공 {{ botReplies.filter((r) => r.success).length }}</span
+              >✅ 성공 {{ botReplies.filter((r) => r.status === 'success').length }}</span
             >
             <span
               class="chip"
               :class="{ active: botReplyTypeFilter === 'failure' }"
               @click="selectBotReplyTypeFilter('failure')"
-              >⚠️ 실패 {{ botReplies.filter((r) => !r.success).length }}</span
+              >⚠️ 실패 {{ botReplies.filter((r) => r.status === 'failure').length }}</span
+            >
+            <span
+              class="chip"
+              :class="{ active: botReplyTypeFilter === 'pending' }"
+              @click="selectBotReplyTypeFilter('pending')"
+              >⏳ 대기 {{ botReplies.filter((r) => r.status === 'pending').length }}</span
             >
           </div>
           <div class="category-chips sub-chips">
@@ -572,7 +594,11 @@ onMounted(() => {
           <div v-else-if="filteredBotReplies.length === 0" class="status-message">봇 댓글이 없습니다.</div>
           <template v-else>
             <div class="uncategorized-list">
-              <div v-for="reply in pagedBotReplies" :key="reply.id" class="uncategorized-row">
+              <div
+                v-for="reply in pagedBotReplies"
+                :key="reply.id ?? `pending-${reply.postId}`"
+                class="uncategorized-row"
+              >
                 <div class="manage-header">
                   <span class="row-author">{{ reply.postAuthor }} · {{ reply.postPreview }}</span>
                   <span class="row-time">{{ formatRelativeTime(reply.createdAt) }}</span>
@@ -594,8 +620,19 @@ onMounted(() => {
                       class="secondary-btn link-btn"
                       >게시글 보기</a
                     >
-                    <button class="secondary-btn" @click="startEditReply(reply)">수정</button>
-                    <button class="secondary-btn" @click="removeBotReply(reply)">삭제</button>
+                    <template v-if="reply.status === 'pending'">
+                      <button
+                        class="save-btn"
+                        :disabled="sendingPendingId === reply.postId"
+                        @click="sendPending(reply)"
+                      >
+                        {{ sendingPendingId === reply.postId ? '전송 중...' : '지금 전송' }}
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="secondary-btn" @click="startEditReply(reply)">수정</button>
+                      <button class="secondary-btn" @click="removeBotReply(reply)">삭제</button>
+                    </template>
                   </div>
                 </template>
               </div>

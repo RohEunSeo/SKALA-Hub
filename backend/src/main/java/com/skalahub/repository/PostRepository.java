@@ -15,6 +15,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     Optional<Post> findBySlackTs(String slackTs);
 
+    // 로컬 환경(FRONTEND_URL=localhost)에서 동기화되어 슬랙 알림이 보류된 게시글 - 관리자 모드 "대기" 목록
+    List<Post> findByPendingNotificationTrue();
+
     // 카테고리/태그/키워드/작성자/기간/캠퍼스 조건은 값이 없으면(null) 무시. 정렬은 sort 값에 따라 동적 분기
     @Query(
             value = """

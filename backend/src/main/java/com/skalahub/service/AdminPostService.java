@@ -8,7 +8,9 @@ import com.skalahub.dto.PostResponse;
 import com.skalahub.entity.Post;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.ReplyRepository;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -89,10 +91,11 @@ public class AdminPostService {
     public record ClassifyResult(int classified, int failed) {
     }
 
-    // 슬랙 봇이 남긴 동기화 안내 댓글 목록 - 관리자 모드에서 슬랙 채널 대신 여기서 확인/관리
+    // 슬랙 봇이 남긴 동기화 안내 댓글 + 알림이 보류된(pending) 게시글을 합쳐서 반환 - 관리자 모드에서
+    // 슬랙 채널 대신 여기서 확인/관리. pending은 아직 실제 슬랙 댓글이 없어서 id·ts가 null
     @Transactional(readOnly = true)
     public List<BotReplyResponse> getBotReplies() {
-        return replyRepository
+        Stream<BotReplyResponse> fromReplies = replyRepository
                 .findBotReplies(SlackBotReplyService.SYNC_SUCCESS_MARKER, SlackBotReplyService.SYNC_FAILURE_MARKER)
                 .stream()
                 .map(reply -> new BotReplyResponse(
@@ -103,8 +106,42 @@ public class AdminPostService {
                         reply.getPost().getId(),
                         reply.getPost().getUserName(),
                         preview(reply.getPost().getContent()),
-                        reply.getContent().contains(SlackBotReplyService.SYNC_SUCCESS_MARKER)))
+                        reply.getContent().contains(SlackBotReplyService.SYNC_SUCCESS_MARKER) ? "success" : "failure"));
+
+        Stream<BotReplyResponse> pending = postRepository.findByPendingNotificationTrue().stream()
+                .map(post -> new BotReplyResponse(
+                        null,
+                        null,
+                        "⏳ 동기화는 완료됐지만 로컬 환경이라 배포 링크를 만들 수 없어 알림이 보류됐습니다.",
+                        post.getSyncedAt(),
+                        post.getId(),
+                        post.getUserName(),
+                        preview(post.getContent()),
+                        "pending"));
+
+        return Stream.concat(fromReplies, pending)
+                .sorted(Comparator.comparing(BotReplyResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    // 배포 환경에서 관리자가 "지금 전송"을 눌렀을 때 - 여전히 로컬 주소면 또 같은 사고가 나므로 다시 한번 확인
+    public void sendPendingNotification(Long postId) {
+        Post post = postRepository
+                .findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다"));
+        if (slackBotReplyService.isLocalFrontendUrl()) {
+            throw new IllegalStateException("아직 FRONTEND_URL이 로컬 주소입니다 - 배포 환경에서 다시 시도해주세요");
+        }
+        slackBotReplyService.notifySyncSuccess(post.getSlackTs(), post.getId());
+        clearPendingNotification(postId);
+    }
+
+    @Transactional
+    public void clearPendingNotification(Long postId) {
+        postRepository.findById(postId).ifPresent(post -> {
+            post.setPendingNotification(false);
+            postRepository.save(post);
+        });
     }
 
     // 봇 댓글을 슬랙에서 삭제하고, 로컬 DB의 replies·post.replyCount도 같이 맞춤 - 슬랙에서 직접 지우면
