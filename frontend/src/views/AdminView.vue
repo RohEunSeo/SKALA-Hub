@@ -20,12 +20,13 @@ import {
   deleteBotReply,
   updateBotReply,
 } from '../api/admin'
-import { stripSlackMarkdown } from '../utils/renderSlackText'
+import { stripSlackMarkdown, renderSlackText } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
 
 const PAGE_SIZE = 10
-const MANAGE_PAGE_SIZE = 30
+const MANAGE_PAGE_SIZE = 4
+const MANAGE_PREVIEW_LENGTH = 150
 
 const authStore = useAuthStore()
 const toastStore = useToastStore()
@@ -104,12 +105,60 @@ async function loadSyncFailures() {
 }
 
 // 슬랙 봇이 남긴 동기화 안내 댓글 - 슬랙 채널에서는 수정/삭제가 안 돼서 여기서 관리
+const BOT_REPLY_PAGE_SIZE = 4
 const botReplies = ref([])
 const botRepliesLoading = ref(false)
 const botRepliesError = ref('')
 const editingReplyId = ref(null)
 const editingContent = ref('')
 const botReplyActionError = ref('')
+const botReplyTypeFilter = ref('all') // 'all' | 'success' | 'failure'
+const botReplyDateFilter = ref('all') // 'all' | 'today'
+const botReplyPage = ref(0)
+
+function isToday(dateStr) {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  )
+}
+
+const filteredBotReplies = computed(() =>
+  botReplies.value.filter((reply) => {
+    const typeMatch =
+      botReplyTypeFilter.value === 'all' || reply.success === (botReplyTypeFilter.value === 'success')
+    const dateMatch = botReplyDateFilter.value === 'all' || isToday(reply.createdAt)
+    return typeMatch && dateMatch
+  }),
+)
+
+const botReplyTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredBotReplies.value.length / BOT_REPLY_PAGE_SIZE)),
+)
+
+const pagedBotReplies = computed(() => {
+  const start = botReplyPage.value * BOT_REPLY_PAGE_SIZE
+  return filteredBotReplies.value.slice(start, start + BOT_REPLY_PAGE_SIZE)
+})
+
+function selectBotReplyTypeFilter(value) {
+  botReplyTypeFilter.value = value
+  botReplyPage.value = 0
+}
+
+function selectBotReplyDateFilter(value) {
+  botReplyDateFilter.value = value
+  botReplyPage.value = 0
+}
+
+function goToPrevBotReplyPage() {
+  if (botReplyPage.value > 0) botReplyPage.value -= 1
+}
+
+function goToNextBotReplyPage() {
+  if (botReplyPage.value + 1 < botReplyTotalPages.value) botReplyPage.value += 1
+}
 
 async function loadBotReplies() {
   botRepliesLoading.value = true
@@ -153,6 +202,7 @@ async function removeBotReply(reply) {
   try {
     await deleteBotReply(reply.ts)
     botReplies.value = botReplies.value.filter((item) => item.id !== reply.id)
+    botReplyPage.value = Math.min(botReplyPage.value, botReplyTotalPages.value - 1)
     toastStore.show('댓글을 삭제했습니다')
   } catch (error) {
     botReplyActionError.value = error.response?.data?.error || '댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.'
@@ -167,6 +217,7 @@ const uncategorizedLoading = ref(false)
 const uncategorizedError = ref('')
 const classifying = ref(false)
 const classifyResultCount = ref(null)
+const classifyFailedCount = ref(0)
 const classifyError = ref('')
 
 async function loadUncategorized() {
@@ -190,10 +241,11 @@ async function runClassifyAll() {
   try {
     const { data } = await classifyAllUncategorized()
     classifyResultCount.value = data.classified
+    classifyFailedCount.value = data.failed ?? 0
     uncategorizedPage.value = 0
     allPostsPage.value = 0
     await loadUncategorized()
-    await loadAllPosts(true)
+    await loadAllPosts()
     postsStore.refreshCategoryCounts()
   } catch {
     classifyError.value = '일괄 분류에 실패했습니다. 잠시 후 다시 시도해주세요.'
@@ -214,7 +266,7 @@ const savingId = ref(null)
 const savedId = ref(null)
 const manageCategoryFilter = ref('') // '' = 전체 카테고리
 const manageTagFilter = ref(null) // 선택된 카테고리의 하위 태그 필터, null = 전체
-const allPostsHasMore = computed(() => allPostsPage.value + 1 < allPostsTotalPages.value)
+const expandedPostIds = ref(new Set())
 const manageCategoryTags = computed(
   () => CATEGORIES.find((cat) => cat.value === manageCategoryFilter.value)?.tags ?? [],
 )
@@ -224,13 +276,30 @@ function selectManageCategory(value) {
   manageCategoryFilter.value = value
   manageTagFilter.value = null
   allPostsPage.value = 0
-  loadAllPosts(true)
+  loadAllPosts()
 }
 
 function selectManageTag(value) {
   manageTagFilter.value = manageTagFilter.value === value ? null : value
   allPostsPage.value = 0
-  loadAllPosts(true)
+  loadAllPosts()
+}
+
+function togglePostExpand(postId) {
+  const next = new Set(expandedPostIds.value)
+  if (next.has(postId)) {
+    next.delete(postId)
+  } else {
+    next.add(postId)
+  }
+  expandedPostIds.value = next
+}
+
+function managePreview(content) {
+  const stripped = stripSlackMarkdown(content, { collapseNewlines: false })
+  return stripped.length > MANAGE_PREVIEW_LENGTH
+    ? stripped.slice(0, MANAGE_PREVIEW_LENGTH) + '...'
+    : stripped
 }
 
 function categoryTagOptions(categoryValue) {
@@ -269,8 +338,8 @@ function removeTag(postId, tagValue) {
   state.tags = state.tags.filter((tag) => tag !== tagValue)
 }
 
-// reset=true: 카테고리 필터를 바꿨을 때 목록을 처음부터 새로 조회, false: "더보기"로 다음 페이지를 이어붙임
-async function loadAllPosts(reset = false) {
+// 매번 현재 allPostsPage 기준으로 목록을 통째로 교체 (이전/다음 페이지네이션 - 누적 안 함)
+async function loadAllPosts() {
   allPostsLoading.value = true
   allPostsError.value = ''
   try {
@@ -281,21 +350,30 @@ async function loadAllPosts(reset = false) {
       size: MANAGE_PAGE_SIZE,
     })
     const content = data?.content ?? []
-    allPosts.value = reset ? content : [...allPosts.value, ...content]
+    allPosts.value = content
     allPostsTotal.value = data?.totalElements ?? 0
     allPostsTotalPages.value = data?.totalPages ?? 0
     initEditState(content)
   } catch {
     allPostsError.value = '게시글 목록을 불러오지 못했습니다.'
-    if (reset) allPosts.value = []
+    allPosts.value = []
   } finally {
     allPostsLoading.value = false
   }
 }
 
-function loadMoreAllPosts() {
-  allPostsPage.value += 1
-  loadAllPosts()
+function goToPrevManagePage() {
+  if (allPostsPage.value > 0) {
+    allPostsPage.value -= 1
+    loadAllPosts()
+  }
+}
+
+function goToNextManagePage() {
+  if (allPostsPage.value + 1 < allPostsTotalPages.value) {
+    allPostsPage.value += 1
+    loadAllPosts()
+  }
 }
 
 function onCategoryChange(postId) {
@@ -354,7 +432,7 @@ async function saveAllPosts() {
         failCount += 1
       }
     }
-    await loadAllPosts(true)
+    await loadAllPosts()
     postsStore.refreshCategoryCounts()
     toastStore.show(
       failCount === 0
@@ -369,7 +447,7 @@ async function saveAllPosts() {
 onMounted(() => {
   if (authStore.user?.role !== 'admin') return
   loadUncategorized()
-  loadAllPosts(true)
+  loadAllPosts()
   loadSyncFailures()
   loadBotReplies()
 })
@@ -387,52 +465,52 @@ onMounted(() => {
 
       <section class="section">
         <div class="section-title">🔄 동기화</div>
-        <div class="card">
-          <p class="card-desc">최근 7일 이내 게시글/댓글만 다시 수집하고 미분류 게시글을 분류합니다. API 호출량이 적어 자주 눌러도 괜찮습니다.</p>
-          <button class="primary-btn" :disabled="syncing" @click="runSync">
-            {{ syncing ? '동기화 중...' : '지금 동기화' }}
-          </button>
-          <div v-if="syncResult" class="result-box">
-            처리 {{ syncResult.postsProcessed }}건 · 신규 {{ syncResult.newPosts }}건 · 댓글
-            {{ syncResult.repliesProcessed }}건 · {{ (syncResult.durationMs / 1000).toFixed(1) }}초 소요
-          </div>
-          <div v-if="syncError" class="result-box error">{{ syncError }}</div>
-
-          <div class="full-sync-row">
-            <p class="card-desc small">
-              채널 히스토리 전체를 다시 훑어야 하는 경우(과거 데이터 복구 등)만 아래를 사용하세요.
-              평소엔 매일 새벽 4시에 자동으로 실행됩니다.
-            </p>
-            <button class="secondary-btn" :disabled="syncingFull" @click="runFullSync">
-              {{ syncingFull ? '전체 재수집 중...' : '전체 재수집 (느림)' }}
+        <div class="card sync-layout">
+          <div class="sync-controls">
+            <p class="card-desc">최근 7일 이내 게시글/댓글만 다시 수집하고 미분류 게시글을 분류합니다. API 호출량이 적어 자주 눌러도 괜찮습니다.</p>
+            <button class="primary-btn" :disabled="syncing" @click="runSync">
+              {{ syncing ? '동기화 중...' : '지금 동기화' }}
             </button>
-            <div v-if="syncFullResult" class="result-box">
-              처리 {{ syncFullResult.postsProcessed }}건 · 신규 {{ syncFullResult.newPosts }}건 · 댓글
-              {{ syncFullResult.repliesProcessed }}건 · {{ (syncFullResult.durationMs / 1000).toFixed(1) }}초 소요
+            <div v-if="syncResult" class="result-box">
+              처리 {{ syncResult.postsProcessed }}건 · 신규 {{ syncResult.newPosts }}건 · 댓글
+              {{ syncResult.repliesProcessed }}건 · {{ (syncResult.durationMs / 1000).toFixed(1) }}초 소요
             </div>
-            <div v-if="syncFullError" class="result-box error">{{ syncFullError }}</div>
-          </div>
-        </div>
-      </section>
+            <div v-if="syncError" class="result-box error">{{ syncError }}</div>
 
-      <section class="section">
-        <div class="section-title">⚠️ 동기화 실패 목록 ({{ syncFailures.length }}건)</div>
-        <div class="card">
-          <p class="card-desc">
-            저장에 실패한 게시글입니다. 슬랙 채널에는 알리지 않고 여기서만 보입니다. 원인을 고친 뒤 위
-            "지금 동기화"를 다시 누르면 성공한 항목은 자동으로 목록에서 빠집니다.
-          </p>
-          <div v-if="syncFailuresLoading" class="status-message">불러오는 중...</div>
-          <div v-else-if="syncFailuresError" class="status-message error">{{ syncFailuresError }}</div>
-          <div v-else-if="syncFailures.length === 0" class="status-message">현재 실패한 동기화가 없습니다.</div>
-          <div v-else class="uncategorized-list">
-            <div v-for="failure in syncFailures" :key="failure.slackTs" class="uncategorized-row">
-              <div class="manage-header">
-                <span class="row-author">ts: {{ failure.slackTs }}</span>
-                <span class="row-time">{{ formatRelativeTime(failure.failedAt) }}</span>
+            <div class="full-sync-row">
+              <p class="card-desc small">
+                채널 히스토리 전체를 다시 훑어야 하는 경우(과거 데이터 복구 등)만 아래를 사용하세요.
+                평소엔 매일 새벽 4시에 자동으로 실행됩니다.
+              </p>
+              <button class="secondary-btn" :disabled="syncingFull" @click="runFullSync">
+                {{ syncingFull ? '전체 재수집 중...' : '전체 재수집 (느림)' }}
+              </button>
+              <div v-if="syncFullResult" class="result-box">
+                처리 {{ syncFullResult.postsProcessed }}건 · 신규 {{ syncFullResult.newPosts }}건 · 댓글
+                {{ syncFullResult.repliesProcessed }}건 · {{ (syncFullResult.durationMs / 1000).toFixed(1) }}초 소요
               </div>
-              <div class="row-preview">{{ failure.contentPreview }}</div>
-              <div class="row-preview error-text">{{ failure.errorMessage }}</div>
+              <div v-if="syncFullError" class="result-box error">{{ syncFullError }}</div>
+            </div>
+          </div>
+
+          <div class="sync-failures">
+            <div class="sync-failures-title">⚠️ 동기화 실패 목록 ({{ syncFailures.length }}건)</div>
+            <p class="card-desc">
+              저장에 실패한 게시글입니다. 슬랙 채널에는 알리지 않고 여기서만 보입니다. 원인을 고친 뒤
+              "지금 동기화"를 다시 누르면 성공한 항목은 자동으로 목록에서 빠집니다.
+            </p>
+            <div v-if="syncFailuresLoading" class="status-message">불러오는 중...</div>
+            <div v-else-if="syncFailuresError" class="status-message error">{{ syncFailuresError }}</div>
+            <div v-else-if="syncFailures.length === 0" class="status-message">현재 실패한 동기화가 없습니다.</div>
+            <div v-else class="uncategorized-list">
+              <div v-for="failure in syncFailures" :key="failure.slackTs" class="uncategorized-row">
+                <div class="manage-header">
+                  <span class="row-author">ts: {{ failure.slackTs }}</span>
+                  <span class="row-time">{{ formatRelativeTime(failure.failedAt) }}</span>
+                </div>
+                <div class="row-preview">{{ failure.contentPreview }}</div>
+                <div class="row-preview error-text">{{ failure.errorMessage }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -444,32 +522,88 @@ onMounted(() => {
           <p class="card-desc">
             봇이 스레드에 남긴 동기화 안내 댓글입니다. 슬랙에서는 직접 수정·삭제가 안 되니 여기서 관리하세요.
           </p>
+
+          <div class="category-chips">
+            <span
+              class="chip"
+              :class="{ active: botReplyTypeFilter === 'all' }"
+              @click="selectBotReplyTypeFilter('all')"
+              >전체 {{ botReplies.length }}</span
+            >
+            <span
+              class="chip"
+              :class="{ active: botReplyTypeFilter === 'success' }"
+              @click="selectBotReplyTypeFilter('success')"
+              >✅ 성공 {{ botReplies.filter((r) => r.success).length }}</span
+            >
+            <span
+              class="chip"
+              :class="{ active: botReplyTypeFilter === 'failure' }"
+              @click="selectBotReplyTypeFilter('failure')"
+              >⚠️ 실패 {{ botReplies.filter((r) => !r.success).length }}</span
+            >
+          </div>
+          <div class="category-chips sub-chips">
+            <span
+              class="chip"
+              :class="{ active: botReplyDateFilter === 'all' }"
+              @click="selectBotReplyDateFilter('all')"
+              >전체 기간</span
+            >
+            <span
+              class="chip"
+              :class="{ active: botReplyDateFilter === 'today' }"
+              @click="selectBotReplyDateFilter('today')"
+              >오늘</span
+            >
+          </div>
+
           <div v-if="botReplyActionError" class="result-box error">{{ botReplyActionError }}</div>
           <div v-if="botRepliesLoading" class="status-message">불러오는 중...</div>
           <div v-else-if="botRepliesError" class="status-message error">{{ botRepliesError }}</div>
-          <div v-else-if="botReplies.length === 0" class="status-message">봇 댓글이 없습니다.</div>
-          <div v-else class="uncategorized-list">
-            <div v-for="reply in botReplies" :key="reply.id" class="uncategorized-row">
-              <div class="manage-header">
-                <span class="row-author">게시글: {{ reply.postPreview }}</span>
-                <span class="row-time">{{ formatRelativeTime(reply.createdAt) }}</span>
+          <div v-else-if="filteredBotReplies.length === 0" class="status-message">봇 댓글이 없습니다.</div>
+          <template v-else>
+            <div class="uncategorized-list">
+              <div v-for="reply in pagedBotReplies" :key="reply.id" class="uncategorized-row">
+                <div class="manage-header">
+                  <span class="row-author">{{ reply.postAuthor }} · {{ reply.postPreview }}</span>
+                  <span class="row-time">{{ formatRelativeTime(reply.createdAt) }}</span>
+                </div>
+                <template v-if="editingReplyId === reply.id">
+                  <textarea v-model="editingContent" class="tag-input reply-edit-textarea" rows="3"></textarea>
+                  <div class="control-row">
+                    <button class="save-btn" @click="saveEditReply(reply)">저장</button>
+                    <button class="secondary-btn" @click="cancelEditReply">취소</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="row-preview">{{ stripSlackMarkdown(reply.content) }}</div>
+                  <div class="control-row">
+                    <a
+                      :href="`/posts/${reply.postId}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="secondary-btn link-btn"
+                      >게시글 보기</a
+                    >
+                    <button class="secondary-btn" @click="startEditReply(reply)">수정</button>
+                    <button class="secondary-btn" @click="removeBotReply(reply)">삭제</button>
+                  </div>
+                </template>
               </div>
-              <template v-if="editingReplyId === reply.id">
-                <textarea v-model="editingContent" class="tag-input reply-edit-textarea" rows="3"></textarea>
-                <div class="control-row">
-                  <button class="save-btn" @click="saveEditReply(reply)">저장</button>
-                  <button class="secondary-btn" @click="cancelEditReply">취소</button>
-                </div>
-              </template>
-              <template v-else>
-                <div class="row-preview">{{ reply.content }}</div>
-                <div class="control-row">
-                  <button class="secondary-btn" @click="startEditReply(reply)">수정</button>
-                  <button class="secondary-btn" @click="removeBotReply(reply)">삭제</button>
-                </div>
-              </template>
             </div>
-          </div>
+            <div class="control-row bot-reply-pagination">
+              <button class="secondary-btn" :disabled="botReplyPage === 0" @click="goToPrevBotReplyPage">이전</button>
+              <span>{{ botReplyPage + 1 }} / {{ botReplyTotalPages }}</span>
+              <button
+                class="secondary-btn"
+                :disabled="botReplyPage + 1 >= botReplyTotalPages"
+                @click="goToNextBotReplyPage"
+              >
+                다음
+              </button>
+            </div>
+          </template>
         </div>
       </section>
 
@@ -481,6 +615,7 @@ onMounted(() => {
           </button>
           <div v-if="classifyResultCount !== null" class="result-box">
             {{ classifyResultCount }}개 게시글을 분류했습니다.
+            <template v-if="classifyFailedCount > 0">({{ classifyFailedCount }}개는 실패 - 다음에 다시 눌러주세요)</template>
           </div>
           <div v-if="classifyError" class="result-box error">{{ classifyError }}</div>
 
@@ -555,7 +690,15 @@ onMounted(() => {
               <span class="row-author">{{ post.userName }}</span>
               <span class="row-time">{{ formatRelativeTime(post.createdAt) }}</span>
             </div>
-            <div class="manage-preview">{{ stripSlackMarkdown(post.content) }}</div>
+            <div v-if="expandedPostIds.has(post.id)" class="manage-preview manage-preview-full" v-html="renderSlackText(post.content)"></div>
+            <div v-else class="manage-preview">{{ managePreview(post.content) }}</div>
+            <div
+              v-if="stripSlackMarkdown(post.content, { collapseNewlines: false }).length > MANAGE_PREVIEW_LENGTH"
+              class="expand-toggle"
+              @click="togglePostExpand(post.id)"
+            >
+              {{ expandedPostIds.has(post.id) ? '접기 ▴' : '더보기 ▾' }}
+            </div>
 
             <div v-if="editState[post.id]" class="manage-controls">
               <div class="control-row">
@@ -601,7 +744,17 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="allPostsHasMore && !allPostsLoading" class="load-more" @click="loadMoreAllPosts">더보기</div>
+        <div v-if="allPosts.length > 0" class="control-row manage-pagination">
+          <button class="secondary-btn" :disabled="allPostsPage === 0" @click="goToPrevManagePage">이전</button>
+          <span>{{ allPostsPage + 1 }} / {{ Math.max(1, allPostsTotalPages) }}</span>
+          <button
+            class="secondary-btn"
+            :disabled="allPostsPage + 1 >= allPostsTotalPages"
+            @click="goToNextManagePage"
+          >
+            다음
+          </button>
+        </div>
       </section>
     </template>
   </AppLayout>
@@ -837,6 +990,94 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.expand-toggle {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a3f8f;
+  cursor: pointer;
+}
+
+.expand-toggle:hover {
+  text-decoration: underline;
+}
+
+.manage-preview-full :deep(.slack-inline-code) {
+  background: #f7e0d9;
+  color: #e01e5a;
+  font-family: ui-monospace, monospace;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.manage-preview-full :deep(.slack-codeblock) {
+  background: #f8f8f8;
+  border: 1px solid rgba(26, 26, 46, 0.08);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+
+.manage-preview-full :deep(.slack-quote) {
+  border-left: 3px solid rgba(26, 26, 46, 0.15);
+  padding-left: 12px;
+  margin: 8px 0;
+}
+
+.manage-preview-full :deep(.slack-link) {
+  color: #1264a3;
+  text-decoration: none;
+}
+
+.manage-preview-full :deep(.slack-link:hover) {
+  text-decoration: underline;
+}
+
+.manage-preview-full :deep(.slack-mention) {
+  color: #1264a3;
+  background: #e8f5fa;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.sync-layout {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.sync-controls,
+.sync-failures {
+  flex: 1;
+  min-width: 280px;
+}
+
+.sync-failures-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin-bottom: 10px;
+}
+
+.manage-pagination,
+.bot-reply-pagination {
+  justify-content: center;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #636e72;
+}
+
+.link-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
 .manage-controls {
   margin-top: 12px;
   display: flex;
@@ -964,16 +1205,4 @@ onMounted(() => {
   resize: vertical;
 }
 
-.load-more {
-  margin-top: 16px;
-  text-align: center;
-  padding: 12px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid rgba(26, 26, 46, 0.1);
-  color: #4a3f8f;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-}
 </style>

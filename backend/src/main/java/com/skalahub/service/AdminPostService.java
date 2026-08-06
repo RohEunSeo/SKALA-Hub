@@ -101,7 +101,9 @@ public class AdminPostService {
                         reply.getContent(),
                         reply.getCreatedAt(),
                         reply.getPost().getId(),
-                        preview(reply.getPost().getContent())))
+                        reply.getPost().getUserName(),
+                        preview(reply.getPost().getContent()),
+                        reply.getContent().contains(SlackBotReplyService.SYNC_SUCCESS_MARKER)))
                 .toList();
     }
 

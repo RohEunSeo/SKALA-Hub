@@ -175,7 +175,8 @@ export function renderSlackText(raw) {
 }
 
 // 목록 미리보기용 - 마크다운 기호/링크 문법을 제거한 순수 텍스트로 변환 (잘라내도 태그가 깨지지 않음)
-export function stripSlackMarkdown(raw) {
+// collapseNewlines=false로 주면 줄바꿈을 공백으로 뭉개지 않고 원본 문단 구조를 유지함 (긴 미리보기용)
+export function stripSlackMarkdown(raw, { collapseNewlines = true } = {}) {
   if (!raw) return ''
 
   let text = raw
@@ -192,7 +193,7 @@ export function stripSlackMarkdown(raw) {
   text = text.replace(/\*([^*\n]+)\*/g, '$1')
   text = text.replace(/_([^_\n]+)_/g, '$1')
   text = text.replace(/~([^~\n]+)~/g, '$1')
-  text = text.replace(/\n+/g, ' ')
+  text = collapseNewlines ? text.replace(/\n+/g, ' ') : text.replace(/\n{3,}/g, '\n\n')
 
   return text.trim()
 }
