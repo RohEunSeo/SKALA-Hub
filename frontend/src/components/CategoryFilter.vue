@@ -19,7 +19,7 @@ function select(value) {
 <template>
   <nav class="category-filter">
     <div class="chip" :class="{ active: !postsStore.category }" @click="select(null)">
-      전체 ({{ postsStore.totalPostCount }})
+      전체 ({{ postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount }})
     </div>
     <div
       v-for="cat in CATEGORIES"
@@ -28,7 +28,8 @@ function select(value) {
       :class="{ active: postsStore.category === cat.value }"
       @click="select(cat.value)"
     >
-      {{ cat.shortLabel }} ({{ postsStore.categoryCount(cat.value) }})
+      {{ cat.shortLabel }}
+      ({{ postsStore.hasLink ? postsStore.linkCategoryCount(cat.value) : postsStore.categoryCount(cat.value) }})
     </div>
   </nav>
 </template>

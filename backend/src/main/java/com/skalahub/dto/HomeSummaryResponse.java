@@ -12,5 +12,10 @@ public record HomeSummaryResponse(
         long cohortWeek,
         long userCount,
         List<CategoryCountDto> categoryCounts,
-        List<CategoryCountDto> tagCounts) {
+        List<CategoryCountDto> tagCounts,
+        // 링크 모음 탭 카테고리 칩 - 게시글 수가 아니라 attachments 배열 원소 총합
+        long totalLinkCount,
+        List<CategoryCountDto> linkCategoryCounts,
+        // 링크 모음 탭 하위 분류(🗂️ 분류) 필터용 - linkCategoryCounts와 동일한 개념의 태그별 링크 수
+        List<CategoryCountDto> linkTagCounts) {
 }

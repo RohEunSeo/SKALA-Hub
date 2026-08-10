@@ -39,10 +39,18 @@ async function load() {
 onMounted(load)
 watch(() => route.params.id, load)
 
-// 마이페이지에서 들어왔으면 마이페이지로, 그 외(피드/홈 등)는 기존처럼 피드로 돌아가게 함
-const fromMyPage = computed(() => route.query.from === 'mypage')
-const backTarget = computed(() => (fromMyPage.value ? { name: 'mypage' } : { name: 'feed' }))
-const backLabel = computed(() => (fromMyPage.value ? '← 마이페이지로 돌아가기' : '← 피드로 돌아가기'))
+// 마이페이지/링크 모음에서 들어왔으면 각각 마이페이지/피드의 링크 탭으로, 그 외(게시글 피드/홈 등)는
+// 기존처럼 피드로 돌아가게 함
+const backTarget = computed(() => {
+  if (route.query.from === 'mypage') return { name: 'mypage' }
+  if (route.query.from === 'links') return { name: 'feed', query: { tab: 'links' } }
+  return { name: 'feed' }
+})
+const backLabel = computed(() => {
+  if (route.query.from === 'mypage') return '← 마이페이지로 돌아가기'
+  if (route.query.from === 'links') return '← 링크 피드로 돌아가기'
+  return '← 피드로 돌아가기'
+})
 </script>
 
 <template>

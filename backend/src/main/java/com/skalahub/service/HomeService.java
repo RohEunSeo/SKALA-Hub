@@ -55,6 +55,14 @@ public class HomeService {
                 .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
 
+        List<CategoryCountDto> linkCategoryCounts = postRepository.countLinksByCategory().stream()
+                .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
+                .toList();
+
+        List<CategoryCountDto> linkTagCounts = postRepository.countLinksByTag().stream()
+                .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
+                .toList();
+
         return new HomeSummaryResponse(
                 postRepository.countByIsDeletedFalse(),
                 todayNewPostCount,
@@ -63,7 +71,10 @@ public class HomeService {
                 Math.max(cohortWeek, 0),
                 userRepository.count(),
                 categoryCounts,
-                tagCounts);
+                tagCounts,
+                postRepository.countAllLinks(),
+                linkCategoryCounts,
+                linkTagCounts);
     }
 
     public HomeLeaderboardResponse getLeaderboard(String period) {

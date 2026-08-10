@@ -15,6 +15,7 @@ export const usePostsStore = defineStore('posts', () => {
   const date = ref(null)
   const sort = ref('latest')
   const campus = ref(null)
+  const hasLink = ref(null)
   const page = ref(0)
   const totalPages = ref(0)
   const lastSyncedAt = ref(null)
@@ -29,6 +30,10 @@ export const usePostsStore = defineStore('posts', () => {
   const categoryCounts = ref([])
   const tagCounts = ref([])
   const totalPostCount = ref(0)
+  // 링크 모음 탭용 카테고리 칩 개수 - 게시글 수가 아니라 attachments 배열 원소 총합(카테고리 칩과 동일한 캐싱 주기로 관리)
+  const linkCategoryCounts = ref([])
+  const linkTagCounts = ref([])
+  const totalLinkCount = ref(0)
   const categoryCountsLoaded = ref(false)
 
   const hasMore = computed(() => page.value + 1 < totalPages.value)
@@ -53,12 +58,18 @@ export const usePostsStore = defineStore('posts', () => {
       categoryCounts.value = data?.categoryCounts ?? []
       tagCounts.value = data?.tagCounts ?? []
       totalPostCount.value = data?.totalPostCount ?? 0
+      linkCategoryCounts.value = data?.linkCategoryCounts ?? []
+      linkTagCounts.value = data?.linkTagCounts ?? []
+      totalLinkCount.value = data?.totalLinkCount ?? 0
       categoryCountsLoaded.value = true
     } catch {
       // 사이드바 카테고리 개수는 부가 정보라 실패해도 조용히 무시(0개로 표시)하고 화면은 그대로 진행
       categoryCounts.value = []
       tagCounts.value = []
       totalPostCount.value = 0
+      linkCategoryCounts.value = []
+      linkTagCounts.value = []
+      totalLinkCount.value = 0
     }
   }
 
@@ -68,6 +79,14 @@ export const usePostsStore = defineStore('posts', () => {
 
   function tagCount(value) {
     return tagCounts.value?.find((item) => item.category === value)?.count ?? 0
+  }
+
+  function linkCategoryCount(value) {
+    return linkCategoryCounts.value?.find((item) => item.category === value)?.count ?? 0
+  }
+
+  function linkTagCount(value) {
+    return linkTagCounts.value?.find((item) => item.category === value)?.count ?? 0
   }
 
   // 카테고리(및 학습자료 하위 태그) 필터 변경 - 목록 처음부터 다시 조회
@@ -102,6 +121,12 @@ export const usePostsStore = defineStore('posts', () => {
     return fetchPosts(true)
   }
 
+  // 링크 모음 탭 필터(true/null) 변경 - 목록 처음부터 다시 조회
+  function setHasLink(newHasLink) {
+    hasLink.value = newHasLink
+    return fetchPosts(true)
+  }
+
   // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임("더보기")
   async function fetchPosts(reset = false) {
     loading.value = true
@@ -115,6 +140,7 @@ export const usePostsStore = defineStore('posts', () => {
         author: author.value || undefined,
         date: date.value || undefined,
         campus: campus.value || undefined,
+        hasLink: hasLink.value ?? undefined,
         sort: sort.value !== 'latest' ? sort.value : undefined,
         page: targetPage,
         size: PAGE_SIZE,
@@ -158,6 +184,7 @@ export const usePostsStore = defineStore('posts', () => {
     date,
     sort,
     campus,
+    hasLink,
     page,
     totalPages,
     lastSyncedAt,
@@ -170,11 +197,15 @@ export const usePostsStore = defineStore('posts', () => {
     categoryCounts,
     tagCounts,
     totalPostCount,
+    linkCategoryCounts,
+    linkTagCounts,
+    totalLinkCount,
     setCategory,
     setSearch,
     setDate,
     setSort,
     setCampus,
+    setHasLink,
     fetchPosts,
     ensureLoaded,
     invalidateCache,
@@ -182,5 +213,7 @@ export const usePostsStore = defineStore('posts', () => {
     refreshCategoryCounts,
     categoryCount,
     tagCount,
+    linkCategoryCount,
+    linkTagCount,
   }
 })

@@ -1,6 +1,7 @@
 <script setup>
 // 게시글 피드(목록) 화면
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
 import SearchBar from '../components/SearchBar.vue'
@@ -9,6 +10,7 @@ import SortFilter from '../components/SortFilter.vue'
 import CampusFilter from '../components/CampusFilter.vue'
 import DateFilter from '../components/DateFilter.vue'
 import PostCard from '../components/PostCard.vue'
+import LinkGalleryCard from '../components/LinkGalleryCard.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
@@ -23,9 +25,20 @@ const DATE_CATEGORIES = ['개발 툴·환경', '학습자료']
 // "🗂️ 분류" 하위 태그 필터 버튼을 보여줄 카테고리 - 학습자료는 사이드바 필터만 쓰고 있어 제외
 const SUBCATEGORY_FILTER_CATEGORIES = ['교육생 서비스', '기타']
 
+const route = useRoute()
 const postsStore = usePostsStore()
 const bookmarksStore = useBookmarksStore()
 const authStore = useAuthStore()
+
+// 상단 탭("게시글"/"🔗 링크 모음") - 뷰 로컬 상태, 카테고리/층/기간 필터는 스토어에서 그대로 공유됨.
+// 링크 모음 카드의 "게시글 보러가기"로 상세 페이지에 갔다가 뒤로가기로 돌아올 때 ?tab=links가 붙어 오면 링크 탭으로 복원
+const activeTab = ref(route.query.tab === 'links' ? 'links' : 'posts')
+
+function selectTab(tab) {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  postsStore.setHasLink(tab === 'links' ? true : null)
+}
 
 const activeCategoryTags = computed(
   () => CATEGORIES.find((cat) => cat.value === postsStore.category)?.tags ?? [],
@@ -64,6 +77,15 @@ function revealMore() {
 const visiblePosts = computed(() => postsStore.posts.slice(0, visibleCount.value))
 const canShowMore = computed(() => visibleCount.value < postsStore.posts.length || postsStore.hasMore)
 
+// 링크 모음 탭 - 카드가 작아서 "체감 스크롤 길이" 제한 없이 불러온 게시글 전부를 바로 펼쳐 보여줌.
+// post.links는 슬랙이 미리보기 카드를 만들어준 링크(attachments)뿐 아니라 본문에 텍스트로만 붙은 링크도
+// 포함한 전체 목록 - 게시글 하나에 링크가 여러 개면 링크마다 카드 1개씩 나뉜다
+const linkCards = computed(() =>
+  postsStore.posts.flatMap((post) =>
+    (post.links ?? []).map((attachment) => ({ post, attachment })),
+  ),
+)
+
 // 필터/검색 등으로 목록이 처음부터 다시 조회될 때마다 노출 개수도 함께 리셋
 watch(
   () => postsStore.resetToken,
@@ -75,6 +97,11 @@ watch(
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) return
+  // ?tab=links로 들어왔는데 스토어에 아직 반영 안 됐으면(새로고침 등) 맞춰줌 - 같은 세션에서 뒤로가기로
+  // 돌아온 경우엔 이미 hasLink가 true라 여기서 다시 fetch를 유발하지 않음(직접 대입, setHasLink 아님)
+  if (activeTab.value === 'links' && postsStore.hasLink !== true) {
+    postsStore.hasLink = true
+  }
   // 캐시된 데이터를 그대로 쓴 경우(false 반환)는 fetchPosts가 호출되지 않아 resetToken이 안 바뀌므로
   // 위 watch가 노출량을 못 채움 - 여기서 직접 채워준다
   const didFetch = await postsStore.ensureLoaded()
@@ -118,6 +145,53 @@ async function loadMore() {
     revealMore()
   }
 }
+
+// 링크 모음 탭은 "더보기" 버튼 없이 스크롤이 바닥 근처에 닿으면 자동으로 다음 페이지를 이어서 불러옴.
+// IntersectionObserver는 교차 상태가 "바뀔 때"만 콜백을 주므로, 한 번 불러온 뒤에도 sentinel이 계속
+// 화면 안에 머물러 있으면(카드가 작아 한 페이지로도 뷰포트를 다 못 채우는 경우) 재호출되지 않는다.
+// 그래서 콜백 안에서 sentinel이 실제로 화면을 벗어날 때까지 while로 계속 다음 페이지를 이어붙인다.
+const scrollSentinel = ref(null)
+let scrollObserver = null
+let autoLoadingLinks = false
+
+function isSentinelNearViewport() {
+  const el = scrollSentinel.value
+  if (!el) return false
+  const rect = el.getBoundingClientRect()
+  return rect.top < window.innerHeight + 400
+}
+
+async function autoLoadLinksWhileVisible() {
+  if (autoLoadingLinks) return
+  autoLoadingLinks = true
+  try {
+    while (postsStore.hasMore && !postsStore.loading && isSentinelNearViewport()) {
+      await postsStore.fetchPosts(false)
+    }
+  } finally {
+    autoLoadingLinks = false
+  }
+}
+
+function teardownScrollObserver() {
+  scrollObserver?.disconnect()
+  scrollObserver = null
+}
+
+function setupScrollObserver() {
+  teardownScrollObserver()
+  if (activeTab.value !== 'links' || !scrollSentinel.value) return
+  scrollObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) autoLoadLinksWhileVisible()
+    },
+    { rootMargin: '400px' },
+  )
+  scrollObserver.observe(scrollSentinel.value)
+}
+
+watch([activeTab, scrollSentinel], () => nextTick(setupScrollObserver))
+onUnmounted(teardownScrollObserver)
 </script>
 
 <template>
@@ -125,34 +199,50 @@ async function loadMore() {
     <AuthRequired v-if="!authStore.isAuthenticated" message="피드를 보려면 SKALA 교육생 인증이 필요합니다" />
     <template v-else>
       <SearchBar @search="handleSearch" />
-      <CategoryFilter />
 
-      <div v-if="hasSubcategoryFilter" class="edu-category-filter">
-        <span class="label">🗂️ 분류 : </span>
-        <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
-          전체 ({{ postsStore.categoryCount(postsStore.category) }})
+      <div class="feed-sticky-filters">
+        <div class="feed-tabs">
+          <div class="feed-tab" :class="{ active: activeTab === 'posts' }" @click="selectTab('posts')">게시글</div>
+          <div class="feed-tab" :class="{ active: activeTab === 'links' }" @click="selectTab('links')">
+            🔗 링크 모음
+          </div>
         </div>
-        <div
-          v-for="sub in activeCategoryTags"
-          :key="sub.value"
-          class="pill"
-          :class="{ active: postsStore.tag === sub.value }"
-          @click="selectSubTag(sub.value)"
-        >
-          {{ sub.label }} ({{ postsStore.tagCount(sub.value) }})
+
+        <CategoryFilter />
+
+        <div v-if="hasSubcategoryFilter" class="edu-category-filter">
+          <span class="label">🗂️ 분류 : </span>
+          <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
+            전체
+            ({{
+              postsStore.hasLink
+                ? postsStore.linkCategoryCount(postsStore.category)
+                : postsStore.categoryCount(postsStore.category)
+            }})
+          </div>
+          <div
+            v-for="sub in activeCategoryTags"
+            :key="sub.value"
+            class="pill"
+            :class="{ active: postsStore.tag === sub.value }"
+            @click="selectSubTag(sub.value)"
+          >
+            {{ sub.label }}
+            ({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})
+          </div>
         </div>
-      </div>
 
-      <div v-if="showCampusFilter || showDateFilter" class="filter-row">
-        <CampusFilter v-if="showCampusFilter" />
-        <DateFilter v-if="showDateFilter" />
-      </div>
+        <div v-if="showCampusFilter || showDateFilter" class="filter-row">
+          <CampusFilter v-if="showCampusFilter" />
+          <DateFilter v-if="showDateFilter" />
+        </div>
 
-      <div class="sync-sort-row">
-        <span v-if="postsStore.lastSyncedAt" class="last-sync">
-          🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
-        </span>
-        <SortFilter />
+        <div class="sync-sort-row">
+          <span v-if="postsStore.lastSyncedAt" class="last-sync">
+            🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
+          </span>
+          <SortFilter />
+        </div>
       </div>
 
       <div v-if="postsStore.loading && postsStore.posts.length === 0" class="post-list" aria-hidden="true">
@@ -162,6 +252,15 @@ async function loadMore() {
           <SkeletonBlock width="90%" height="13px" />
           <SkeletonBlock width="40%" height="13px" />
         </div>
+      </div>
+      <div v-else-if="activeTab === 'links'" class="link-gallery-grid">
+        <LinkGalleryCard
+          v-for="card in linkCards"
+          :key="`${card.post.id}-${card.attachment.titleLink || card.attachment.fromUrl}`"
+          :post="card.post"
+          :attachment="card.attachment"
+        />
+        <div v-if="postsStore.hasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
       </div>
       <div v-else class="post-list">
         <PostCard
@@ -177,14 +276,84 @@ async function loadMore() {
       <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
         아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
       </div>
+      <div v-else-if="activeTab === 'links' && linkCards.length === 0" class="status-message">
+        링크가 달린 게시글이 없습니다.
+      </div>
       <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
 
-      <div v-if="canShowMore && !postsStore.loading" class="load-more" @click="loadMore">더보기</div>
+      <div
+        v-if="canShowMore && !postsStore.loading && activeTab !== 'links'"
+        class="load-more"
+        @click="loadMore"
+      >
+        더보기
+      </div>
     </template>
   </AppLayout>
 </template>
 
 <style scoped>
+/* 링크 갤러리처럼 긴 목록을 스크롤할 때도 탭/카테고리/층·기간 필터는 화면 상단에 계속 붙어있도록 고정 -
+   그래야 스크롤을 내린 상태에서도 필터를 다시 위로 올라가지 않고 바로 누를 수 있다 */
+.feed-sticky-filters {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fafafa;
+  padding-top: 4px;
+}
+
+/* 모바일 햄버거 메뉴 버튼(고정, 왼쪽 위 14px)과 겹치지 않도록 그 아래로 내려서 고정 */
+@media (max-width: 768px) {
+  .feed-sticky-filters {
+    top: 60px;
+  }
+}
+
+.feed-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+  margin-bottom: 16px;
+}
+
+.feed-tab {
+  padding: 10px 2px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #636e72;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.feed-tab.active {
+  color: #4a3f8f;
+  border-bottom-color: #4a3f8f;
+}
+
+.link-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.scroll-sentinel {
+  grid-column: 1 / -1;
+  height: 1px;
+}
+
+@media (max-width: 768px) {
+  .link-gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .link-gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .edu-category-filter {
   display: flex;
   align-items: center;

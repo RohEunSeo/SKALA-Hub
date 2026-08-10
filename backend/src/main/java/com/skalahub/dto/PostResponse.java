@@ -20,5 +20,8 @@ public record PostResponse(
         LocalDateTime createdAt,
         String slackPermalink,
         List<LinkPreviewDto> attachments,
-        List<FileAttachmentDto> files) {
+        List<FileAttachmentDto> files,
+        // 링크 모음 탭용 - 슬랙이 미리보기 카드를 만들어준 링크(attachments) + 본문에 텍스트로만 붙은 링크를
+        // 합쳐서 중복 없이 나열한 목록(리치 미리보기가 있으면 그걸, 없으면 URL/라벨만으로 구성)
+        List<LinkPreviewDto> links) {
 }
