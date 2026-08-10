@@ -15,3 +15,8 @@ export function fetchPost(id) {
 export function fetchReplies(id) {
   return http.get(`/api/posts/${id}/replies`)
 }
+
+// 링크 모음 탭 - URL 기준으로 그룹핑된 링크 목록 (같은 링크를 올린 게시글이 여러 개면 카드 1개로 합쳐서 내려옴)
+export function fetchLinkGroups(params) {
+  return http.get('/api/links', { params })
+}

@@ -43,6 +43,8 @@ public class PostService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
     private static final Set<String> VALID_SORTS = Set.of("latest", "popular", "oldest", "saved");
+    // 링크 있는 게시글이 이 수를 넘을 일은 없다고 보고 잡은 넉넉한 상한(전체 채널 게시글 수보다 큼)
+    private static final int LINKED_POSTS_FETCH_LIMIT = 5000;
 
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
@@ -79,23 +81,34 @@ public class PostService {
             String sort,
             int page,
             int size) {
+        Page<Post> result = searchPosts(category, tag, keyword, author, date, campus, hasLink, sort, page, size);
+        return wrapPage(result);
+    }
+
+    // 링크 모음 탭 그룹핑(LinkService)용 - 같은 필터로 "링크 있는 게시글" 전체를 페이지네이션 없이 가져옴.
+    // URL 기준 그룹이 게시글 페이지 경계와 맞지 않아, 그룹을 정확히 합치려면 필터에 맞는 게시글을 전부 모은 뒤
+    // 거기서 그룹을 만들어야 함(그룹 단위 페이지네이션은 LinkService가 그 뒤에 따로 적용)
+    public List<Post> findLinkedPosts(String category, String tag, String keyword, String author, String date, String campus, String sort) {
+        return searchPosts(category, tag, keyword, author, date, campus, true, sort, 0, LINKED_POSTS_FETCH_LIMIT)
+                .getContent();
+    }
+
+    private Page<Post> searchPosts(
+            String category,
+            String tag,
+            String keyword,
+            String author,
+            String date,
+            String campus,
+            Boolean hasLink,
+            String sort,
+            int page,
+            int size) {
         LocalDateTime[] range = resolveDateRange(date);
         boolean campusActive = campus != null && !campus.isBlank();
-        List<String> campusSlackIds;
-        if (campusActive) {
-            String targetFloor = campus;
-            campusSlackIds = userRepository.findAll().stream()
-                    .filter(u -> targetFloor.equals(CampusResolver.resolveFloor(u.getClassNum())))
-                    .map(User::getSlackId)
-                    .toList();
-            if (campusSlackIds.isEmpty()) {
-                campusSlackIds = List.of("__no_match__");
-            }
-        } else {
-            campusSlackIds = List.of("__unused__");
-        }
+        List<String> campusSlackIds = resolveCampusSlackIds(campus, campusActive);
 
-        Page<Post> result = postRepository.search(
+        return postRepository.search(
                 blankToNull(category),
                 blankToNull(tag),
                 blankToNull(keyword),
@@ -107,8 +120,17 @@ public class PostService {
                 hasLink,
                 normalizeSort(sort),
                 PageRequest.of(page, size));
+    }
 
-        return wrapPage(result);
+    private List<String> resolveCampusSlackIds(String campus, boolean campusActive) {
+        if (!campusActive) {
+            return List.of("__unused__");
+        }
+        List<String> campusSlackIds = userRepository.findAll().stream()
+                .filter(u -> campus.equals(CampusResolver.resolveFloor(u.getClassNum())))
+                .map(User::getSlackId)
+                .toList();
+        return campusSlackIds.isEmpty() ? List.of("__no_match__") : campusSlackIds;
     }
 
     private String normalizeSort(String sort) {
@@ -117,7 +139,7 @@ public class PostService {
 
     // Home/MyPage 등 다른 화면에서도 같은 매핑 로직을 재사용하기 위한 공개 메서드
     public PostPageResponse wrapPage(Page<Post> result) {
-        List<PostResponse> content = result.getContent().stream().map(this::toResponse).toList();
+        List<PostResponse> content = toResponses(result.getContent());
         return new PostPageResponse(
                 content,
                 result.getNumber(),
@@ -151,9 +173,34 @@ public class PostService {
                 reply.getCreatedAt());
     }
 
-    // Home 순위보드 등 다른 서비스에서도 재사용
+    // Home 순위보드 등 다른 서비스에서도 재사용 - 게시글 1건짜리 조회(상세 화면 등)용. 여러 건을 한 번에 변환할 땐
+    // toResponses()를 써야 link_previews 조회가 게시글 수만큼 반복되지 않음
     public PostResponse toResponse(Post post) {
         List<LinkPreviewDto> attachments = parseAttachments(post.getAttachments());
+        Map<String, LinkPreview> overrides = loadOverrides(collectLinkUrls(post.getContent(), attachments));
+        return buildResponse(post, attachments, overrides);
+    }
+
+    // 목록 화면(피드/링크 모음)용 - link_previews 오버라이드 조회를 게시글별로 반복하지 않고 전체 게시글의 URL을
+    // 모아 한 번만 조회한다. 게시글이 많고 링크도 많은 링크 모음 탭에서 특히 중요(안 그러면 N+1로 매우 느려짐)
+    public List<PostResponse> toResponses(List<Post> posts) {
+        List<List<LinkPreviewDto>> attachmentsList = new ArrayList<>(posts.size());
+        Set<String> allUrls = new LinkedHashSet<>();
+        for (Post post : posts) {
+            List<LinkPreviewDto> attachments = parseAttachments(post.getAttachments());
+            attachmentsList.add(attachments);
+            allUrls.addAll(collectLinkUrls(post.getContent(), attachments));
+        }
+        Map<String, LinkPreview> overrides = loadOverrides(allUrls);
+
+        List<PostResponse> result = new ArrayList<>(posts.size());
+        for (int i = 0; i < posts.size(); i++) {
+            result.add(buildResponse(posts.get(i), attachmentsList.get(i), overrides));
+        }
+        return result;
+    }
+
+    private PostResponse buildResponse(Post post, List<LinkPreviewDto> attachments, Map<String, LinkPreview> overrides) {
         return new PostResponse(
                 post.getId(),
                 post.getUserName(),
@@ -171,7 +218,30 @@ public class PostService {
                 buildPermalink(post.getSlackTs()),
                 attachments,
                 parseFiles(post.getFiles()),
-                parseLinks(post.getContent(), attachments));
+                parseLinks(post.getContent(), attachments, overrides));
+    }
+
+    private Set<String> collectLinkUrls(String content, List<LinkPreviewDto> attachments) {
+        Set<String> urls = new LinkedHashSet<>();
+        for (SlackLinkParser.SlackLink link : SlackLinkParser.extract(content)) {
+            urls.add(link.url());
+        }
+        for (LinkPreviewDto attachment : attachments) {
+            String url = attachment.fromUrl() != null ? attachment.fromUrl() : attachment.titleLink();
+            if (url != null) {
+                urls.add(url);
+            }
+        }
+        return urls;
+    }
+
+    private Map<String, LinkPreview> loadOverrides(Set<String> urls) {
+        if (urls.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, LinkPreview> overrides = new LinkedHashMap<>();
+        linkPreviewRepository.findAllById(urls).forEach(lp -> overrides.put(lp.getUrl(), lp));
+        return overrides;
     }
 
     private String buildPermalink(String slackTs) {
@@ -202,7 +272,7 @@ public class PostService {
     // 중복 없이 나열. 같은 URL이 attachments에 있으면 그걸, 없으면 link_previews 캐시(og:title/image)를,
     // 캐시도 없으면 라벨/URL만으로 카드를 만든다 - 단, 라벨이 "[", "]"처럼 기호뿐이면(실수로 걸린 링크) 제외.
     // 어느 경우든 관리자가 link_previews에 남긴 admin_title/hidden이 최종적으로 우선 적용됨
-    private List<LinkPreviewDto> parseLinks(String content, List<LinkPreviewDto> attachments) {
+    private List<LinkPreviewDto> parseLinks(String content, List<LinkPreviewDto> attachments, Map<String, LinkPreview> overrides) {
         Map<String, LinkPreviewDto> richByUrl = new LinkedHashMap<>();
         for (LinkPreviewDto attachment : attachments) {
             String url = attachment.fromUrl() != null ? attachment.fromUrl() : attachment.titleLink();
@@ -215,7 +285,7 @@ public class PostService {
         Set<String> seen = new LinkedHashSet<>();
         for (SlackLinkParser.SlackLink link : SlackLinkParser.extract(content)) {
             seen.add(link.url());
-            LinkPreviewDto dto = buildLink(link.url(), link.label(), richByUrl.get(link.url()));
+            LinkPreviewDto dto = buildLink(link.url(), link.label(), richByUrl.get(link.url()), overrides);
             if (dto != null) {
                 links.add(dto);
             }
@@ -224,7 +294,7 @@ public class PostService {
         for (LinkPreviewDto attachment : attachments) {
             String url = attachment.fromUrl() != null ? attachment.fromUrl() : attachment.titleLink();
             if (url == null || seen.add(url)) {
-                LinkPreviewDto dto = buildLink(url, url, attachment);
+                LinkPreviewDto dto = buildLink(url, url, attachment, overrides);
                 if (dto != null) {
                     links.add(dto);
                 }
@@ -237,11 +307,13 @@ public class PostService {
     // 그마저 없으면 슬랙 라벨로 폴백(라벨마저 의미 없으면(기호뿐) null을 돌려줘서 목록에서 아예 빠지게 함).
     // 관리자가 link_previews에 직접 남긴 값(admin_title/admin_source)은 어느 경로든 마지막에 덮어씀 -
     // hidden이면 무조건 null (실제 이동 주소는 이 과정에서 절대 안 바뀜 - titleLink/fromUrl은 항상 원본 유지)
-    private LinkPreviewDto buildLink(String url, String label, LinkPreviewDto rich) {
+    // override는 호출부(toResponse/toResponses)가 미리 배치 조회해서 넘겨줌 - 여기서 개별 조회하면 게시글/링크
+    // 수만큼 DB 왕복이 늘어나 N+1이 됨
+    private LinkPreviewDto buildLink(String url, String label, LinkPreviewDto rich, Map<String, LinkPreview> overrides) {
         if (url == null) {
             return rich;
         }
-        LinkPreview override = linkPreviewRepository.findById(url).orElse(null);
+        LinkPreview override = overrides.get(url);
         if (override != null && Boolean.TRUE.equals(override.getHidden())) {
             return null;
         }

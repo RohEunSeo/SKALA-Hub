@@ -77,15 +77,6 @@ function revealMore() {
 const visiblePosts = computed(() => postsStore.posts.slice(0, visibleCount.value))
 const canShowMore = computed(() => visibleCount.value < postsStore.posts.length || postsStore.hasMore)
 
-// 링크 모음 탭 - 카드가 작아서 "체감 스크롤 길이" 제한 없이 불러온 게시글 전부를 바로 펼쳐 보여줌.
-// post.links는 슬랙이 미리보기 카드를 만들어준 링크(attachments)뿐 아니라 본문에 텍스트로만 붙은 링크도
-// 포함한 전체 목록 - 게시글 하나에 링크가 여러 개면 링크마다 카드 1개씩 나뉜다
-const linkCards = computed(() =>
-  postsStore.posts.flatMap((post) =>
-    (post.links ?? []).map((attachment) => ({ post, attachment })),
-  ),
-)
-
 // 필터/검색 등으로 목록이 처음부터 다시 조회될 때마다 노출 개수도 함께 리셋
 watch(
   () => postsStore.resetToken,
@@ -99,13 +90,15 @@ onMounted(async () => {
   if (!authStore.isAuthenticated) return
   // ?tab=links로 들어왔는데 스토어에 아직 반영 안 됐으면(새로고침 등) 맞춰줌 - 같은 세션에서 뒤로가기로
   // 돌아온 경우엔 이미 hasLink가 true라 여기서 다시 fetch를 유발하지 않음(직접 대입, setHasLink 아님)
-  if (activeTab.value === 'links' && postsStore.hasLink !== true) {
+  if (activeTab.value === 'links') {
     postsStore.hasLink = true
+    await postsStore.ensureLinkGroupsLoaded()
+  } else {
+    // 캐시된 데이터를 그대로 쓴 경우(false 반환)는 fetchPosts가 호출되지 않아 resetToken이 안 바뀌므로
+    // 위 watch가 노출량을 못 채움 - 여기서 직접 채워준다
+    const didFetch = await postsStore.ensureLoaded()
+    if (!didFetch) revealMore()
   }
-  // 캐시된 데이터를 그대로 쓴 경우(false 반환)는 fetchPosts가 호출되지 않아 resetToken이 안 바뀌므로
-  // 위 watch가 노출량을 못 채움 - 여기서 직접 채워준다
-  const didFetch = await postsStore.ensureLoaded()
-  if (!didFetch) revealMore()
   bookmarksStore.loadBookmarks()
 })
 
@@ -165,8 +158,8 @@ async function autoLoadLinksWhileVisible() {
   if (autoLoadingLinks) return
   autoLoadingLinks = true
   try {
-    while (postsStore.hasMore && !postsStore.loading && isSentinelNearViewport()) {
-      await postsStore.fetchPosts(false)
+    while (postsStore.linkHasMore && !postsStore.linkGroupsLoading && isSentinelNearViewport()) {
+      await postsStore.fetchLinkGroups(false)
     }
   } finally {
     autoLoadingLinks = false
@@ -245,7 +238,15 @@ onUnmounted(teardownScrollObserver)
         </div>
       </div>
 
-      <div v-if="postsStore.loading && postsStore.posts.length === 0" class="post-list" aria-hidden="true">
+      <div
+        v-if="
+          activeTab === 'links'
+            ? postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
+            : postsStore.loading && postsStore.posts.length === 0
+        "
+        class="post-list"
+        aria-hidden="true"
+      >
         <div class="post-card-skeleton" v-for="n in 3" :key="n">
           <SkeletonBlock width="70%" height="16px" />
           <SkeletonBlock width="100%" height="13px" />
@@ -254,13 +255,8 @@ onUnmounted(teardownScrollObserver)
         </div>
       </div>
       <div v-else-if="activeTab === 'links'" class="link-gallery-grid">
-        <LinkGalleryCard
-          v-for="card in linkCards"
-          :key="`${card.post.id}-${card.attachment.titleLink || card.attachment.fromUrl}`"
-          :post="card.post"
-          :attachment="card.attachment"
-        />
-        <div v-if="postsStore.hasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+        <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
+        <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
       </div>
       <div v-else class="post-list">
         <PostCard
@@ -271,21 +267,27 @@ onUnmounted(teardownScrollObserver)
         />
       </div>
 
-      <div v-if="postsStore.loading && postsStore.posts.length > 0" class="status-message">불러오는 중...</div>
-      <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
-      <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
-        아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
-      </div>
-      <div v-else-if="activeTab === 'links' && linkCards.length === 0" class="status-message">
-        링크가 달린 게시글이 없습니다.
-      </div>
-      <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
+      <template v-if="activeTab === 'links'">
+        <div v-if="postsStore.linkGroupsLoading && postsStore.linkGroups.length > 0" class="loading-indicator">
+          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+        </div>
+        <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
+        <div v-else-if="postsStore.linkGroups.length === 0" class="status-message">
+          링크가 달린 게시글이 없습니다.
+        </div>
+      </template>
+      <template v-else>
+        <div v-if="postsStore.loading && postsStore.posts.length > 0" class="loading-indicator">
+          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+        </div>
+        <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
+        <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
+          아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
+        </div>
+        <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
+      </template>
 
-      <div
-        v-if="canShowMore && !postsStore.loading && activeTab !== 'links'"
-        class="load-more"
-        @click="loadMore"
-      >
+      <div v-if="canShowMore && !postsStore.loading && activeTab !== 'links'" class="load-more" @click="loadMore">
         더보기
       </div>
     </template>
@@ -445,6 +447,31 @@ onUnmounted(teardownScrollObserver)
 
 .status-message.error {
   color: #e01e5a;
+}
+
+.loading-indicator {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #636e72;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(74, 63, 143, 0.2);
+  border-top-color: #4a3f8f;
+  border-radius: 50%;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .load-more {

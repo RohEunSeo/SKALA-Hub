@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/bookmarks/**").authenticated()
                 .requestMatchers("/api/mypage/**").authenticated()
                 .requestMatchers("/api/posts/**").authenticated()
+                .requestMatchers("/api/links/**").authenticated()
                 .requestMatchers("/api/files/**").authenticated()
                 .anyRequest().permitAll())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

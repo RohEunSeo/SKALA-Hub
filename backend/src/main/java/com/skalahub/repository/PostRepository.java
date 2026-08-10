@@ -69,21 +69,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("sort") String sort,
             Pageable pageable);
 
-    // 링크 모음 탭 "전체" 칩에 표시할 전체 링크 수 - 게시글 수가 아니라 본문에 붙은 링크(<url|label>) 총합.
-    // 슬랙이 미리보기 카드를 만들어준 링크(attachments)도 원문에는 항상 이 형태로 남아있으므로 본문 기준 집계가 더 정확함(게시글 1개에 링크가 여러 개일 수 있음)
-    @Query(
-            value =
-                    "SELECT COALESCE(SUM(regexp_count(content, '<https?://[^|>\\s]+')), 0) FROM posts WHERE is_deleted = false",
-            nativeQuery = true)
-    long countAllLinks();
-
-    // 링크 모음 탭 카테고리 칩별 링크 수(게시글 수 아님) - 홈 요약과 동일한 [category, count] 형태
-    @Query(
-            value =
-                    "SELECT category, SUM(regexp_count(content, '<https?://[^|>\\s]+')) FROM posts WHERE is_deleted = false AND category IS NOT NULL AND content ~ '<https?://' GROUP BY category",
-            nativeQuery = true)
-    List<Object[]> countLinksByCategory();
-
     @Query(value = "SELECT MAX(synced_at) FROM posts", nativeQuery = true)
     LocalDateTime findLastSyncedAt();
 
@@ -104,13 +89,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
                     "SELECT tag, count(*) FROM posts, unnest(tags) AS tag WHERE is_deleted = false GROUP BY tag",
             nativeQuery = true)
     List<Object[]> countByTag();
-
-    // 링크 모음 탭 하위 분류(🗂️ 분류) 필터별 링크 수(게시글 수 아님) - countLinksByCategory와 동일한 집계 방식
-    @Query(
-            value =
-                    "SELECT tag, SUM(regexp_count(content, '<https?://[^|>\\s]+')) FROM posts, unnest(tags) AS tag WHERE is_deleted = false AND content ~ '<https?://' GROUP BY tag",
-            nativeQuery = true)
-    List<Object[]> countLinksByTag();
 
     long countByUserSlackIdAndIsDeletedFalse(String userSlackId);
 

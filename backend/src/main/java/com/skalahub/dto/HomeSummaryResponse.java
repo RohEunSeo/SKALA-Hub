@@ -13,7 +13,7 @@ public record HomeSummaryResponse(
         long userCount,
         List<CategoryCountDto> categoryCounts,
         List<CategoryCountDto> tagCounts,
-        // 링크 모음 탭 카테고리 칩 - 게시글 수가 아니라 attachments 배열 원소 총합
+        // 링크 모음 탭 카테고리 칩 - 게시글 수가 아니라 URL로 그룹핑된 카드 수 기준(중복 링크는 1개로만 셈)
         long totalLinkCount,
         List<CategoryCountDto> linkCategoryCounts,
         // 링크 모음 탭 하위 분류(🗂️ 분류) 필터용 - linkCategoryCounts와 동일한 개념의 태그별 링크 수

@@ -49,6 +49,9 @@ public class AdminLinkService {
         if (request.source() != null) {
             preview.setAdminSource(request.source().isBlank() ? null : request.source().trim());
         }
+        if (request.creators() != null) {
+            preview.setAdminCreators(request.creators().isBlank() ? null : request.creators().trim());
+        }
         if (request.hidden() != null) {
             preview.setHidden(request.hidden());
         }

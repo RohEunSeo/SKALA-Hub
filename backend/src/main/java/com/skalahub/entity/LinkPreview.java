@@ -42,6 +42,11 @@ public class LinkPreview {
     @Column(name = "admin_source")
     private String adminSource;
 
+    // "만든 사람" 표시 수동 수정 - 비어 있으면 이 URL을 올린 게시글 작성자를 자동 수집해서 보여주고,
+    // 값이 있으면 이 텍스트가 항상 우선함(쉼표로 구분된 이름 목록)
+    @Column(name = "admin_creators")
+    private String adminCreators;
+
     // 관리자가 링크 모음에서 숨김 처리했는지 - true면 이 URL은 어느 게시글에서도 표시 안 함.
     // DB 컬럼이 NOT NULL이라 새로 생성되는 행에서도 항상 값이 채워지도록 기본값을 둠
     // (안 두면 신규 INSERT 시 null이 들어가 제약조건 위반으로 저장이 실패함)
