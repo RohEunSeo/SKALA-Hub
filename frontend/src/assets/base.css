@@ -43,6 +43,8 @@
 
 body {
   min-height: 100vh;
+  /* 모바일에서 특정 요소가 넘쳐도 페이지 전체는 좌우로 스크롤되지 않고 위아래로만 스크롤되게 고정 */
+  overflow-x: hidden;
   color: var(--color-text);
   background: var(--color-background);
   transition:

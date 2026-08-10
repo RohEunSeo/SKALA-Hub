@@ -79,4 +79,21 @@ watch([keyword, author], () => {
   border-color: #4a3f8f;
   color: #4a3f8f;
 }
+
+/* 좁은 화면에서 author-input(고정폭)까지 한 줄에 다 못 담아 가로 스크롤이 생기던 문제 -
+   검색 버튼은 검색어 입력 옆(1번째 줄)에 유지하고, 작성자 입력만 2번째 줄로 내림 */
+@media (max-width: 768px) {
+  .search-bar {
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    min-width: 0;
+  }
+
+  .author-input {
+    order: 3;
+    width: 100%;
+  }
+}
 </style>

@@ -1,6 +1,6 @@
 <script setup>
 // 게시글 상세 화면 - 마이페이지 목록 등에서 특정 게시글로 바로 이동할 때 사용
-import { ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
@@ -38,13 +38,18 @@ async function load() {
 
 onMounted(load)
 watch(() => route.params.id, load)
+
+// 마이페이지에서 들어왔으면 마이페이지로, 그 외(피드/홈 등)는 기존처럼 피드로 돌아가게 함
+const fromMyPage = computed(() => route.query.from === 'mypage')
+const backTarget = computed(() => (fromMyPage.value ? { name: 'mypage' } : { name: 'feed' }))
+const backLabel = computed(() => (fromMyPage.value ? '← 마이페이지로 돌아가기' : '← 피드로 돌아가기'))
 </script>
 
 <template>
   <AppLayout>
     <AuthRequired v-if="!authStore.isAuthenticated" message="게시글을 보려면 SKALA 교육생 인증이 필요합니다" />
     <template v-else>
-      <span class="back-link" @click="router.push({ name: 'feed' })">← 피드로 돌아가기</span>
+      <span class="back-link" @click="router.push(backTarget)">{{ backLabel }}</span>
 
       <div v-if="loading" class="status-message">불러오는 중...</div>
       <div v-else-if="notFound" class="status-message">게시글을 찾을 수 없습니다.</div>

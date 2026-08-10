@@ -965,7 +965,8 @@ onMounted(() => {
 .row-author {
   font-weight: 700;
   color: #1a1a2e;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .row-preview {
@@ -1038,7 +1039,9 @@ onMounted(() => {
 
 .manage-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 4px 12px;
   font-size: 12px;
 }
 
