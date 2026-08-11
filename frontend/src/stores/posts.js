@@ -32,13 +32,25 @@ export const usePostsStore = defineStore('posts', () => {
   const postsLoaded = ref(false)
 
   // 링크 모음 탭 - URL 기준으로 그룹핑된 카드 목록(같은 URL을 올린 게시글이 여러 개면 카드 1개로 합쳐서 옴).
-  // /api/posts와는 별도 엔드포인트(/api/links)라서 게시글 목록(posts)과 독립적으로 상태를 둔다
-  const linkGroups = ref([])
+  // /api/posts와는 별도 엔드포인트(/api/links)라서 게시글 목록(posts)과 독립적으로 상태를 둔다.
+  // allLinkGroups는 서버에서 받아온 원본(카테고리/유형 필터링 전) - 카테고리 칩을 누를 때마다 재요청하지
+  // 않도록, 카테고리/유형(tag)은 아래 linkGroups computed에서 client-side로만 거른다
+  const allLinkGroups = ref([])
+  const linkGroups = computed(() =>
+    allLinkGroups.value.filter((group) => {
+      if (category.value && group.category !== category.value) return false
+      if (tag.value && group.typeTag !== tag.value) return false
+      return true
+    }),
+  )
   const linkPage = ref(0)
   const linkTotalPages = ref(0)
   const linkGroupsLoading = ref(false)
   const linkGroupsLoaded = ref(false)
   const linkResetToken = ref(0)
+  // 검색/기간/정렬/캠퍼스 등 서버 재조회가 필요한 필터 변경 여부(카테고리/유형은 client-side라 여기 해당 안 됨) -
+  // true면 화면에 이전 카드들을 그대로 둔 채 살짝 dim 처리 + 스피너 오버레이만 보여줌
+  const linkFilterLoading = ref(false)
 
   // 관리자 전용 "숨김" 뷰 - 링크 모음 탭 정렬 드롭다운에서 켜면 hiddenLinkGroups를 대신 보여줌
   const showHiddenLinks = ref(false)
@@ -118,6 +130,9 @@ export const usePostsStore = defineStore('posts', () => {
   function setCategory(newCategory, newTag = null) {
     category.value = newCategory
     tag.value = newTag
+    // 링크 모음 탭에서는 카테고리/유형이 client-side 필터라(위 linkGroups computed) 값만 바꾸면
+    // 목록이 알아서 다시 계산됨 - 네트워크 요청이 필요 없음
+    if (hasLink.value === true) return
     return refetchCurrent()
   }
 
@@ -200,18 +215,20 @@ export const usePostsStore = defineStore('posts', () => {
     postsLoaded.value = false
   }
 
+  // 카테고리/유형(tag)은 서버에 안 보내고 항상 전체를 받아온 뒤 client-side로 거른다(아래 linkGroups
+  // computed) - 카테고리 칩을 누를 때마다 네트워크 왕복이 생겨서 배포 환경에서 1~2초씩 걸리던 걸 없애기 위함.
+  // 검색어/기간/정렬/캠퍼스는 그대로 서버 필터를 씀(변경 빈도가 낮고, client에서 완전히 재현하려면
+  // 작성일·저장수 등 별도 필드가 더 필요해 복잡도가 커짐)
   // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임(스크롤 더보기)
   async function fetchLinkGroups(reset = false) {
     linkGroupsLoading.value = true
+    // 이미 카드가 떠 있는 상태에서의 필터 변경(reset)이면 목록을 비우지 않고 오버레이 스피너만 띄움 -
+    // 목록이 비었다 다시 채워지는 깜빡임 없이 즉시 전환되는 것처럼 보이게 함
+    if (reset && linkGroups.value.length > 0) linkFilterLoading.value = true
     error.value = ''
-    // 카테고리/필터 변경 시 이전 결과가 잠깐 남아있다 갑자기 바뀌는 것처럼 보이지 않도록,
-    // reset일 때는 즉시 비워서 스켈레톤이 바로 뜨게 함(더보기 스크롤은 기존 목록 유지)
-    if (reset) linkGroups.value = []
     try {
       const targetPage = reset ? 0 : linkPage.value + 1
       const { data } = await fetchLinkGroupsApi({
-        category: category.value || undefined,
-        tag: tag.value || undefined,
         keyword: keyword.value || undefined,
         author: author.value || undefined,
         date: date.value || undefined,
@@ -221,7 +238,7 @@ export const usePostsStore = defineStore('posts', () => {
         size: LINK_PAGE_SIZE,
       })
       const content = data?.content ?? []
-      linkGroups.value = reset ? content : [...linkGroups.value, ...content]
+      allLinkGroups.value = reset ? content : [...allLinkGroups.value, ...content]
       linkPage.value = data?.page ?? 0
       linkTotalPages.value = data?.totalPages ?? 0
       if (reset) {
@@ -230,9 +247,10 @@ export const usePostsStore = defineStore('posts', () => {
       }
     } catch {
       error.value = '링크를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
-      if (reset) linkGroups.value = []
+      if (reset) allLinkGroups.value = []
     } finally {
       linkGroupsLoading.value = false
+      linkFilterLoading.value = false
     }
   }
 
@@ -289,6 +307,7 @@ export const usePostsStore = defineStore('posts', () => {
     linkPage,
     linkTotalPages,
     linkGroupsLoading,
+    linkFilterLoading,
     linkGroupsLoaded,
     linkResetToken,
     linkHasMore,

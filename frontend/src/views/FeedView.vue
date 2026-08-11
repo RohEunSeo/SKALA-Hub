@@ -11,6 +11,7 @@ import CampusFilter from '../components/CampusFilter.vue'
 import DateFilter from '../components/DateFilter.vue'
 import PostCard from '../components/PostCard.vue'
 import LinkGalleryCard from '../components/LinkGalleryCard.vue'
+import LinkCardSkeleton from '../components/LinkCardSkeleton.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
@@ -268,10 +269,15 @@ onUnmounted(teardownScrollObserver)
         v-if="
           showHidden
             ? postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length === 0
-            : activeTab === 'links'
-              ? postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
-              : postsStore.loading && postsStore.posts.length === 0
+            : activeTab === 'links' && postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
         "
+        class="link-gallery-grid"
+        aria-hidden="true"
+      >
+        <LinkCardSkeleton v-for="n in 6" :key="n" />
+      </div>
+      <div
+        v-else-if="!showHidden && activeTab !== 'links' && postsStore.loading && postsStore.posts.length === 0"
         class="post-list"
         aria-hidden="true"
       >
@@ -285,9 +291,14 @@ onUnmounted(teardownScrollObserver)
       <div v-else-if="showHidden" class="link-gallery-grid">
         <LinkGalleryCard v-for="group in postsStore.hiddenLinkGroups" :key="group.url" :group="group" />
       </div>
-      <div v-else-if="activeTab === 'links'" class="link-gallery-grid">
-        <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
-        <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+      <div v-else-if="activeTab === 'links'" class="link-gallery-grid-wrapper">
+        <div v-if="postsStore.linkFilterLoading" class="link-gallery-overlay">
+          <span class="spinner spinner-lg" aria-hidden="true"></span>
+        </div>
+        <div class="link-gallery-grid">
+          <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
+          <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+        </div>
       </div>
       <div v-else class="post-list">
         <PostCard
@@ -305,7 +316,10 @@ onUnmounted(teardownScrollObserver)
         <div v-else-if="postsStore.hiddenLinkGroups.length === 0" class="status-message">숨긴 링크가 없습니다.</div>
       </template>
       <template v-else-if="activeTab === 'links'">
-        <div v-if="postsStore.linkGroupsLoading && postsStore.linkGroups.length > 0" class="loading-indicator">
+        <div
+          v-if="postsStore.linkGroupsLoading && !postsStore.linkFilterLoading && postsStore.linkGroups.length > 0"
+          class="loading-indicator"
+        >
           <span class="spinner" aria-hidden="true"></span> 불러오는 중...
         </div>
         <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
@@ -380,10 +394,33 @@ onUnmounted(teardownScrollObserver)
   font-weight: 600;
 }
 
+.link-gallery-grid-wrapper {
+  position: relative;
+}
+
 .link-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+}
+
+/* 카테고리/필터 전환 시 카드 목록을 유지한 채 살짝 dim 처리 + 스피너만 겹쳐 보여줌 -
+   목록이 통째로 비었다 다시 채워지는 깜빡임 없이 즉시 전환되는 것처럼 느껴지게 함 */
+.link-gallery-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(250, 250, 250, 0.6);
+  border-radius: 12px;
+}
+
+.spinner-lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
 }
 
 .scroll-sentinel {
