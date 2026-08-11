@@ -39,8 +39,11 @@ export const usePostsStore = defineStore('posts', () => {
   const linkGroups = computed(() =>
     allLinkGroups.value.filter((group) => {
       if (category.value && group.category !== category.value) return false
-      if (tag.value && group.typeTag !== tag.value) return false
-      return true
+      if (!tag.value) return true
+      // 학습자료 하위 유형은 typeTag(링크 단위로 확정된 값 하나)로, 그 외 카테고리(교육생 서비스 등)의
+      // 하위 분류는 대표 게시글의 원본 tags 배열로 거른다 - 서로 다른 필드라 분기 필요
+      if (category.value === '학습자료') return group.typeTag === tag.value
+      return group.tags?.includes(tag.value) ?? false
     }),
   )
   const linkPage = ref(0)

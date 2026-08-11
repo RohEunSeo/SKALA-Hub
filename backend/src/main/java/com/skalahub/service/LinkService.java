@@ -205,6 +205,7 @@ public class LinkService {
                 representative.post.replyCount(),
                 representative.post.category(),
                 resolveTypeTag(representative, override),
+                representative.post.tags(),
                 postDtos);
     }
 
