@@ -19,5 +19,8 @@ public record LinkGroupDto(
         // 게시글의 tags 목록을 그대로 내려주지 않는 이유는 게시글 하나에 태그가 여러 개 달릴 수 있어
         // "이 링크 하나"의 유형과 어긋날 수 있기 때문 - LinkService가 이미 하나로 확정해서 내려줌
         String typeTag,
+        // 학습자료 외 카테고리(교육생 서비스 등)의 하위 분류 필터용 - 대표 게시글의 원본 tags 그대로.
+        // typeTag와 달리 이건 프론트에서 카테고리/유형 필터를 서버 재조회 없이 client-side로 거르는 데 씀
+        List<String> tags,
         List<LinkGroupPostDto> posts) {
 }
