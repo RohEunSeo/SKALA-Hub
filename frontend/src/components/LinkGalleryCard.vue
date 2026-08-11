@@ -17,6 +17,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
 
+// 외부 사이트 og:image가 CORP 정책 등으로 브라우저에서 차단되어 아예 로드 실패하는 경우가 있음 -
+// 깨진 이미지 대신 썸네일 없을 때와 동일하게 이모지 플레이스홀더로 자연스럽게 전환
+const imageFailed = ref(false)
+
 const theme = getLinkTheme(props.group.serviceName)
 const linkUrl = props.group.titleLink || props.group.url
 // getLinkSource는 attachment 형태(serviceName/titleLink/fromUrl)를 기대해서 그룹 필드를 맞춰서 넘김
@@ -135,7 +139,7 @@ async function restoreLink() {
 <template>
   <a class="link-card" :href="linkUrl" target="_blank" rel="noopener noreferrer" @click="handleCardClick">
     <div class="link-card-thumb" :style="{ background: theme.bg }">
-      <img v-if="group.imageUrl" :src="group.imageUrl" alt="" />
+      <img v-if="group.imageUrl && !imageFailed" :src="group.imageUrl" alt="" @error="imageFailed = true" />
       <span v-else class="link-card-emoji">{{ theme.emoji }}</span>
       <div class="link-card-badges">
         <span
