@@ -5,6 +5,10 @@ export function fetchMyStats() {
   return http.get('/api/mypage/stats')
 }
 
-export function fetchMyPosts(tab, page, size) {
-  return http.get('/api/mypage/posts', { params: { tab, page, size } })
+export function fetchMyPosts(tab, category, tag, page, size) {
+  return http.get('/api/mypage/posts', { params: { tab, category, tag, page, size } })
+}
+
+export function fetchMyCategoryCounts(tab) {
+  return http.get('/api/mypage/category-counts', { params: { tab } })
 }

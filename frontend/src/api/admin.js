@@ -21,6 +21,21 @@ export function updatePostAsAdmin(id, payload) {
   return http.patch(`/api/admin/posts/${id}`, payload)
 }
 
+// 링크 모음 탭 카드 제목 수동 수정 / 숨김 처리 (url 기준, 전역)
+export function updateLinkAsAdmin(payload) {
+  return http.patch('/api/admin/links', payload)
+}
+
+// 슬랙 재수집 없이 - DB에 이미 있는 게시글 본문에서 아직 미리보기 캐시가 없는 링크만 다시 fetch 시도
+export function backfillLinkPreviews() {
+  return http.post('/api/admin/links/backfill')
+}
+
+// 숨긴 링크 목록 (복원 전까지 링크 모음 어디에도 안 보이므로 관리자 전용 화면에서만 확인 가능)
+export function fetchHiddenLinks() {
+  return http.get('/api/admin/links/hidden')
+}
+
 // 미분류 게시글 전체 일괄 재분류
 export function classifyAllUncategorized() {
   return http.post('/api/admin/posts/classify-all')

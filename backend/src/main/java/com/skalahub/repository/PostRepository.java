@@ -32,6 +32,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
               AND (CAST(:dateTo AS timestamp) IS NULL OR p.created_at < CAST(:dateTo AS timestamp))
               AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
+              AND (CAST(:hasLink AS boolean) IS NULL OR CAST(:hasLink AS boolean) = false
+                   OR p.attachments IS NOT NULL OR p.content ~ '<https?://')
             ORDER BY
               CASE WHEN CAST(:sort AS varchar) = 'popular' THEN p.reaction_count END DESC NULLS LAST,
               CASE WHEN CAST(:sort AS varchar) = 'saved' THEN p.bookmark_count END DESC NULLS LAST,
@@ -50,6 +52,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
               AND (CAST(:dateTo AS timestamp) IS NULL OR p.created_at < CAST(:dateTo AS timestamp))
               AND (CAST(:campusActive AS boolean) = false OR p.user_slack_id IN (:campusSlackIds))
+              AND (CAST(:hasLink AS boolean) IS NULL OR CAST(:hasLink AS boolean) = false
+                   OR p.attachments IS NOT NULL OR p.content ~ '<https?://')
             """,
             nativeQuery = true)
     Page<Post> search(
@@ -61,6 +65,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("dateTo") LocalDateTime dateTo,
             @Param("campusActive") boolean campusActive,
             @Param("campusSlackIds") List<String> campusSlackIds,
+            @Param("hasLink") Boolean hasLink,
             @Param("sort") String sort,
             Pageable pageable);
 
@@ -85,27 +90,87 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     List<Object[]> countByTag();
 
-    Page<Post> findByUserSlackIdAndIsDeletedFalseOrderByCreatedAtDesc(String userSlackId, Pageable pageable);
-
     long countByUserSlackIdAndIsDeletedFalse(String userSlackId);
+
+    // 마이페이지 "내가 올린 글" - category/tag는 값이 없으면(null) 무시
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.user_slack_id = :slackId AND p.is_deleted = false
+              AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
+              AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
+            ORDER BY p.created_at DESC
+            """,
+            countQuery = """
+            SELECT count(*) FROM posts p
+            WHERE p.user_slack_id = :slackId AND p.is_deleted = false
+              AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
+              AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
+            """,
+            nativeQuery = true)
+    Page<Post> findMyPosts(
+            @Param("slackId") String slackId,
+            @Param("category") String category,
+            @Param("tag") String tag,
+            Pageable pageable);
 
     @Query(
             value = "SELECT COALESCE(SUM(reaction_count), 0) FROM posts WHERE user_slack_id = :slackId AND is_deleted = false",
             nativeQuery = true)
     long sumReactionsByUser(@Param("slackId") String slackId);
 
-    // 마이페이지 "반응한 글" - 내가 이모지를 남긴 게시글 목록/개수
+    // 마이페이지 카테고리 필터 탭의 "(N)" 표시용 - "내가 올린 글" 카테고리/태그별 개수
     @Query(
             value =
-                    "SELECT * FROM posts WHERE is_deleted = false AND :slackId = ANY(reacted_user_ids) ORDER BY created_at DESC",
-            countQuery = "SELECT count(*) FROM posts WHERE is_deleted = false AND :slackId = ANY(reacted_user_ids)",
+                    "SELECT category, count(*) FROM posts WHERE user_slack_id = :slackId AND is_deleted = false AND category IS NOT NULL GROUP BY category",
             nativeQuery = true)
-    Page<Post> findReactedByUser(@Param("slackId") String slackId, Pageable pageable);
+    List<Object[]> countMyPostsByCategory(@Param("slackId") String slackId);
+
+    @Query(
+            value =
+                    "SELECT tag, count(*) FROM posts, unnest(tags) AS tag WHERE user_slack_id = :slackId AND is_deleted = false GROUP BY tag",
+            nativeQuery = true)
+    List<Object[]> countMyPostsByTag(@Param("slackId") String slackId);
+
+    // 마이페이지 "반응한 글" - 내가 이모지를 남긴 게시글 목록. category/tag는 값이 없으면(null) 무시
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.is_deleted = false AND :slackId = ANY(p.reacted_user_ids)
+              AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
+              AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
+            ORDER BY p.created_at DESC
+            """,
+            countQuery = """
+            SELECT count(*) FROM posts p
+            WHERE p.is_deleted = false AND :slackId = ANY(p.reacted_user_ids)
+              AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
+              AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
+            """,
+            nativeQuery = true)
+    Page<Post> findReactedByUser(
+            @Param("slackId") String slackId,
+            @Param("category") String category,
+            @Param("tag") String tag,
+            Pageable pageable);
 
     @Query(
             value = "SELECT count(*) FROM posts WHERE is_deleted = false AND :slackId = ANY(reacted_user_ids)",
             nativeQuery = true)
     long countReactedByUser(@Param("slackId") String slackId);
+
+    // 마이페이지 카테고리 필터 탭의 "(N)" 표시용 - "반응한 글" 카테고리/태그별 개수
+    @Query(
+            value =
+                    "SELECT category, count(*) FROM posts WHERE is_deleted = false AND :slackId = ANY(reacted_user_ids) AND category IS NOT NULL GROUP BY category",
+            nativeQuery = true)
+    List<Object[]> countReactedByCategory(@Param("slackId") String slackId);
+
+    @Query(
+            value =
+                    "SELECT tag, count(*) FROM posts, unnest(tags) AS tag WHERE is_deleted = false AND :slackId = ANY(reacted_user_ids) GROUP BY tag",
+            nativeQuery = true)
+    List<Object[]> countReactedByTag(@Param("slackId") String slackId);
 
     // 홈 화면 순위보드 - 반응/댓글 많은 순 TOP3 (dateFrom이 null이면 전체 기간, 아니면 그 시점 이후만)
     @Query(

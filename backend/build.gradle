@@ -24,6 +24,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	// 링크 모음 탭 - 미리보기 없는 URL의 og:title/og:image를 파싱하기 위한 HTML 파서 (fetch는 기존 RestClient 재사용)
+	implementation 'org.jsoup:jsoup:1.17.2'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 	compileOnly 'org.projectlombok:lombok'

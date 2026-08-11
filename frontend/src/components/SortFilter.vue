@@ -1,9 +1,12 @@
 <script setup>
-// 정렬 드롭다운 (최신순/인기순/오래된순) - 하위카테고리 선택 후 부가적으로 쓰는 옵션이라 작은 드롭다운 형태로 제공
+// 정렬 드롭다운 (최신순/인기순/오래된순) - 하위카테고리 선택 후 부가적으로 쓰는 옵션이라 작은 드롭다운 형태로 제공.
+// 링크 모음 탭 + 관리자 로그인일 때만 맨 아래에 "숨김"(관리자가 숨긴 링크 보기) 옵션이 추가로 붙음
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePostsStore } from '../stores/posts'
+import { useAuthStore } from '../stores/auth'
 
 const postsStore = usePostsStore()
+const authStore = useAuthStore()
 const isOpen = ref(false)
 
 const SORTS = [
@@ -13,7 +16,13 @@ const SORTS = [
   { value: 'saved', label: '저장순' },
 ]
 
-const currentLabel = computed(() => SORTS.find((opt) => opt.value === postsStore.sort)?.label ?? '최신순')
+// 일반 사용자에게는 이 옵션 자체가 DOM에 없음(v-if) - 관리자 + 링크 모음 탭일 때만 노출
+const showHiddenOption = computed(() => postsStore.hasLink && authStore.user?.role === 'admin')
+
+const currentLabel = computed(() => {
+  if (postsStore.showHiddenLinks) return '숨김'
+  return SORTS.find((opt) => opt.value === postsStore.sort)?.label ?? '최신순'
+})
 
 function toggleOpen() {
   isOpen.value = !isOpen.value
@@ -21,7 +30,15 @@ function toggleOpen() {
 
 function select(value) {
   isOpen.value = false
+  if (postsStore.showHiddenLinks) {
+    postsStore.setShowHiddenLinks(false)
+  }
   postsStore.setSort(value)
+}
+
+function selectHidden() {
+  isOpen.value = false
+  postsStore.setShowHiddenLinks(true)
 }
 
 function closeDropdownOnOutsideClick(event) {
@@ -44,10 +61,19 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
         v-for="opt in SORTS"
         :key="opt.value"
         class="sort-option"
-        :class="{ active: postsStore.sort === opt.value }"
+        :class="{ active: !postsStore.showHiddenLinks && postsStore.sort === opt.value }"
         @click="select(opt.value)"
       >
         {{ opt.label }}
+      </div>
+      <div v-if="showHiddenOption" class="sort-menu-divider"></div>
+      <div
+        v-if="showHiddenOption"
+        class="sort-option"
+        :class="{ active: postsStore.showHiddenLinks }"
+        @click="selectHidden"
+      >
+        🔒 숨김
       </div>
     </div>
   </div>
@@ -115,5 +141,11 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 .sort-option.active {
   background: #f1eefc;
   color: #4a3f8f;
+}
+
+.sort-menu-divider {
+  height: 1px;
+  margin: 4px 2px;
+  background: rgba(26, 26, 46, 0.08);
 }
 </style>

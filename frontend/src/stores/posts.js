@@ -1,10 +1,15 @@
 // 게시글 목록 및 필터 상태 관리
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchPosts as fetchPostsApi } from '../api/posts'
+import { fetchPosts as fetchPostsApi, fetchLinkGroups as fetchLinkGroupsApi } from '../api/posts'
 import { fetchHomeSummary } from '../api/home'
+import { fetchHiddenLinks as fetchHiddenLinksApi } from '../api/admin'
 
 const PAGE_SIZE = 20
+// 링크 모음 탭은 URL 중복 제거를 위해 매 요청마다 필터에 맞는 게시글 전체를 다시 훑어서 그룹을 새로 계산함 -
+// 페이지 크기를 작게 잡으면 스크롤할 때마다 이 무거운 재계산이 반복돼서 매번 로딩이 걸림. 채널 규모(5개월,
+// 340명) 대비 넉넉한 크기로 한 번에 받아와서, 사실상 첫 로딩 한 번 이후로는 스크롤이 로컬에서만 처리되게 함
+const LINK_PAGE_SIZE = 1000
 
 export const usePostsStore = defineStore('posts', () => {
   const posts = ref([])
@@ -15,6 +20,7 @@ export const usePostsStore = defineStore('posts', () => {
   const date = ref(null)
   const sort = ref('latest')
   const campus = ref(null)
+  const hasLink = ref(null)
   const page = ref(0)
   const totalPages = ref(0)
   const lastSyncedAt = ref(null)
@@ -25,13 +31,32 @@ export const usePostsStore = defineStore('posts', () => {
   // 현재 필터 조건으로 한 번이라도 성공적으로 불러왔는지 - 피드 탭을 벗어났다 돌아왔을 때 재조회를 건너뛰는 기준
   const postsLoaded = ref(false)
 
+  // 링크 모음 탭 - URL 기준으로 그룹핑된 카드 목록(같은 URL을 올린 게시글이 여러 개면 카드 1개로 합쳐서 옴).
+  // /api/posts와는 별도 엔드포인트(/api/links)라서 게시글 목록(posts)과 독립적으로 상태를 둔다
+  const linkGroups = ref([])
+  const linkPage = ref(0)
+  const linkTotalPages = ref(0)
+  const linkGroupsLoading = ref(false)
+  const linkGroupsLoaded = ref(false)
+  const linkResetToken = ref(0)
+
+  // 관리자 전용 "숨김" 뷰 - 링크 모음 탭 정렬 드롭다운에서 켜면 hiddenLinkGroups를 대신 보여줌
+  const showHiddenLinks = ref(false)
+  const hiddenLinkGroups = ref([])
+  const hiddenLinkGroupsLoading = ref(false)
+
   // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
   const categoryCounts = ref([])
   const tagCounts = ref([])
   const totalPostCount = ref(0)
+  // 링크 모음 탭용 카테고리 칩 개수 - 게시글 수가 아니라 attachments 배열 원소 총합(카테고리 칩과 동일한 캐싱 주기로 관리)
+  const linkCategoryCounts = ref([])
+  const linkTagCounts = ref([])
+  const totalLinkCount = ref(0)
   const categoryCountsLoaded = ref(false)
 
   const hasMore = computed(() => page.value + 1 < totalPages.value)
+  const linkHasMore = computed(() => linkPage.value + 1 < linkTotalPages.value)
 
   // 월별(yyyy-MM) 필터가 아직 오지 않은 미래 달을 가리키는지 - 게시글이 없는 이유를 화면에 다르게 안내하는 데 사용
   const isFutureMonth = computed(() => {
@@ -53,12 +78,18 @@ export const usePostsStore = defineStore('posts', () => {
       categoryCounts.value = data?.categoryCounts ?? []
       tagCounts.value = data?.tagCounts ?? []
       totalPostCount.value = data?.totalPostCount ?? 0
+      linkCategoryCounts.value = data?.linkCategoryCounts ?? []
+      linkTagCounts.value = data?.linkTagCounts ?? []
+      totalLinkCount.value = data?.totalLinkCount ?? 0
       categoryCountsLoaded.value = true
     } catch {
       // 사이드바 카테고리 개수는 부가 정보라 실패해도 조용히 무시(0개로 표시)하고 화면은 그대로 진행
       categoryCounts.value = []
       tagCounts.value = []
       totalPostCount.value = 0
+      linkCategoryCounts.value = []
+      linkTagCounts.value = []
+      totalLinkCount.value = 0
     }
   }
 
@@ -70,36 +101,55 @@ export const usePostsStore = defineStore('posts', () => {
     return tagCounts.value?.find((item) => item.category === value)?.count ?? 0
   }
 
+  function linkCategoryCount(value) {
+    return linkCategoryCounts.value?.find((item) => item.category === value)?.count ?? 0
+  }
+
+  function linkTagCount(value) {
+    return linkTagCounts.value?.find((item) => item.category === value)?.count ?? 0
+  }
+
+  // 현재 활성 탭(게시글/링크 모음)에 맞는 목록을 처음부터 다시 조회 - 필터 변경 setter들이 공용으로 사용
+  function refetchCurrent() {
+    return hasLink.value === true ? fetchLinkGroups(true) : fetchPosts(true)
+  }
+
   // 카테고리(및 학습자료 하위 태그) 필터 변경 - 목록 처음부터 다시 조회
   function setCategory(newCategory, newTag = null) {
     category.value = newCategory
     tag.value = newTag
-    return fetchPosts(true)
+    return refetchCurrent()
   }
 
   // 키워드/작성자 검색 - 목록 처음부터 다시 조회
   function setSearch({ keyword: newKeyword, author: newAuthor }) {
     keyword.value = newKeyword ?? ''
     author.value = newAuthor ?? ''
-    return fetchPosts(true)
+    return refetchCurrent()
   }
 
   // 기간 필터(today/week/month/YYYY-MM) 변경 - 목록 처음부터 다시 조회
   function setDate(newDate) {
     date.value = newDate
-    return fetchPosts(true)
+    return refetchCurrent()
   }
 
   // 정렬(latest/popular/oldest) 변경 - 목록 처음부터 다시 조회
   function setSort(newSort) {
     sort.value = newSort
-    return fetchPosts(true)
+    return refetchCurrent()
   }
 
   // 캠퍼스(4층/5층) 필터 변경 - 목록 처음부터 다시 조회
   function setCampus(newCampus) {
     campus.value = newCampus
-    return fetchPosts(true)
+    return refetchCurrent()
+  }
+
+  // 링크 모음 탭 전환(true/null) - 전환된 탭에 맞는 목록을 처음부터 다시 조회
+  function setHasLink(newHasLink) {
+    hasLink.value = newHasLink
+    return refetchCurrent()
   }
 
   // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임("더보기")
@@ -115,6 +165,7 @@ export const usePostsStore = defineStore('posts', () => {
         author: author.value || undefined,
         date: date.value || undefined,
         campus: campus.value || undefined,
+        hasLink: hasLink.value ?? undefined,
         sort: sort.value !== 'latest' ? sort.value : undefined,
         page: targetPage,
         size: PAGE_SIZE,
@@ -149,6 +200,70 @@ export const usePostsStore = defineStore('posts', () => {
     postsLoaded.value = false
   }
 
+  // reset=true: 1페이지부터 새로 조회, false: 다음 페이지를 이어붙임(스크롤 더보기)
+  async function fetchLinkGroups(reset = false) {
+    linkGroupsLoading.value = true
+    error.value = ''
+    try {
+      const targetPage = reset ? 0 : linkPage.value + 1
+      const { data } = await fetchLinkGroupsApi({
+        category: category.value || undefined,
+        tag: tag.value || undefined,
+        keyword: keyword.value || undefined,
+        author: author.value || undefined,
+        date: date.value || undefined,
+        campus: campus.value || undefined,
+        sort: sort.value !== 'latest' ? sort.value : undefined,
+        page: targetPage,
+        size: LINK_PAGE_SIZE,
+      })
+      const content = data?.content ?? []
+      linkGroups.value = reset ? content : [...linkGroups.value, ...content]
+      linkPage.value = data?.page ?? 0
+      linkTotalPages.value = data?.totalPages ?? 0
+      if (reset) {
+        linkResetToken.value += 1
+        linkGroupsLoaded.value = true
+      }
+    } catch {
+      error.value = '링크를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
+      if (reset) linkGroups.value = []
+    } finally {
+      linkGroupsLoading.value = false
+    }
+  }
+
+  // 링크 모음 탭 마운트 시 호출 - ensureLoaded()의 링크 버전
+  async function ensureLinkGroupsLoaded() {
+    if (linkGroupsLoaded.value) return false
+    await fetchLinkGroups(true)
+    return true
+  }
+
+  // 관리자가 링크 제목/만든사람 등을 수정한 직후 - 다음 방문 시 다시 불러오게 함
+  function invalidateLinkGroupsCache() {
+    linkGroupsLoaded.value = false
+  }
+
+  // 관리자 전용 "숨김" 뷰 - 필터 없이 숨긴 링크 전체를 가져옴(개수가 적어 페이지네이션 없음)
+  async function fetchHiddenLinkGroups() {
+    hiddenLinkGroupsLoading.value = true
+    try {
+      const { data } = await fetchHiddenLinksApi()
+      hiddenLinkGroups.value = data ?? []
+    } finally {
+      hiddenLinkGroupsLoading.value = false
+    }
+  }
+
+  // 정렬 드롭다운의 "숨김" 옵션 토글 - 켜면 숨긴 링크 목록을 새로 불러옴
+  function setShowHiddenLinks(value) {
+    showHiddenLinks.value = value
+    if (value) {
+      fetchHiddenLinkGroups()
+    }
+  }
+
   return {
     posts,
     category,
@@ -158,6 +273,7 @@ export const usePostsStore = defineStore('posts', () => {
     date,
     sort,
     campus,
+    hasLink,
     page,
     totalPages,
     lastSyncedAt,
@@ -166,21 +282,42 @@ export const usePostsStore = defineStore('posts', () => {
     resetToken,
     postsLoaded,
     hasMore,
+    linkGroups,
+    linkPage,
+    linkTotalPages,
+    linkGroupsLoading,
+    linkGroupsLoaded,
+    linkResetToken,
+    linkHasMore,
+    showHiddenLinks,
+    hiddenLinkGroups,
+    hiddenLinkGroupsLoading,
     isFutureMonth,
     categoryCounts,
     tagCounts,
     totalPostCount,
+    linkCategoryCounts,
+    linkTagCounts,
+    totalLinkCount,
     setCategory,
     setSearch,
     setDate,
     setSort,
     setCampus,
+    setHasLink,
     fetchPosts,
     ensureLoaded,
     invalidateCache,
+    fetchLinkGroups,
+    ensureLinkGroupsLoaded,
+    invalidateLinkGroupsCache,
+    fetchHiddenLinkGroups,
+    setShowHiddenLinks,
     loadCategoryCounts,
     refreshCategoryCounts,
     categoryCount,
     tagCount,
+    linkCategoryCount,
+    linkTagCount,
   }
 })

@@ -85,7 +85,7 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 }
 
 .pill {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
@@ -98,6 +98,19 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnOutsideCl
 .pill.active {
   background: #f1eefc;
   color: #4a3f8f;
+}
+
+/* 화면이 좁아져도 유형/기간 필터가 최대한 한 줄에 붙어있도록 버튼을 한 번 더 축소 */
+@media (max-width: 1024px) {
+  .label {
+    font-size: 12px;
+    padding: 0 2px 0 4px;
+  }
+
+  .pill {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
 }
 
 .month-dropdown-wrapper {

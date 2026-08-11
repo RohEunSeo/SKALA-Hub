@@ -2,6 +2,7 @@
 // 공통 레이아웃 - 사이드바 + 중앙 정렬된 본문 (넓은 화면에서 좌우 여백 균형, 모바일에서 사이드바는 드로어로 전환)
 import { ref, computed } from 'vue'
 import Sidebar from './Sidebar.vue'
+import { useUiStore } from '../stores/ui'
 
 const props = defineProps({
   // 기본 1040 - HomeView/AdminView와 동일한 폭. 다르게 하고 싶은 화면만 개별로 max-width를 넘기면 됨
@@ -11,6 +12,9 @@ const props = defineProps({
 })
 
 const sidebarOpen = ref(false)
+// 데스크톱~태블릿 폭에서 사용자가 수동으로 사이드바를 접어 본문 폭을 넓힐 때 쓰는 상태 - 페이지 이동 간에도
+// 유지되어야 해서 스토어에 둠 (모바일 드로어용 sidebarOpen과는 별개 - 768px 미만에서는 CSS가 이 상태를 무시함)
+const uiStore = useUiStore()
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
 const mainStyle = computed(() => ({ paddingTop: `${props.paddingTop}px` }))
 
@@ -26,10 +30,18 @@ function closeSidebar() {
 <template>
   <div class="app-layout">
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
-    <div class="sidebar-wrap" :class="{ open: sidebarOpen }">
-      <Sidebar @navigate="closeSidebar" />
+    <div class="sidebar-wrap" :class="{ open: sidebarOpen, collapsed: uiStore.sidebarCollapsed }">
+      <Sidebar @navigate="closeSidebar" @collapse="uiStore.collapseSidebar" />
     </div>
-    <button class="menu-toggle" aria-label="메뉴" @click="toggleSidebar">☰</button>
+    <button class="menu-toggle" aria-label="메뉴" @click="toggleSidebar">»</button>
+    <button
+      v-if="uiStore.sidebarCollapsed"
+      class="menu-toggle sidebar-expand-toggle"
+      aria-label="사이드바 펼치기"
+      @click="uiStore.expandSidebar"
+    >
+      »
+    </button>
     <main class="app-main" :style="mainStyle">
       <div class="app-main-inner" :style="innerStyle">
         <slot />
@@ -66,6 +78,31 @@ function closeSidebar() {
 
 .sidebar-overlay {
   display: none;
+}
+
+/* .sidebar-expand-toggle는 .menu-toggle 클래스를 함께 써서 모양(위치/크기/스타일)을 그대로 공유하고,
+   보이는 조건(display)만 여기서 따로 제어 - 접힘/펼침 버튼과 모바일 햄버거가 같은 아이콘(»)으로 통일되고,
+   로고 옆 접기 버튼(«)과도 짝이 맞게 */
+.sidebar-expand-toggle {
+  display: none;
+}
+
+/* 768px 이상(데스크톱~태블릿)에서만 접기 기능이 의미가 있음 - 모바일은 기존 드로어(sidebarOpen)만 사용 */
+@media (min-width: 768px) {
+  .sidebar-wrap.collapsed {
+    display: none;
+  }
+
+  .sidebar-expand-toggle {
+    display: flex;
+  }
+}
+
+/* 모바일 폭으로 리사이즈된 상태로 접힘 상태가 남아있어도, 실제 햄버거 버튼과 겹쳐 두 개가 뜨지 않게 항상 숨김 */
+@media (max-width: 768px) {
+  .sidebar-expand-toggle {
+    display: none !important;
+  }
 }
 
 .app-main {

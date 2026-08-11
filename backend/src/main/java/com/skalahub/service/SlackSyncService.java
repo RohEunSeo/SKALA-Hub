@@ -7,6 +7,7 @@ import com.skalahub.entity.SyncFailure;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.ReplyRepository;
 import com.skalahub.repository.SyncFailureRepository;
+import com.skalahub.util.SlackLinkParser;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -54,6 +55,7 @@ public class SlackSyncService {
     private final CategoryClassifier categoryClassifier;
     private final SlackBotReplyService slackBotReplyService;
     private final SyncFailureRepository syncFailureRepository;
+    private final LinkPreviewFetchService linkPreviewFetchService;
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
@@ -72,6 +74,7 @@ public class SlackSyncService {
             CategoryClassifier categoryClassifier,
             SlackBotReplyService slackBotReplyService,
             SyncFailureRepository syncFailureRepository,
+            LinkPreviewFetchService linkPreviewFetchService,
             @Value("${slack.user-token}") String userToken,
             @Value("${slack.channel-id}") String channelId,
             @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
@@ -80,6 +83,7 @@ public class SlackSyncService {
         this.categoryClassifier = categoryClassifier;
         this.slackBotReplyService = slackBotReplyService;
         this.syncFailureRepository = syncFailureRepository;
+        this.linkPreviewFetchService = linkPreviewFetchService;
         this.userToken = userToken;
         this.channelId = channelId;
         this.recentSyncWindowDays = recentSyncWindowDays;
@@ -315,7 +319,37 @@ public class SlackSyncService {
             categoryClassifier.classify(post);
             post = postRepository.save(post);
         }
+
+        fetchMissingLinkPreviews(post.getContent(), msg.path("attachments"));
         return post;
+    }
+
+    // 본문 링크 중 슬랙이 이미 미리보기(attachments)를 만들어준 URL은 제외하고, 나머지만 og:title/image를
+    // 새로 캐싱 - 링크 하나가 실패/지연되어도 동기화 전체가 멈추지 않도록 개별적으로 방어
+    private void fetchMissingLinkPreviews(String content, JsonNode attachments) {
+        List<SlackLinkParser.SlackLink> links = SlackLinkParser.extract(content);
+        if (links.isEmpty()) {
+            return;
+        }
+        Set<String> attachmentUrls = new LinkedHashSet<>();
+        if (attachments != null && attachments.isArray()) {
+            for (JsonNode attachment : attachments) {
+                String url = attachment.path("from_url").asString(attachment.path("title_link").asString(null));
+                if (url != null) {
+                    attachmentUrls.add(url);
+                }
+            }
+        }
+        for (SlackLinkParser.SlackLink link : links) {
+            if (attachmentUrls.contains(link.url())) {
+                continue;
+            }
+            try {
+                linkPreviewFetchService.ensureCached(link.url());
+            } catch (Exception e) {
+                log.debug("링크 미리보기 캐싱 중 예외 (무시하고 계속): {} ({})", link.url(), e.toString());
+            }
+        }
     }
 
     // attachments/files 배열이 비어있으면 null로 저장 (빈 배열 문자열 방지)

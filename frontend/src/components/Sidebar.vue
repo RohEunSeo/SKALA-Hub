@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { CATEGORIES } from '../constants/categories'
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits(['navigate', 'collapse'])
 
 const route = useRoute()
 const router = useRouter()
@@ -46,9 +46,18 @@ function handleLogout() {
 <template>
   <aside class="sidebar" @click="emit('navigate')">
     <div>
-      <RouterLink to="/" class="logo">
-        <span class="logo-text">SKALA<span class="logo-accent">Hub</span></span>
-      </RouterLink>
+      <div class="logo-row">
+        <RouterLink to="/" class="logo">
+          <span class="logo-text">SKALA<span class="logo-accent">Hub</span></span>
+        </RouterLink>
+        <button
+          class="collapse-btn"
+          aria-label="사이드바 접기"
+          @click.stop="emit('collapse')"
+        >
+          «
+        </button>
+      </div>
 
       <nav class="nav">
         <RouterLink to="/" class="nav-item" :class="{ active: route.name === 'home' }">🏠 홈</RouterLink>
@@ -125,11 +134,44 @@ function handleLogout() {
   overflow-y: auto;
 }
 
+.logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 40px 8px;
+}
+
 .logo {
   display: flex;
   align-items: center;
-  padding: 4px 8px 40px;
   text-decoration: none;
+}
+
+.collapse-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 26, 46, 0.15);
+  background: #ffffff;
+  color: #1a1a2e;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.collapse-btn:hover {
+  background: rgba(26, 26, 46, 0.05);
+  color: #4a3f8f;
+}
+
+/* 접기 버튼은 데스크톱 전용 - 모바일은 오버레이 드로어(닫기는 바깥 클릭)만 사용 */
+@media (max-width: 768px) {
+  .collapse-btn {
+    display: none;
+  }
 }
 
 .logo-text {

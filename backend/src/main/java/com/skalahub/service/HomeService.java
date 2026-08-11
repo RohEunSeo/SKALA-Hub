@@ -5,6 +5,7 @@ import com.skalahub.dto.CategoryCountDto;
 import com.skalahub.dto.HomeLeaderboardResponse;
 import com.skalahub.dto.HomeSummaryResponse;
 import com.skalahub.dto.LeaderboardEntryDto;
+import com.skalahub.dto.LinkCountsDto;
 import com.skalahub.repository.PostRepository;
 import com.skalahub.repository.UserRepository;
 import java.time.LocalDate;
@@ -23,16 +24,19 @@ public class HomeService {
 
     private final PostRepository postRepository;
     private final PostService postService;
+    private final LinkService linkService;
     private final UserRepository userRepository;
     private final LocalDate cohortStartDate;
 
     public HomeService(
             PostRepository postRepository,
             PostService postService,
+            LinkService linkService,
             UserRepository userRepository,
             @Value("${app.cohort-start-date}") String cohortStartDate) {
         this.postRepository = postRepository;
         this.postService = postService;
+        this.linkService = linkService;
         this.userRepository = userRepository;
         this.cohortStartDate = LocalDate.parse(cohortStartDate);
     }
@@ -55,6 +59,9 @@ public class HomeService {
                 .map(row -> new CategoryCountDto((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
 
+        // 링크 모음 탭 카테고리 칩 개수 - 링크 언급 횟수가 아니라 URL로 그룹핑된 카드 수 기준(중복 링크는 1개로만 셈)
+        LinkCountsDto linkCounts = linkService.getCounts();
+
         return new HomeSummaryResponse(
                 postRepository.countByIsDeletedFalse(),
                 todayNewPostCount,
@@ -63,7 +70,10 @@ public class HomeService {
                 Math.max(cohortWeek, 0),
                 userRepository.count(),
                 categoryCounts,
-                tagCounts);
+                tagCounts,
+                linkCounts.total(),
+                linkCounts.categoryCounts(),
+                linkCounts.tagCounts());
     }
 
     public HomeLeaderboardResponse getLeaderboard(String period) {

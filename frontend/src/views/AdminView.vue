@@ -20,6 +20,7 @@ import {
   deleteBotReply,
   updateBotReply,
   sendPendingNotification,
+  backfillLinkPreviews,
 } from '../api/admin'
 import { stripSlackMarkdown, renderSlackText } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -83,6 +84,26 @@ async function runFullSync() {
     syncFullError.value = error.response?.data?.error || '전체 재수집 중 오류가 발생했습니다.'
   } finally {
     syncingFull.value = false
+  }
+}
+
+// 링크 미리보기 재수집 (슬랙 재수집 없음 - 이미 있는 게시글 본문에서 아직 캐시 안 된 링크만 다시 fetch)
+const syncingLinks = ref(false)
+const syncLinksResult = ref(null)
+const syncLinksError = ref('')
+
+async function runLinkPreviewBackfill() {
+  syncingLinks.value = true
+  syncLinksError.value = ''
+  syncLinksResult.value = null
+  try {
+    const { data } = await backfillLinkPreviews()
+    syncLinksResult.value = data
+    invalidateFeedCaches()
+  } catch (error) {
+    syncLinksError.value = error.response?.data?.error || '링크 미리보기 재수집 중 오류가 발생했습니다.'
+  } finally {
+    syncingLinks.value = false
   }
 }
 
@@ -514,6 +535,20 @@ onMounted(() => {
                 {{ syncFullResult.repliesProcessed }}건 · {{ (syncFullResult.durationMs / 1000).toFixed(1) }}초 소요
               </div>
               <div v-if="syncFullError" class="result-box error">{{ syncFullError }}</div>
+            </div>
+
+            <div class="full-sync-row">
+              <p class="card-desc small">
+                슬랙을 다시 훑지 않고, 이미 저장된 게시글 본문에서 아직 미리보기(제목/썸네일)를 못 가져온
+                링크 모음 링크만 다시 시도합니다. 게시글/댓글은 건드리지 않아 빠르고 가볍습니다.
+              </p>
+              <button class="secondary-btn" :disabled="syncingLinks" @click="runLinkPreviewBackfill">
+                {{ syncingLinks ? '링크 미리보기 재수집 중...' : '링크 미리보기 재수집' }}
+              </button>
+              <div v-if="syncLinksResult" class="result-box">
+                {{ syncLinksResult.attempted }}개 링크 재시도 완료
+              </div>
+              <div v-if="syncLinksError" class="result-box error">{{ syncLinksError }}</div>
             </div>
           </div>
 
@@ -965,7 +1000,8 @@ onMounted(() => {
 .row-author {
   font-weight: 700;
   color: #1a1a2e;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .row-preview {
@@ -1038,7 +1074,9 @@ onMounted(() => {
 
 .manage-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 4px 12px;
   font-size: 12px;
 }
 

@@ -1,13 +1,17 @@
 // 관리자 전용 API (role=admin만 접근 - SecurityConfig에서 강제)
 package com.skalahub.controller;
 
+import com.skalahub.dto.AdminLinkUpdateRequest;
 import com.skalahub.dto.AdminPostUpdateRequest;
 import com.skalahub.dto.BotReplyResponse;
 import com.skalahub.dto.BotReplyUpdateRequest;
+import com.skalahub.dto.LinkGroupDto;
 import com.skalahub.dto.PostPageResponse;
 import com.skalahub.dto.PostResponse;
 import com.skalahub.entity.SyncFailure;
+import com.skalahub.service.AdminLinkService;
 import com.skalahub.service.AdminPostService;
+import com.skalahub.service.LinkService;
 import com.skalahub.service.SlackSyncService;
 import java.util.List;
 import java.util.Map;
@@ -30,10 +34,18 @@ public class AdminController {
 
     private final SlackSyncService slackSyncService;
     private final AdminPostService adminPostService;
+    private final AdminLinkService adminLinkService;
+    private final LinkService linkService;
 
-    public AdminController(SlackSyncService slackSyncService, AdminPostService adminPostService) {
+    public AdminController(
+            SlackSyncService slackSyncService,
+            AdminPostService adminPostService,
+            AdminLinkService adminLinkService,
+            LinkService linkService) {
         this.slackSyncService = slackSyncService;
         this.adminPostService = adminPostService;
+        this.adminLinkService = adminLinkService;
+        this.linkService = linkService;
     }
 
     // 최근 N일 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류) - API 호출량이 적어 자주 눌러도 부담 없음
@@ -83,6 +95,25 @@ public class AdminController {
     @PatchMapping("/posts/{id}")
     public PostResponse updatePost(@PathVariable Long id, @RequestBody AdminPostUpdateRequest request) {
         return adminPostService.updatePost(id, request);
+    }
+
+    // 링크 모음 탭 카드 제목 수동 수정 / 숨김 처리 (URL 기준, 전역)
+    @PatchMapping("/links")
+    public void updateLink(@RequestBody AdminLinkUpdateRequest request) {
+        adminLinkService.updateLink(request);
+    }
+
+    // 숨긴 링크를 평소와 동일한 카드 형태로 - 링크 모음 탭 "정렬" 드롭다운의 관리자 전용 "숨김" 옵션에서 사용
+    @GetMapping("/links/hidden")
+    public List<LinkGroupDto> getHiddenLinks() {
+        return linkService.getHiddenLinkGroups();
+    }
+
+    // 슬랙 재수집 없이 - 이미 DB에 있는 게시글 본문에서 아직 미리보기 캐시가 없는 링크만 다시 fetch 시도
+    @PostMapping("/links/backfill")
+    public Map<String, Object> backfillLinkPreviews() {
+        int attempted = adminLinkService.backfillPreviews();
+        return Map.of("attempted", attempted);
     }
 
     // 미분류 게시글 전체를 Claude로 일괄 재분류
