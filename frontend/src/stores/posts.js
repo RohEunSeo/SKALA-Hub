@@ -204,6 +204,9 @@ export const usePostsStore = defineStore('posts', () => {
   async function fetchLinkGroups(reset = false) {
     linkGroupsLoading.value = true
     error.value = ''
+    // 카테고리/필터 변경 시 이전 결과가 잠깐 남아있다 갑자기 바뀌는 것처럼 보이지 않도록,
+    // reset일 때는 즉시 비워서 스켈레톤이 바로 뜨게 함(더보기 스크롤은 기존 목록 유지)
+    if (reset) linkGroups.value = []
     try {
       const targetPage = reset ? 0 : linkPage.value + 1
       const { data } = await fetchLinkGroupsApi({

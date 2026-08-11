@@ -45,7 +45,7 @@ public class LinkPreviewFetchService {
                 title = doc.title();
             }
             preview.setTitle(blankToNull(title));
-            preview.setImageUrl(blankToNull(metaContent(doc, "og:image")));
+            preview.setImageUrl(toHttps(blankToNull(metaContent(doc, "og:image"))));
             preview.setServiceName(blankToNull(metaContent(doc, "og:site_name")));
             preview.setFetchFailed(false);
         } catch (Exception e) {
@@ -64,5 +64,15 @@ public class LinkPreviewFetchService {
 
     private String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    // http 이미지를 그대로 내려주면 프론트(https)에서 Mixed Content 경고가 뜸 - 대부분의 사이트가
+    // https도 함께 지원하므로 스킴만 바꿔서 저장(진짜 https를 못 받으면 브라우저가 자동 업그레이드했을 때와
+    // 동일하게 이미지 로드만 실패하고, 콘솔 경고는 사라짐)
+    private String toHttps(String url) {
+        if (url == null || !url.startsWith("http://")) {
+            return url;
+        }
+        return "https://" + url.substring("http://".length());
     }
 }
