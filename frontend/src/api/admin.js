@@ -31,6 +31,11 @@ export function backfillLinkPreviews() {
   return http.post('/api/admin/links/backfill')
 }
 
+// 숨긴 링크 목록 (복원 전까지 링크 모음 어디에도 안 보이므로 관리자 전용 화면에서만 확인 가능)
+export function fetchHiddenLinks() {
+  return http.get('/api/admin/links/hidden')
+}
+
 // 미분류 게시글 전체 일괄 재분류
 export function classifyAllUncategorized() {
   return http.post('/api/admin/posts/classify-all')

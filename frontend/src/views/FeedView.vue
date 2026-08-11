@@ -37,16 +37,36 @@ const activeTab = ref(route.query.tab === 'links' ? 'links' : 'posts')
 function selectTab(tab) {
   if (activeTab.value === tab) return
   activeTab.value = tab
+  // 링크 탭엔 층 필터 UI가 없으므로, 게시글 탭에서 걸어뒀던 층 값이 안 보이는 채로 계속 적용되지 않게 초기화
+  if (tab === 'links' && postsStore.campus) {
+    postsStore.campus = null
+  }
+  // 관리자 "숨김" 뷰는 링크 탭 전용이라 다른 탭으로 나가면 꺼줌
+  if (tab !== 'links' && postsStore.showHiddenLinks) {
+    postsStore.setShowHiddenLinks(false)
+  }
   postsStore.setHasLink(tab === 'links' ? true : null)
 }
+
+// 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
+const showHidden = computed(() => activeTab.value === 'links' && postsStore.showHiddenLinks)
 
 const activeCategoryTags = computed(
   () => CATEGORIES.find((cat) => cat.value === postsStore.category)?.tags ?? [],
 )
+// 학습자료는 게시글 탭에선 사이드바 필터만 쓰지만(기존 동작 유지), 링크 탭에서는 층 필터 대신
+// 유형(영상/블로그·글/깃허브) 필터로 이 자리에 노출한다
 const hasSubcategoryFilter = computed(
-  () => SUBCATEGORY_FILTER_CATEGORIES.includes(postsStore.category) && activeCategoryTags.value.length > 0,
+  () =>
+    (SUBCATEGORY_FILTER_CATEGORIES.includes(postsStore.category) ||
+      (postsStore.hasLink && postsStore.category === '학습자료')) &&
+    activeCategoryTags.value.length > 0,
 )
-const showCampusFilter = computed(() => !postsStore.category || CAMPUS_CATEGORIES.includes(postsStore.category))
+const subcategoryFilterLabel = computed(() => (postsStore.category === '학습자료' ? '🗂️ 유형 : ' : '🗂️ 분류 : '))
+// 링크 모음 탭에서는 층 구분이 의미 없어 카테고리와 무관하게 숨김
+const showCampusFilter = computed(
+  () => !postsStore.hasLink && (!postsStore.category || CAMPUS_CATEGORIES.includes(postsStore.category)),
+)
 const showDateFilter = computed(() => !postsStore.category || DATE_CATEGORIES.includes(postsStore.category))
 
 // 게시글 개수 대신 "체감 스크롤 길이"로 더보기를 끊기 위한 상태 - 텍스트가 짧은 글 20개와
@@ -201,33 +221,35 @@ onUnmounted(teardownScrollObserver)
           </div>
         </div>
 
-        <CategoryFilter />
+        <CategoryFilter v-if="!showHidden" />
 
-        <div v-if="hasSubcategoryFilter" class="edu-category-filter">
-          <span class="label">🗂️ 분류 : </span>
-          <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
-            전체
-            ({{
-              postsStore.hasLink
-                ? postsStore.linkCategoryCount(postsStore.category)
-                : postsStore.categoryCount(postsStore.category)
-            }})
+        <div v-if="!showHidden && (hasSubcategoryFilter || showCampusFilter || showDateFilter)" class="filter-combined-row">
+          <div v-if="hasSubcategoryFilter" class="edu-category-filter">
+            <span class="label">{{ subcategoryFilterLabel }}</span>
+            <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
+              전체
+              ({{
+                postsStore.hasLink
+                  ? postsStore.linkCategoryCount(postsStore.category)
+                  : postsStore.categoryCount(postsStore.category)
+              }})
+            </div>
+            <div
+              v-for="sub in activeCategoryTags"
+              :key="sub.value"
+              class="pill"
+              :class="{ active: postsStore.tag === sub.value }"
+              @click="selectSubTag(sub.value)"
+            >
+              {{ sub.label }}
+              ({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})
+            </div>
           </div>
-          <div
-            v-for="sub in activeCategoryTags"
-            :key="sub.value"
-            class="pill"
-            :class="{ active: postsStore.tag === sub.value }"
-            @click="selectSubTag(sub.value)"
-          >
-            {{ sub.label }}
-            ({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})
-          </div>
-        </div>
 
-        <div v-if="showCampusFilter || showDateFilter" class="filter-row">
-          <CampusFilter v-if="showCampusFilter" />
-          <DateFilter v-if="showDateFilter" />
+          <div v-if="showCampusFilter || showDateFilter" class="filter-row">
+            <CampusFilter v-if="showCampusFilter" />
+            <DateFilter v-if="showDateFilter" />
+          </div>
         </div>
 
         <div class="sync-sort-row">
@@ -238,11 +260,17 @@ onUnmounted(teardownScrollObserver)
         </div>
       </div>
 
+      <div v-if="showHidden" class="hidden-links-banner">
+        🔒 관리자에게만 보이는 숨긴 링크입니다. 카드의 ♻️ 버튼으로 복원할 수 있어요.
+      </div>
+
       <div
         v-if="
-          activeTab === 'links'
-            ? postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
-            : postsStore.loading && postsStore.posts.length === 0
+          showHidden
+            ? postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length === 0
+            : activeTab === 'links'
+              ? postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
+              : postsStore.loading && postsStore.posts.length === 0
         "
         class="post-list"
         aria-hidden="true"
@@ -253,6 +281,9 @@ onUnmounted(teardownScrollObserver)
           <SkeletonBlock width="90%" height="13px" />
           <SkeletonBlock width="40%" height="13px" />
         </div>
+      </div>
+      <div v-else-if="showHidden" class="link-gallery-grid">
+        <LinkGalleryCard v-for="group in postsStore.hiddenLinkGroups" :key="group.url" :group="group" />
       </div>
       <div v-else-if="activeTab === 'links'" class="link-gallery-grid">
         <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
@@ -267,7 +298,13 @@ onUnmounted(teardownScrollObserver)
         />
       </div>
 
-      <template v-if="activeTab === 'links'">
+      <template v-if="showHidden">
+        <div v-if="postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length > 0" class="loading-indicator">
+          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+        </div>
+        <div v-else-if="postsStore.hiddenLinkGroups.length === 0" class="status-message">숨긴 링크가 없습니다.</div>
+      </template>
+      <template v-else-if="activeTab === 'links'">
         <div v-if="postsStore.linkGroupsLoading && postsStore.linkGroups.length > 0" class="loading-indicator">
           <span class="spinner" aria-hidden="true"></span> 불러오는 중...
         </div>
@@ -333,6 +370,16 @@ onUnmounted(teardownScrollObserver)
   border-bottom-color: #4a3f8f;
 }
 
+.hidden-links-banner {
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #fff4e0;
+  color: #8a5a00;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .link-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -356,6 +403,16 @@ onUnmounted(teardownScrollObserver)
   }
 }
 
+/* 유형·분류 필터(edu-category-filter)와 층·기간 필터(filter-row)를 한 줄에 나란히 배치 -
+   화면이 좁으면 flex-wrap으로 자연스럽게 다음 줄로 넘어감 */
+.filter-combined-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .edu-category-filter {
   display: flex;
   align-items: center;
@@ -366,7 +423,6 @@ onUnmounted(teardownScrollObserver)
   border-radius: 12px;
   padding: 6px;
   width: fit-content;
-  margin-bottom: 16px;
 }
 
 .edu-category-filter .label {
@@ -378,13 +434,26 @@ onUnmounted(teardownScrollObserver)
 }
 
 .edu-category-filter .pill {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
   color: #1a1a2e;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/* 화면이 좁아져도 유형/기간 필터가 최대한 한 줄에 붙어있도록 버튼을 한 번 더 축소 */
+@media (max-width: 1024px) {
+  .edu-category-filter .label {
+    font-size: 12px;
+    padding: 0 2px 0 4px;
+  }
+
+  .edu-category-filter .pill {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
 }
 
 .edu-category-filter .pill.active {
@@ -397,7 +466,6 @@ onUnmounted(teardownScrollObserver)
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 16px;
 }
 
 .sync-sort-row {

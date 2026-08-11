@@ -52,6 +52,9 @@ public class AdminLinkService {
         if (request.creators() != null) {
             preview.setAdminCreators(request.creators().isBlank() ? null : request.creators().trim());
         }
+        if (request.typeTag() != null) {
+            preview.setAdminTypeTag(request.typeTag().isBlank() ? null : request.typeTag().trim());
+        }
         if (request.hidden() != null) {
             preview.setHidden(request.hidden());
         }

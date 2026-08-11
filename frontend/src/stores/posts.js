@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { fetchPosts as fetchPostsApi, fetchLinkGroups as fetchLinkGroupsApi } from '../api/posts'
 import { fetchHomeSummary } from '../api/home'
+import { fetchHiddenLinks as fetchHiddenLinksApi } from '../api/admin'
 
 const PAGE_SIZE = 20
 // 링크 모음 탭은 URL 중복 제거를 위해 매 요청마다 필터에 맞는 게시글 전체를 다시 훑어서 그룹을 새로 계산함 -
@@ -38,6 +39,11 @@ export const usePostsStore = defineStore('posts', () => {
   const linkGroupsLoading = ref(false)
   const linkGroupsLoaded = ref(false)
   const linkResetToken = ref(0)
+
+  // 관리자 전용 "숨김" 뷰 - 링크 모음 탭 정렬 드롭다운에서 켜면 hiddenLinkGroups를 대신 보여줌
+  const showHiddenLinks = ref(false)
+  const hiddenLinkGroups = ref([])
+  const hiddenLinkGroupsLoading = ref(false)
 
   // 사이드바/카테고리칩에 표시할 카테고리별 게시글 수 - 여러 화면에서 공유해서 쓰도록 스토어에 캐싱
   const categoryCounts = ref([])
@@ -239,6 +245,25 @@ export const usePostsStore = defineStore('posts', () => {
     linkGroupsLoaded.value = false
   }
 
+  // 관리자 전용 "숨김" 뷰 - 필터 없이 숨긴 링크 전체를 가져옴(개수가 적어 페이지네이션 없음)
+  async function fetchHiddenLinkGroups() {
+    hiddenLinkGroupsLoading.value = true
+    try {
+      const { data } = await fetchHiddenLinksApi()
+      hiddenLinkGroups.value = data ?? []
+    } finally {
+      hiddenLinkGroupsLoading.value = false
+    }
+  }
+
+  // 정렬 드롭다운의 "숨김" 옵션 토글 - 켜면 숨긴 링크 목록을 새로 불러옴
+  function setShowHiddenLinks(value) {
+    showHiddenLinks.value = value
+    if (value) {
+      fetchHiddenLinkGroups()
+    }
+  }
+
   return {
     posts,
     category,
@@ -264,6 +289,9 @@ export const usePostsStore = defineStore('posts', () => {
     linkGroupsLoaded,
     linkResetToken,
     linkHasMore,
+    showHiddenLinks,
+    hiddenLinkGroups,
+    hiddenLinkGroupsLoading,
     isFutureMonth,
     categoryCounts,
     tagCounts,
@@ -283,6 +311,8 @@ export const usePostsStore = defineStore('posts', () => {
     fetchLinkGroups,
     ensureLinkGroupsLoaded,
     invalidateLinkGroupsCache,
+    fetchHiddenLinkGroups,
+    setShowHiddenLinks,
     loadCategoryCounts,
     refreshCategoryCounts,
     categoryCount,

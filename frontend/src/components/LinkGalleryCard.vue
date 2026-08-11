@@ -27,6 +27,23 @@ const source = getLinkSource({
 })
 // 대표 게시글(반응수 가장 높은 게시글)의 카테고리를 배지로 표시
 const categoryInfo = computed(() => CATEGORIES.find((cat) => cat.value === props.group.category))
+// 학습자료 하위 유형(영상/블로그·글/깃허브·코드) 배지 - 백엔드가 이미 확정해서 내려준 group.typeTag
+// 하나만 보고 표시(게시글 tags 배열을 직접 안 봄 - 게시글에 태그가 여러 개 달려있으면 이 링크 하나의
+// 실제 유형과 어긋날 수 있어서 백엔드에서 하나로 정리해서 내려줌). 학습자료가 아니면 항상 null
+const SUBTAG_EMOJI = { 영상: '🎬', '블로그·글': '📝', 깃허브: '💻' }
+const isStudyMaterial = computed(() => props.group.category === '학습자료')
+const subTagInfo = computed(() => {
+  if (!isStudyMaterial.value || !props.group.typeTag) return null
+  const tag = categoryInfo.value?.tags?.find((t) => t.value === props.group.typeTag)
+  return tag ? { label: tag.label, emoji: SUBTAG_EMOJI[tag.value] ?? '🏷️' } : null
+})
+// 학습자료 카드에서만 관리자가 유형 배지를 직접 지정할 수 있게 함(자동 추정이 틀렸을 때 보정용)
+const TYPE_TAG_OPTIONS = [
+  { value: '', label: '자동 감지' },
+  { value: '영상', label: '영상' },
+  { value: '블로그·글', label: '블로그·글' },
+  { value: '깃허브', label: '깃허브·코드' },
+]
 const creatorsLabel = computed(() => (props.group.creators ?? []).map((name) => `${name}님`).join(', '))
 // 만든 사람 표시는 "교육생 서비스" 카테고리에서만 의미가 있음(누가 만들었는지가 중요한 카테고리) - 나머지
 // 카테고리(학습자료/GitHub 링크 등)는 만든 사람 개념이 없어서 굳이 표시하지 않음
@@ -38,11 +55,14 @@ const sourceLabel = computed(() =>
 
 // 관리자만 카드 위에서 바로 제목/만든사람 수정, 숨김 가능 - 별도 /admin 페이지 이동 없이
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+// 정렬 드롭다운의 "숨김" 옵션으로 보고 있는 카드인지 - 이때는 🗑️(숨김) 대신 ♻️(복원) 액션을 보여줌
+const isHiddenView = computed(() => postsStore.showHiddenLinks)
 
 const editing = ref(false)
 const editTitle = ref('')
 const editSource = ref('')
 const editCreators = ref('')
+const editTypeTag = ref('')
 const expanded = ref(false)
 
 function goToDetail(postId) {
@@ -65,6 +85,7 @@ function startEdit() {
   editTitle.value = props.group.title || ''
   editSource.value = source
   editCreators.value = (props.group.creators ?? []).join(', ')
+  editTypeTag.value = props.group.typeTag || ''
   editing.value = true
 }
 
@@ -78,10 +99,17 @@ async function saveEdit() {
     title: editTitle.value,
     source: editSource.value,
     creators: editCreators.value,
+    typeTag: editTypeTag.value,
   })
   editing.value = false
   postsStore.invalidateLinkGroupsCache()
-  postsStore.fetchLinkGroups(true)
+  if (isHiddenView.value) {
+    postsStore.fetchHiddenLinkGroups()
+  } else {
+    postsStore.fetchLinkGroups(true)
+  }
+  // 유형/분류 필터 옆 숫자(예: "영상 (30)")도 방금 수정 내용을 바로 반영하도록 갱신
+  postsStore.refreshCategoryCounts()
 }
 
 // url 기준 전역 숨김 - 같은 링크가 다른 게시글에도 있으면 전부 함께 숨겨짐
@@ -92,6 +120,15 @@ async function hideLink() {
   await updateLinkAsAdmin({ url: props.group.url, hidden: true })
   postsStore.invalidateLinkGroupsCache()
   postsStore.fetchLinkGroups(true)
+  postsStore.refreshCategoryCounts()
+}
+
+// 숨김 뷰에서 복원 - 다시 모든 사용자에게 보이게 됨
+async function restoreLink() {
+  await updateLinkAsAdmin({ url: props.group.url, hidden: false })
+  postsStore.invalidateLinkGroupsCache()
+  postsStore.fetchHiddenLinkGroups()
+  postsStore.refreshCategoryCounts()
 }
 </script>
 
@@ -100,16 +137,24 @@ async function hideLink() {
     <div class="link-card-thumb" :style="{ background: theme.bg }">
       <img v-if="group.imageUrl" :src="group.imageUrl" alt="" />
       <span v-else class="link-card-emoji">{{ theme.emoji }}</span>
-      <span
-        v-if="categoryInfo"
-        class="link-card-category-badge"
-        :style="{ background: hexToRgba(categoryInfo.color, 0.72) }"
-      >
-        {{ categoryInfo.icon }} {{ categoryInfo.shortLabel }}
-      </span>
+      <div class="link-card-badges">
+        <span
+          v-if="categoryInfo"
+          class="link-card-category-badge"
+          :style="{ background: hexToRgba(categoryInfo.color, 0.72) }"
+        >
+          {{ categoryInfo.icon }} {{ categoryInfo.shortLabel }}
+        </span>
+        <span v-if="subTagInfo" class="link-card-subtag-badge">
+          {{ subTagInfo.emoji }} {{ subTagInfo.label }}
+        </span>
+      </div>
       <div v-if="isAdmin" class="link-card-admin-actions">
         <span class="link-card-admin-btn" title="수정" @click.stop.prevent="startEdit">✏️</span>
-        <span class="link-card-admin-btn" title="숨김" @click.stop.prevent="hideLink">🗑️</span>
+        <span v-if="isHiddenView" class="link-card-admin-btn" title="복원" @click.stop.prevent="restoreLink">
+          ♻️
+        </span>
+        <span v-else class="link-card-admin-btn" title="숨김" @click.stop.prevent="hideLink">🗑️</span>
       </div>
     </div>
     <div class="link-card-body">
@@ -135,6 +180,14 @@ async function hideLink() {
           @click.stop.prevent
           @keydown.stop
         />
+        <select
+          v-if="isStudyMaterial"
+          v-model="editTypeTag"
+          class="link-card-edit-input link-card-edit-select"
+          @click.stop.prevent
+        >
+          <option v-for="opt in TYPE_TAG_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
         <div class="link-card-edit-actions">
           <span class="link-card-edit-save" @click.stop.prevent="saveEdit">저장</span>
           <span class="link-card-edit-cancel" @click.stop.prevent="cancelEdit">취소</span>
@@ -217,11 +270,29 @@ async function hideLink() {
   font-size: 32px;
 }
 
-.link-card-category-badge {
+/* 카테고리 배지 + 유형 배지(학습자료만)를 한 줄에 나란히 배치 */
+.link-card-badges {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-card-category-badge {
   color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(26, 26, 46, 0.2);
+}
+
+.link-card-subtag-badge {
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1a2e;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
@@ -399,6 +470,13 @@ async function hideLink() {
   font-size: 12px;
   font-weight: 400;
   color: #636e72;
+}
+
+.link-card-edit-select {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a3f8f;
+  cursor: pointer;
 }
 
 .link-card-edit-actions {

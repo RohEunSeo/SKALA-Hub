@@ -178,7 +178,8 @@ public class PostService {
     public PostResponse toResponse(Post post) {
         List<LinkPreviewDto> attachments = parseAttachments(post.getAttachments());
         Map<String, LinkPreview> overrides = loadOverrides(collectLinkUrls(post.getContent(), attachments));
-        return buildResponse(post, attachments, overrides);
+        List<LinkPreviewDto> links = parseLinks(post.getContent(), attachments, overrides);
+        return buildResponse(post, attachments, links);
     }
 
     // 목록 화면(피드/링크 모음)용 - link_previews 오버라이드 조회를 게시글별로 반복하지 않고 전체 게시글의 URL을
@@ -195,12 +196,38 @@ public class PostService {
 
         List<PostResponse> result = new ArrayList<>(posts.size());
         for (int i = 0; i < posts.size(); i++) {
-            result.add(buildResponse(posts.get(i), attachmentsList.get(i), overrides));
+            Post post = posts.get(i);
+            List<LinkPreviewDto> attachments = attachmentsList.get(i);
+            List<LinkPreviewDto> links = parseLinks(post.getContent(), attachments, overrides);
+            result.add(buildResponse(post, attachments, links));
         }
         return result;
     }
 
-    private PostResponse buildResponse(Post post, List<LinkPreviewDto> attachments, Map<String, LinkPreview> overrides) {
+    // 관리자 "숨김" 갤러리 뷰 전용 - toResponses()와 똑같이 배치 조회하되, links를 parseLinks가 아니라
+    // parseHiddenLinks로 채워서 "숨긴 링크만" 담긴 PostResponse 목록을 만든다(LinkService가 이걸로
+    // 평소와 동일한 buildGroup() 조립 로직을 그대로 재사용해 같은 카드 UI를 그릴 수 있게 함)
+    public List<PostResponse> toHiddenLinkResponses(List<Post> posts) {
+        List<List<LinkPreviewDto>> attachmentsList = new ArrayList<>(posts.size());
+        Set<String> allUrls = new LinkedHashSet<>();
+        for (Post post : posts) {
+            List<LinkPreviewDto> attachments = parseAttachments(post.getAttachments());
+            attachmentsList.add(attachments);
+            allUrls.addAll(collectLinkUrls(post.getContent(), attachments));
+        }
+        Map<String, LinkPreview> overrides = loadOverrides(allUrls);
+
+        List<PostResponse> result = new ArrayList<>(posts.size());
+        for (int i = 0; i < posts.size(); i++) {
+            Post post = posts.get(i);
+            List<LinkPreviewDto> attachments = attachmentsList.get(i);
+            List<LinkPreviewDto> hiddenLinks = parseHiddenLinks(post.getContent(), attachments, overrides);
+            result.add(buildResponse(post, attachments, hiddenLinks));
+        }
+        return result;
+    }
+
+    private PostResponse buildResponse(Post post, List<LinkPreviewDto> attachments, List<LinkPreviewDto> links) {
         return new PostResponse(
                 post.getId(),
                 post.getUserName(),
@@ -218,7 +245,7 @@ public class PostService {
                 buildPermalink(post.getSlackTs()),
                 attachments,
                 parseFiles(post.getFiles()),
-                parseLinks(post.getContent(), attachments, overrides));
+                links);
     }
 
     private Set<String> collectLinkUrls(String content, List<LinkPreviewDto> attachments) {
@@ -301,6 +328,51 @@ public class PostService {
             }
         }
         return links;
+    }
+
+    // 관리자 "숨김" 갤러리 뷰 전용 - parseLinks()의 반대: hidden=true인 것만 남긴다. parseLinks()와 달리
+    // 라벨이 기호뿐이어도(junk label) 걸러내지 않음 - 관리자는 정확히 뭘 숨겼는지 그대로 봐야 하기 때문
+    private List<LinkPreviewDto> parseHiddenLinks(String content, List<LinkPreviewDto> attachments, Map<String, LinkPreview> overrides) {
+        Map<String, LinkPreviewDto> richByUrl = new LinkedHashMap<>();
+        for (LinkPreviewDto attachment : attachments) {
+            String url = attachment.fromUrl() != null ? attachment.fromUrl() : attachment.titleLink();
+            if (url != null) {
+                richByUrl.put(url, attachment);
+            }
+        }
+
+        List<LinkPreviewDto> hidden = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (SlackLinkParser.SlackLink link : SlackLinkParser.extract(content)) {
+            seen.add(link.url());
+            LinkPreviewDto dto = buildHiddenLink(link.url(), link.label(), richByUrl.get(link.url()), overrides);
+            if (dto != null) {
+                hidden.add(dto);
+            }
+        }
+        for (LinkPreviewDto attachment : attachments) {
+            String url = attachment.fromUrl() != null ? attachment.fromUrl() : attachment.titleLink();
+            if (url != null && seen.add(url)) {
+                LinkPreviewDto dto = buildHiddenLink(url, url, attachment, overrides);
+                if (dto != null) {
+                    hidden.add(dto);
+                }
+            }
+        }
+        return hidden;
+    }
+
+    private LinkPreviewDto buildHiddenLink(String url, String label, LinkPreviewDto rich, Map<String, LinkPreview> overrides) {
+        LinkPreview override = overrides.get(url);
+        if (override == null || !Boolean.TRUE.equals(override.getHidden())) {
+            return null;
+        }
+        LinkPreviewDto base = rich;
+        if (base == null) {
+            String title = override.getTitle() != null ? override.getTitle() : label;
+            base = new LinkPreviewDto(title, url, null, override.getImageUrl(), url, override.getServiceName());
+        }
+        return applyAdminOverrides(base, override);
     }
 
     // rich(슬랙 리치 미리보기)가 있으면 그걸, 없으면 link_previews 자동 fetch 캐시(og:title/image)를,

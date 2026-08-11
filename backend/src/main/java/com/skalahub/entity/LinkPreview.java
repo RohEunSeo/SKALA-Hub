@@ -47,6 +47,11 @@ public class LinkPreview {
     @Column(name = "admin_creators")
     private String adminCreators;
 
+    // 학습자료 하위 유형(영상/블로그·글/깃허브) 배지 수동 지정 - 비어 있으면 게시글 태그/서비스명 기반
+    // 자동 추정을 쓰고, 값이 있으면 이게 항상 우선함(링크 단위로만 적용, 게시글의 실제 tags는 안 건드림)
+    @Column(name = "admin_type_tag")
+    private String adminTypeTag;
+
     // 관리자가 링크 모음에서 숨김 처리했는지 - true면 이 URL은 어느 게시글에서도 표시 안 함.
     // DB 컬럼이 NOT NULL이라 새로 생성되는 행에서도 항상 값이 채워지도록 기본값을 둠
     // (안 두면 신규 INSERT 시 null이 들어가 제약조건 위반으로 저장이 실패함)
