@@ -65,3 +65,23 @@ export function updateBotReply(ts, content) {
 export function sendPendingNotification(postId) {
   return http.post(`/api/admin/pending-notifications/${postId}/send`)
 }
+
+// 전체 공지 목록 (관리자 모드 - 읽음 여부 무관)
+export function fetchAdminAnnouncements() {
+  return http.get('/api/admin/announcements')
+}
+
+// 전체 공지 작성 - 저장 즉시 모든 유저의 "전체 공지" 탭에 노출
+export function createAnnouncement(payload) {
+  return http.post('/api/admin/announcements', payload)
+}
+
+// 전체 공지 수정 - 이미 읽은 유저의 읽음 상태는 그대로 유지됨(다시 안읽음으로 뜨지 않음)
+export function updateAnnouncement(id, payload) {
+  return http.patch(`/api/admin/announcements/${id}`, payload)
+}
+
+// 전체 공지 삭제
+export function deleteAnnouncement(id) {
+  return http.delete(`/api/admin/announcements/${id}`)
+}

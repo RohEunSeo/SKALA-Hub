@@ -1,10 +1,11 @@
 <script setup>
 // 좌측 네비게이션 사이드바 - 로고/메뉴/카테고리/유저 프로필
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { CATEGORIES } from '../constants/categories'
+import InquiryModal from './InquiryModal.vue'
 
 const emit = defineEmits(['navigate', 'collapse'])
 
@@ -12,6 +13,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
+const showInquiryModal = ref(false)
 
 onMounted(() => {
   postsStore.loadCategoryCounts()
@@ -30,6 +32,8 @@ function isActiveCategory(value, tagValue = null) {
 }
 
 function selectCategory(value, tagValue = null) {
+  // 링크 모음 탭에 있어도 사이드바 카테고리를 누르면 항상 게시글 탭으로 전환 (직접 대입, setHasLink 아님 - setCategory가 어차피 다시 조회하므로 중복 조회 방지)
+  postsStore.hasLink = null
   postsStore.setCategory(value, tagValue)
   window.scrollTo({ top: 0, behavior: 'auto' })
   if (route.name !== 'feed') {
@@ -98,23 +102,29 @@ function handleLogout() {
       </div>
     </div>
 
-    <div v-if="authStore.user" class="profile-block">
-      <div class="profile">
-        <img
-          v-if="authStore.user.profileImg"
-          class="avatar avatar-img"
-          :src="authStore.user.profileImg"
-          :alt="authStore.user.name"
-        />
-        <div v-else class="avatar">{{ userInitial }}</div>
-        <div>
-          <div class="profile-name">{{ authStore.user.name }}</div>
-          <div class="profile-meta">{{ userMeta }}</div>
+    <div class="sidebar-footer">
+      <div class="inquiry-nav-item" @click="showInquiryModal = true">💬 문의하기</div>
+
+      <div v-if="authStore.user" class="profile-block">
+        <div class="profile">
+          <img
+            v-if="authStore.user.profileImg"
+            class="avatar avatar-img"
+            :src="authStore.user.profileImg"
+            :alt="authStore.user.name"
+          />
+          <div v-else class="avatar">{{ userInitial }}</div>
+          <div>
+            <div class="profile-name">{{ authStore.user.name }}</div>
+            <div class="profile-meta">{{ userMeta }}</div>
+          </div>
         </div>
+        <div class="logout-link" @click="handleLogout">로그아웃</div>
       </div>
-      <div class="logout-link" @click="handleLogout">로그아웃</div>
     </div>
   </aside>
+
+  <InquiryModal v-if="showInquiryModal" @close="showInquiryModal = false" />
 </template>
 
 <style scoped>
@@ -283,6 +293,26 @@ function handleLogout() {
   background: #f1eefc;
   color: #4a3f8f;
   font-weight: 700;
+}
+
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inquiry-nav-item {
+  padding: 7px 12px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 580;
+  color: #1a1a2e;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.inquiry-nav-item:hover {
+  background: rgba(26, 26, 46, 0.05);
 }
 
 .profile-block {
