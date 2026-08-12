@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import NotificationBell from '../components/NotificationBell.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { useHomeStore } from '../stores/home'
@@ -91,6 +92,12 @@ function goToCategory(value) {
   router.push({ name: 'feed' })
 }
 
+// "링크 모음" 바로가기 - 이미 FeedView 안에 있는 링크 갤러리 탭으로 바로 진입
+function goToLinkGallery() {
+  postsStore.setHasLink(true)
+  router.push({ name: 'feed', query: { tab: 'links' } })
+}
+
 // "오늘 새 글" 뱃지 클릭 - 카테고리 필터는 초기화하고 기간만 오늘로 설정한 채 피드로 이동
 function goToTodayFeed() {
   postsStore.category = null
@@ -167,6 +174,7 @@ onUnmounted(() => {
       <div v-else class="avatar" title="마이페이지로 이동" @click="router.push({ name: 'mypage' })">
         {{ authStore.user?.name?.charAt(0) }}
       </div>
+      <NotificationBell />
     </div>
 
     <p class="eyebrow">SKALA 판교캠퍼스 교육생을 위한 정보공유 아카이빙 서비스</p>
@@ -239,7 +247,10 @@ onUnmounted(() => {
     </section>
 
     <section class="section">
-      <div class="section-title">카테고리별 아카이브</div>
+      <div class="section-header">
+        <span class="section-title">카테고리별 아카이브</span>
+        <button class="link-gallery-chip" @click="goToLinkGallery">🔗 링크 모음</button>
+      </div>
       <div class="category-grid">
         <div
           v-for="cat in CATEGORIES"
@@ -417,6 +428,21 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 800;
   color: #1a1a2e;
+}
+
+.link-gallery-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(74, 63, 143, 0.2);
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.link-gallery-chip:hover {
+  background: #e3ddf7;
 }
 
 .leaderboard-card {

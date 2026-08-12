@@ -1,4 +1,4 @@
-// Security 설정 - /api/admin/**은 role=admin만, /api/posts/**·/api/bookmarks/**·/api/mypage/**·/api/files/**는 로그인 필요, 나머지(홈 요약/순위보드 등)는 전체 허용
+// Security 설정 - /api/admin/**은 role=admin만, /api/posts/**·/api/bookmarks/**·/api/mypage/**·/api/files/**·/api/announcements/**·/api/notifications/**는 로그인 필요, 나머지(홈 요약/순위보드 등)는 전체 허용
 package com.skalahub.config;
 
 import java.util.List;
@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/posts/**").authenticated()
                 .requestMatchers("/api/links/**").authenticated()
                 .requestMatchers("/api/files/**").authenticated()
+                .requestMatchers("/api/announcements/**").authenticated()
+                .requestMatchers("/api/notifications/**").authenticated()
                 .anyRequest().permitAll())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

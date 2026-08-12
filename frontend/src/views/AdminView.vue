@@ -21,10 +21,15 @@ import {
   updateBotReply,
   sendPendingNotification,
   backfillLinkPreviews,
+  fetchAdminAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
 } from '../api/admin'
 import { stripSlackMarkdown, renderSlackText } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
+import { ANNOUNCEMENT_LINK_PRESETS } from '../constants/announcementLinks'
 
 const PAGE_SIZE = 10
 const MANAGE_PAGE_SIZE = 4
@@ -489,12 +494,112 @@ async function saveAllPosts() {
   }
 }
 
+// 공지 관리 - 작성한 공지는 저장 즉시 모든 유저의 "전체 공지" 탭에 노출됨
+const announcements = ref([])
+const announcementsLoading = ref(false)
+const announcementsError = ref('')
+const newAnnouncement = reactive({ badgeType: '공지', title: '', content: '', linkPath: '' })
+const sendingAnnouncement = ref(false)
+const editingAnnouncementId = ref(null)
+
+// 예시 불러오기 - 클릭하면 폼에 채워지고, 등록 전에 자유롭게 수정 가능
+const ANNOUNCEMENT_PRESETS = [
+  {
+    label: '공지 예시',
+    badgeType: '공지',
+    title: '카테고리 분류 기능이 업데이트되었습니다',
+    content: '학습자료 하위 태그(영상/아티클/깃허브) 분류 정확도가 개선되었습니다.',
+  },
+  {
+    label: '버그 예시',
+    badgeType: '버그',
+    title: '이미지 로딩 오류가 수정되었습니다',
+    content: '일부 게시글에서 이미지가 안 뜨던 문제를 고쳤습니다.',
+  },
+  {
+    label: '업데이트 예시',
+    badgeType: '업데이트',
+    title: '링크 모음 탭이 새로 추가되었습니다',
+    content: '피드 상단에서 🔗 링크 모음 탭으로 바로 이동할 수 있습니다.',
+  },
+]
+
+function applyAnnouncementPreset(preset) {
+  newAnnouncement.badgeType = preset.badgeType
+  newAnnouncement.title = preset.title
+  newAnnouncement.content = preset.content
+}
+
+function applyAnnouncementLinkPreset(preset) {
+  newAnnouncement.linkPath = preset.path
+}
+
+function resetAnnouncementForm() {
+  editingAnnouncementId.value = null
+  newAnnouncement.badgeType = '공지'
+  newAnnouncement.title = ''
+  newAnnouncement.content = ''
+  newAnnouncement.linkPath = ''
+}
+
+function startEditAnnouncement(a) {
+  editingAnnouncementId.value = a.id
+  newAnnouncement.badgeType = a.badgeType
+  newAnnouncement.title = a.title
+  newAnnouncement.content = a.content ?? ''
+  newAnnouncement.linkPath = a.linkPath ?? ''
+}
+
+async function loadAnnouncements() {
+  announcementsLoading.value = true
+  announcementsError.value = ''
+  try {
+    const { data } = await fetchAdminAnnouncements()
+    announcements.value = data
+  } catch {
+    announcementsError.value = '공지 목록을 불러오지 못했습니다.'
+  } finally {
+    announcementsLoading.value = false
+  }
+}
+
+async function submitAnnouncement() {
+  if (!newAnnouncement.title.trim()) return
+  sendingAnnouncement.value = true
+  try {
+    if (editingAnnouncementId.value) {
+      await updateAnnouncement(editingAnnouncementId.value, { ...newAnnouncement })
+      toastStore.show('공지가 수정되었습니다')
+    } else {
+      await createAnnouncement({ ...newAnnouncement })
+      toastStore.show('공지가 등록되었습니다')
+    }
+    resetAnnouncementForm()
+    await loadAnnouncements()
+  } catch {
+    toastStore.show(editingAnnouncementId.value ? '공지 수정에 실패했습니다' : '공지 등록에 실패했습니다')
+  } finally {
+    sendingAnnouncement.value = false
+  }
+}
+
+async function removeAnnouncement(id) {
+  try {
+    await deleteAnnouncement(id)
+    if (editingAnnouncementId.value === id) resetAnnouncementForm()
+    await loadAnnouncements()
+  } catch {
+    toastStore.show('공지 삭제에 실패했습니다')
+  }
+}
+
 onMounted(() => {
   if (authStore.user?.role !== 'admin') return
   loadUncategorized()
   loadAllPosts()
   loadSyncFailures()
   loadBotReplies()
+  loadAnnouncements()
 })
 </script>
 
@@ -851,6 +956,101 @@ onMounted(() => {
           </button>
         </div>
       </section>
+
+      <section class="section">
+        <div class="section-title">📢 공지 관리</div>
+        <div class="card">
+          <p class="card-desc">여기서 작성한 공지는 저장 즉시 모든 유저의 "전체 공지" 탭에 노출됩니다.</p>
+
+          <div class="category-chips">
+            <span
+              v-for="preset in ANNOUNCEMENT_PRESETS"
+              :key="preset.label"
+              class="chip"
+              @click="applyAnnouncementPreset(preset)"
+              >{{ preset.label }}</span
+            >
+          </div>
+
+          <div class="control-row">
+            <select v-model="newAnnouncement.badgeType" class="category-select">
+              <option value="공지">공지</option>
+              <option value="버그">버그</option>
+              <option value="업데이트">업데이트</option>
+            </select>
+            <input v-model="newAnnouncement.title" class="tag-input announcement-title-input" placeholder="공지 제목" />
+          </div>
+          <textarea
+            v-model="newAnnouncement.content"
+            class="tag-input reply-edit-textarea"
+            rows="3"
+            placeholder="공지 내용 (선택)"
+          ></textarea>
+
+          <p class="card-desc small">이동 경로 (선택) - 공지를 클릭하면 이 경로로 이동합니다</p>
+          <div class="category-chips sub-chips">
+            <span
+              v-for="preset in ANNOUNCEMENT_LINK_PRESETS"
+              :key="preset.label"
+              class="chip"
+              @click="applyAnnouncementLinkPreset(preset)"
+              >{{ preset.label }}</span
+            >
+          </div>
+          <div class="control-row">
+            <input
+              v-model="newAnnouncement.linkPath"
+              class="tag-input announcement-title-input"
+              placeholder="예: /feed?tab=links"
+            />
+          </div>
+
+          <div class="control-row">
+            <button
+              class="primary-btn"
+              :disabled="sendingAnnouncement || !newAnnouncement.title.trim()"
+              @click="submitAnnouncement"
+            >
+              {{ sendingAnnouncement ? '저장 중...' : editingAnnouncementId ? '수정 저장' : '보내기' }}
+            </button>
+            <button v-if="editingAnnouncementId" class="secondary-btn" @click="resetAnnouncementForm">취소</button>
+          </div>
+
+          <div v-if="announcementsLoading" class="status-message">불러오는 중...</div>
+          <div v-else-if="announcementsError" class="status-message error">{{ announcementsError }}</div>
+          <div v-else-if="announcements.length === 0" class="status-message">등록된 공지가 없습니다.</div>
+          <div v-else class="uncategorized-list">
+            <div v-for="a in announcements" :key="a.id" class="uncategorized-row">
+              <div class="manage-header">
+                <span class="row-author"
+                  >[{{ a.badgeType }}] {{ a.title }} <span v-if="a.updatedAt" class="edited-tag">(수정됨)</span></span
+                >
+                <span class="row-time">{{ formatRelativeTime(a.createdAt) }}</span>
+              </div>
+              <div v-if="a.content" class="row-preview">{{ a.content }}</div>
+              <div v-if="a.linkPath" class="row-preview">🔗 {{ a.linkPath }}</div>
+              <div class="control-row">
+                <button class="secondary-btn" @click="startEditAnnouncement(a)">수정</button>
+                <button class="secondary-btn" @click="removeAnnouncement(a.id)">삭제</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">💬 문의 · 만족도 응답 확인</div>
+        <div class="card">
+          <p class="card-desc">문의하기·만족도 조사는 기존에 운영 중인 Tally 폼을 그대로 사용합니다. 응답 확인은 Tally 대시보드에서 하세요.</p>
+          <a
+            href="https://tally.so/forms/gDX4G4/submissions"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="primary-btn link-btn"
+            >Tally 응답함 바로가기 ↗</a
+          >
+        </div>
+      </section>
     </template>
   </AppLayout>
 </template>
@@ -1002,6 +1202,12 @@ onMounted(() => {
   color: #1a1a2e;
   min-width: 0;
   overflow-wrap: break-word;
+}
+
+.edited-tag {
+  font-weight: 500;
+  color: #636e72;
+  font-size: 11.5px;
 }
 
 .row-preview {
@@ -1190,6 +1396,12 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.announcement-title-input {
+  flex: 1;
+  min-width: 200px;
+  width: auto;
 }
 
 .category-select {

@@ -20,12 +20,17 @@ public class BookmarkService {
     private final BookmarkRepository bookmarkRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
+    private final NotificationService notificationService;
 
     public BookmarkService(
-            BookmarkRepository bookmarkRepository, UserRepository userRepository, PostRepository postRepository) {
+            BookmarkRepository bookmarkRepository,
+            UserRepository userRepository,
+            PostRepository postRepository,
+            NotificationService notificationService) {
         this.bookmarkRepository = bookmarkRepository;
         this.userRepository = userRepository;
         this.postRepository = postRepository;
+        this.notificationService = notificationService;
     }
 
     public List<Long> getBookmarkedPostIds(String slackId) {
@@ -54,6 +59,10 @@ public class BookmarkService {
 
         post.setBookmarkCount(post.getBookmarkCount() == null ? 1 : post.getBookmarkCount() + 1);
         postRepository.save(post);
+
+        if (post.getUserSlackId() != null && !post.getUserSlackId().equals(slackId)) {
+            notificationService.notifyBookmarkReceived(post.getUserSlackId(), postId);
+        }
     }
 
     @Transactional
