@@ -258,12 +258,14 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           <div v-if="hasSubcategoryFilter" class="edu-category-filter">
             <span class="label">{{ subcategoryFilterLabel }}</span>
             <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
-              전체
-              ({{
-                postsStore.hasLink
-                  ? postsStore.linkCategoryCount(postsStore.category)
-                  : postsStore.categoryCount(postsStore.category)
-              }})
+              <span class="pill-label">전체</span
+              ><span class="pill-count"
+                >({{
+                  postsStore.hasLink
+                    ? postsStore.linkCategoryCount(postsStore.category)
+                    : postsStore.categoryCount(postsStore.category)
+                }})</span
+              >
             </div>
             <div
               v-for="sub in activeCategoryTags"
@@ -272,8 +274,10 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
               :class="{ active: postsStore.tag === sub.value }"
               @click="selectSubTag(sub.value)"
             >
-              {{ sub.label }}
-              ({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})
+              <span class="pill-label">{{ sub.label }}</span
+              ><span class="pill-count"
+                >({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})</span
+              >
             </div>
           </div>
 
@@ -549,6 +553,9 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 }
 
 .edu-category-filter .pill {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
   padding: 6px 12px;
   border-radius: 9px;
   font-size: 13px;
@@ -571,6 +578,25 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   }
 }
 
+/* 모바일은 태그 라벨이 "학습 및 스터디매칭" 같이 길어서 위 1024px 축소만으로는 2줄에 안 들어감 -
+   CategoryFilter와 같은 방식으로 라벨/카운트 폰트를 분리해서 카운트만 한 번 더 줄임(공백은 이미
+   템플릿에서 태그를 붙여써서 없앤 상태) */
+@media (max-width: 768px) {
+  .edu-category-filter {
+    gap: 4px 6px;
+    padding: 7px 9px;
+  }
+
+  .edu-category-filter .pill {
+    padding: 6px 7px;
+  }
+
+  .edu-category-filter .pill-count {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+}
+
 .edu-category-filter .pill.active {
   background: #f1eefc;
   color: #4a3f8f;
@@ -581,6 +607,44 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+/* 모바일은 층/기간이 나란히 한 줄에 안 들어가서 각자 박스로 세로로 쌓이면 분리된 느낌이 강했음 -
+   이 줄(.filter-row) 자체를 하나의 박스로 만들고, 안에 있는 CampusFilter/DateFilter 컴포넌트의
+   자체 박스 스타일(배경/테두리/radius)은 지워서 내용물만 남긴 뒤 세로로 쌓는다. 층 쪽에 아래
+   테두리를 하나 그어서 구분선처럼 보이게 함(층이 없으면 그 border-bottom도 같이 없어져서 문제없음) */
+@media (max-width: 768px) {
+  /* 위 카테고리 박스와 폭을 맞추기 위해 fit-content 대신 100%로 통일 */
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: #ffffff;
+    border: 1px solid rgba(26, 26, 46, 0.08);
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .filter-row :deep(.campus-filter),
+  .filter-row :deep(.date-filter) {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 8px 10px;
+    width: auto;
+  }
+
+  .filter-row :deep(.campus-filter) {
+    border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+  }
+
+  /* "층"(1글자)과 "기간"(2글자) 라벨 폭이 달라서 뒤에 오는 "전체" 필터 버튼 시작 위치가
+     줄마다 어긋나 보였음 - 두 라벨에 같은 최소 폭을 줘서 버튼 시작 위치를 맞춘다 */
+  .filter-row :deep(.campus-filter .label),
+  .filter-row :deep(.date-filter .label) {
+    display: inline-block;
+    min-width: 54px;
+  }
 }
 
 .sync-sort-row {
