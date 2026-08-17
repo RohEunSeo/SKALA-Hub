@@ -614,7 +614,10 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
    자체 박스 스타일(배경/테두리/radius)은 지워서 내용물만 남긴 뒤 세로로 쌓는다. 층 쪽에 아래
    테두리를 하나 그어서 구분선처럼 보이게 함(층이 없으면 그 border-bottom도 같이 없어져서 문제없음) */
 @media (max-width: 768px) {
-  /* 위 카테고리 박스와 폭을 맞추기 위해 fit-content 대신 100%로 통일 */
+  /* 위/아래 여백은 박스 바깥쪽(.filter-row)에서 하위 분류 박스와 같은 7px 9px로 한 번만 주고,
+     안쪽 두 구간(층/기간)은 자체 여백 없이 구분선 주변에만 딱 필요한 만큼만 최소로 띄운다 -
+     안팎에 여백이 두 겹으로 쌓이면 하위 분류 박스보다 세로로 훨씬 길어짐. 폭은 카테고리 박스와
+     맞추기 위해 fit-content 대신 100%로 통일 */
   .filter-row {
     flex-direction: column;
     align-items: stretch;
@@ -622,6 +625,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
     background: #ffffff;
     border: 1px solid rgba(26, 26, 46, 0.08);
     border-radius: 12px;
+    padding: 7px 9px;
     width: 100%;
   }
 
@@ -630,12 +634,25 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
     background: transparent;
     border: none;
     border-radius: 0;
-    padding: 8px 10px;
+    padding: 0;
     width: auto;
   }
 
   .filter-row :deep(.campus-filter) {
+    padding-bottom: 3px;
     border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+  }
+
+  .filter-row :deep(.date-filter) {
+    padding-top: 3px;
+  }
+
+  /* 바로 위 하위 분류(edu-category-filter) 박스와 높이/여백을 맞추기 위해 pill 크기도 같은
+     기준(padding 6px 7px, font 12px)으로 축소 */
+  .filter-row :deep(.campus-filter .pill),
+  .filter-row :deep(.date-filter .pill) {
+    padding: 6px 7px;
+    font-size: 12px;
   }
 
   /* "층"(1글자)과 "기간"(2글자) 라벨 폭이 달라서 뒤에 오는 "전체" 필터 버튼 시작 위치가
