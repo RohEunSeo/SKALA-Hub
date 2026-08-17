@@ -19,8 +19,8 @@ function select(value) {
 <template>
   <nav class="category-filter">
     <div class="chip" :class="{ active: !postsStore.category }" @click="select(null)">
-      전체
-      <span class="count">({{ postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount }})</span>
+      <span class="label">전체</span
+      ><span class="count">({{ postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount }})</span>
     </div>
     <div
       v-for="cat in CATEGORIES"
@@ -29,10 +29,10 @@ function select(value) {
       :class="{ active: postsStore.category === cat.value }"
       @click="select(cat.value)"
     >
-      {{ cat.shortLabel }}
-      <span class="count">
-        ({{ postsStore.hasLink ? postsStore.linkCategoryCount(cat.value) : postsStore.categoryCount(cat.value) }})
-      </span>
+      <span class="label">{{ cat.shortLabel }}</span
+      ><span class="count"
+        >({{ postsStore.hasLink ? postsStore.linkCategoryCount(cat.value) : postsStore.categoryCount(cat.value) }})</span
+      >
     </div>
   </nav>
 </template>
@@ -64,19 +64,26 @@ function select(value) {
 
 /* 모바일은 칩 7개가 개별 테두리로 나열되면 3줄로 줄바꿈되고 마지막 줄에 하나만 남아 어색해 보임 -
    다른 필터들(edu-category-filter/campus-filter/date-filter)과 같은 "박스" 스타일로 감싸고,
-   칩 패딩을 줄이고 카운트 숫자만 작게 축소해서 2줄에 가깝게 정리한다 */
+   칩 패딩·간격을 줄이고 폰트를 축소해서 카운트를 유지한 채로 2줄에 들어가게 한다.
+   라벨과 카운트 사이 공백은 템플릿에서 태그를 붙여써서 없앴음(공백 하나도 여러 칩이 쌓이면 무시 못 할 폭) */
 @media (max-width: 768px) {
+  /* justify-content: space-between을 써봤더니 마지막 줄(칩 개수가 적게 남는 줄)만 억지로 양 끝까지
+     벌어져서 어색해 보였음(줄마다 칩 개수가 달라서 균등 분산이 위아래 줄이 다르게 보임) - 다시
+     자연스러운 왼쪽 정렬(flex-start, 기본값)로 되돌리고, 대신 폰트를 키워서 빈 여백 자체를 줄임 */
   .category-filter {
-    gap: 5px;
+    gap: 6px 8px;
     background: #ffffff;
     border: 1px solid rgba(26, 26, 46, 0.08);
     border-radius: 12px;
-    padding: 6px;
+    padding: 8px 10px;
     width: fit-content;
   }
 
   .chip {
-    padding: 6px 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+    padding: 7px 9px;
     border-radius: 9px;
     border-color: transparent;
     background: transparent;
@@ -88,12 +95,14 @@ function select(value) {
     border-color: transparent;
   }
 
-  /* 라벨은 그대로 두고 카운트만 축소 - 정보는 남기되 차지하는 폭을 줄여서 2줄에 들어갈 여유를 만듦.
-     색은 지정하지 않고 상속시켜서 active/비active 글씨색을 그대로 따라가게 함 */
+  .chip .label {
+    font-size: 13px;
+  }
+
+  /* 카운트는 라벨보다 한 단계 더 작게 - 정보는 유지하되 차지하는 폭을 최대한 줄임 */
   .chip .count {
-    font-size: 10px;
-    opacity: 0.75;
-    margin-left: 1px;
+    font-size: 11px;
+    opacity: 0.8;
   }
 }
 </style>

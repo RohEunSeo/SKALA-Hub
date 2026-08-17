@@ -254,9 +254,12 @@ async function restoreLink() {
   transform: translateY(-2px);
 }
 
+/* 고정 px 높이 대신 비율로 지정 - 모바일은 2열이라 카드 폭이 데스크톱 3열보다 훨씬 좁은데, 높이가
+   고정값이면 폭만 좁아져서 정사각형에 가까워짐(웹의 가로로 긴 직사각형 느낌과 달라짐). aspect-ratio를
+   쓰면 카드 폭이 얼마든 항상 같은 비율(가로로 긴 직사각형)을 유지함 */
 .link-card-thumb {
   position: relative;
-  height: 150px;
+  aspect-ratio: 2 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,12 +385,16 @@ async function restoreLink() {
   overflow: hidden;
 }
 
+/* 카드가 좁아지면(모바일 2열 등) 통계+버튼이 한 줄에 다 안 들어갈 수 있음 - flex-wrap이 없으면
+   "게시글 N개 보러가기" 텍스트가 카드 밖으로 밀려서 .link-card의 overflow:hidden에 잘려버림.
+   wrap을 주면 안 잘리고 아래 줄로 자연스럽게 내려감 */
 .link-card-footer {
   margin-top: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   flex-shrink: 0;
 }
 
