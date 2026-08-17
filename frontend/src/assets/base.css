@@ -43,8 +43,11 @@
 
 body {
   min-height: 100vh;
-  /* 모바일에서 특정 요소가 넘쳐도 페이지 전체는 좌우로 스크롤되지 않고 위아래로만 스크롤되게 고정 */
-  overflow-x: hidden;
+  /* 모바일에서 특정 요소가 넘쳐도 페이지 전체는 좌우로 스크롤되지 않고 위아래로만 스크롤되게 고정 -
+     overflow-x: hidden을 쓰면 overflow-y가 암묵적으로 auto로 바뀌면서 body가 별도 스크롤 컨테이너가 되어
+     모바일에서 하위 position: sticky 요소(검색/필터 영역)가 뷰포트 기준으로 붙지 못하고 콘텐츠를 가리는
+     문제가 있었음. clip은 같은 규칙에서 예외라 sticky를 깨지 않음 */
+  overflow-x: clip;
   color: var(--color-text);
   background: var(--color-background);
   transition:

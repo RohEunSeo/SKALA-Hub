@@ -214,6 +214,28 @@ function setupScrollObserver() {
 
 watch([activeTab, scrollSentinel], () => nextTick(setupScrollObserver))
 onUnmounted(teardownScrollObserver)
+
+// 스크롤 방향에 따라 필터 헤더를 숨겼다 보여줬다 하는 방식은 position:sticky와 함께 쓰면 일부 모바일
+// 브라우저에서 화면 중간 어딘가에 어정쩡하게 고정돼버리는 문제가 있어서 포기 - 대신 헤더는 항상 그 자리에
+// sticky로 고정해두고, 스크롤을 많이 내렸을 때만 "맨 위로" 버튼을 띄워서 누르면 헤더 위치까지 쭉 올려줌
+const showScrollTop = ref(false)
+let scrollTopTicking = false
+
+function handleScrollForTopButton() {
+  if (scrollTopTicking) return
+  scrollTopTicking = true
+  requestAnimationFrame(() => {
+    showScrollTop.value = window.scrollY > 400
+    scrollTopTicking = false
+  })
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+onMounted(() => window.addEventListener('scroll', handleScrollForTopButton, { passive: true }))
+onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton))
 </script>
 
 <template>
@@ -349,13 +371,18 @@ onUnmounted(teardownScrollObserver)
       <div v-if="canShowMore && !postsStore.loading && activeTab !== 'links'" class="load-more" @click="loadMore">
         더보기
       </div>
+
+      <button v-if="showScrollTop" class="scroll-top-btn" aria-label="맨 위로" @click="scrollToTop">
+        <span class="scroll-top-icon">↑</span>
+        <span class="scroll-top-label">맨 위로</span>
+      </button>
     </template>
   </AppLayout>
 </template>
 
 <style scoped>
-/* 링크 갤러리처럼 긴 목록을 스크롤할 때도 탭/카테고리/층·기간 필터는 화면 상단에 계속 붙어있도록 고정 -
-   그래야 스크롤을 내린 상태에서도 필터를 다시 위로 올라가지 않고 바로 누를 수 있다 */
+/* 데스크톱은 화면이 넉넉해서 탭/카테고리/필터를 화면 상단에 계속 붙여둠(position:sticky) - 스크롤을
+   내린 상태에서도 필터를 바로 누를 수 있어 편리하고, 화면이 넓어 콘텐츠를 가리는 문제도 없다 */
 .feed-sticky-filters {
   position: sticky;
   top: 0;
@@ -364,11 +391,53 @@ onUnmounted(teardownScrollObserver)
   padding-top: 4px;
 }
 
-/* 모바일 햄버거 메뉴 버튼(고정, 왼쪽 위 14px)과 겹치지 않도록 그 아래로 내려서 고정 */
+/* 모바일은 이 블록이 화면의 상당 부분을 차지해서, sticky로 고정해두면 스크롤할 때마다 게시글/링크를
+   가려버림. 그래서 모바일에서는 고정을 아예 풀고 페이지 맨 위에서만 보이다가 스크롤하면 다른 콘텐츠처럼
+   함께 흘러가 버리게 두고, 다시 필터를 만지고 싶으면 우측 하단 "맨 위로" 버튼으로 여기까지 올라오게 함 */
 @media (max-width: 768px) {
   .feed-sticky-filters {
-    top: 60px;
+    position: static;
   }
+}
+
+/* 스크롤을 많이 내렸을 때만 뜨는 "맨 위로" 버튼 - 누르면 헤더가 있는 맨 위까지 부드럽게 스크롤.
+   반투명 + blur로 뒤 게시글이 은은하게 비치게 해서 진한 단색보다 콘텐츠를 덜 가리게 함 */
+.scroll-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(74, 63, 143, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(26, 26, 46, 0.2);
+}
+
+.scroll-top-btn:hover {
+  background: rgba(108, 92, 231, 0.8);
+}
+
+.scroll-top-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.scroll-top-label {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .feed-tabs {
@@ -442,9 +511,10 @@ onUnmounted(teardownScrollObserver)
   }
 }
 
+/* 좁은 폰 화면(360~430px)에서도 스크롤을 줄이기 위해 2열을 유지하고 여백만 살짝 좁힘 */
 @media (max-width: 480px) {
   .link-gallery-grid {
-    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 
