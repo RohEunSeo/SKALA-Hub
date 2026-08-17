@@ -69,13 +69,14 @@ function select(value) {
    폰트를 13px/11px까지 키워봤더니 실기기에서 4+3이 3+3+1로 무너지는 걸 확인해서, 2줄이 확인된
    12px/10px로 되돌리고 간격만 더 좁혀서 여유를 추가로 확보한다 */
 @media (max-width: 768px) {
+  /* 아래 층/기간 박스와 폭을 맞추기 위해 fit-content 대신 100%(검색창과 같은 폭)로 통일 */
   .category-filter {
     gap: 4px 6px;
     background: #ffffff;
     border: 1px solid rgba(26, 26, 46, 0.08);
     border-radius: 12px;
     padding: 7px 9px;
-    width: fit-content;
+    width: 100%;
   }
 
   .chip {

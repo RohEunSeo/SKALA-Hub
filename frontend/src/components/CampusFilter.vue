@@ -52,7 +52,7 @@ function select(value) {
 }
 
 .pill {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
@@ -64,5 +64,18 @@ function select(value) {
 .pill.active {
   background: #f1eefc;
   color: #4a3f8f;
+}
+
+/* 옆에 나란히 붙는 기간 필터(DateFilter)와 패딩·폰트 축소 기준을 맞춰서 박스 높이가 항상 같게 함 */
+@media (max-width: 1024px) {
+  .label {
+    font-size: 12px;
+    padding: 0 2px 0 4px;
+  }
+
+  .pill {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
 }
 </style>
