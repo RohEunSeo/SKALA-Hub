@@ -616,6 +616,16 @@ onUnmounted(() => {
   }
 }
 
+/* 아바타/알림벨(.top-bar)이 데스크톱에선 컨테이너가 넓어 문제없이 오른쪽 위에 떠 있지만, 모바일처럼
+   폭이 좁아지면 절대 위치라 그 아래 안내 문구(eyebrow)/인사말이 그대로 깔려서 가려짐 - 모바일에서는
+   절대 위치를 풀어 일반 흐름의 한 줄(맨 위, 오른쪽 정렬)로 빼서 겹칠 여지 자체를 없앤다 */
+@media (max-width: 768px) {
+  .top-bar {
+    position: static;
+    margin-bottom: 12px;
+  }
+}
+
 /* 맥 Finder 폴더 아이콘 느낌 - 둥근 본체(진한 톤) + 왼쪽 위로 삐져나온 탭(연한 톤), 테두리선 없이 그림자로만 입체감 */
 .category-card {
   position: relative;
