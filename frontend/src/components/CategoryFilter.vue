@@ -65,17 +65,16 @@ function select(value) {
 /* 모바일은 칩 7개가 개별 테두리로 나열되면 3줄로 줄바꿈되고 마지막 줄에 하나만 남아 어색해 보임 -
    다른 필터들(edu-category-filter/campus-filter/date-filter)과 같은 "박스" 스타일로 감싸고,
    칩 패딩·간격을 줄이고 폰트를 축소해서 카운트를 유지한 채로 2줄에 들어가게 한다.
-   라벨과 카운트 사이 공백은 템플릿에서 태그를 붙여써서 없앴음(공백 하나도 여러 칩이 쌓이면 무시 못 할 폭) */
+   라벨과 카운트 사이 공백은 템플릿에서 태그를 붙여써서 없앴음(공백 하나도 여러 칩이 쌓이면 무시 못 할 폭).
+   폰트를 13px/11px까지 키워봤더니 실기기에서 4+3이 3+3+1로 무너지는 걸 확인해서, 2줄이 확인된
+   12px/10px로 되돌리고 간격만 더 좁혀서 여유를 추가로 확보한다 */
 @media (max-width: 768px) {
-  /* justify-content: space-between을 써봤더니 마지막 줄(칩 개수가 적게 남는 줄)만 억지로 양 끝까지
-     벌어져서 어색해 보였음(줄마다 칩 개수가 달라서 균등 분산이 위아래 줄이 다르게 보임) - 다시
-     자연스러운 왼쪽 정렬(flex-start, 기본값)로 되돌리고, 대신 폰트를 키워서 빈 여백 자체를 줄임 */
   .category-filter {
-    gap: 6px 8px;
+    gap: 4px 6px;
     background: #ffffff;
     border: 1px solid rgba(26, 26, 46, 0.08);
     border-radius: 12px;
-    padding: 8px 10px;
+    padding: 7px 9px;
     width: fit-content;
   }
 
@@ -83,7 +82,7 @@ function select(value) {
     display: flex;
     align-items: baseline;
     gap: 1px;
-    padding: 7px 9px;
+    padding: 6px 7px;
     border-radius: 9px;
     border-color: transparent;
     background: transparent;
@@ -96,12 +95,12 @@ function select(value) {
   }
 
   .chip .label {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   /* 카운트는 라벨보다 한 단계 더 작게 - 정보는 유지하되 차지하는 폭을 최대한 줄임 */
   .chip .count {
-    font-size: 11px;
+    font-size: 10px;
     opacity: 0.8;
   }
 }
