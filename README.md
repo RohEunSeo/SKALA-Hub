@@ -6,7 +6,7 @@
 
 **340명의 정보가 흘러가 버리는 슬랙 채널을, 검색되고 쌓이는 아카이브로.**
 
-SKALA 부트캠프 교육생들이 슬랙에 매일 쏟아내는 꿀팁·자료·후기를 자동으로 수집·분류해서, 다시 찾아볼 수 있는 피드로 정리하는 서비스입니다.
+슬랙 채널에 올리는 인사이트·자료·웹사이트를 자동으로 수집·분류해서,다시 찾아볼 수 있는 피드로 정리하는 서비스입니다.
 
 [![Vue.js](https://img.shields.io/badge/Vue.js_3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-B73BFE?style=flat-square&logo=vite&logoColor=FFD62E)](https://vitejs.dev/)
@@ -16,9 +16,11 @@ SKALA 부트캠프 교육생들이 슬랙에 매일 쏟아내는 꿀팁·자료�
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/)
 [![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://render.com/)
 
+<img src="docs/screenshots/home.png" width="100%">
+
 </div>
 
----
+<br>
 
 ## 💡 배경
 
