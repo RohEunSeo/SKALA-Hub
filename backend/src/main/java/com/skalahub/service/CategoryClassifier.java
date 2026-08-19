@@ -30,14 +30,15 @@ public class CategoryClassifier {
             - 교수님: 교수님 또는 전임교수가 작성한 글
             - 기타: 위에 해당 없는 것
             
-            태그 (학습자료일 때는 해당되는 것 모두 선택 / 기타일 때는 아래 4가지 중 하나만 선택, 반드시 하나는 선택 / 그 외 카테고리는 태그 없음, tags: []):
+            태그 (학습자료일 때는 해당되는 것 모두 선택 / 기타일 때는 아래 5가지 중 하나만 선택, 반드시 하나는 선택 / 그 외 카테고리는 태그 없음, tags: []):
             - 영상: youtube.com 링크 포함된 것
             - 블로그·글: velog, tistory, medium, 블로그, 아티클 링크
             - 깃허브: github.com 링크 포함된 것
             - 인사이트·경험 공유: 해커톤 회고, 스터디/멘토링 모집, 유용한 툴·강의·아티클·프롬프트 추천, 공부 노하우, 트렌드 정보 공유 (키워드: 인사이트, 팁, 추천, 공유, 회고, 스터디, 모임, 후기)
             - 오류 해결: 개발 환경 설정 에러, 프로그램/툴(Zoom, 구글 등) 사용 중 겪는 문제와 해결 방법, 트러블슈팅 공유 (키워드: 오류, 에러, 설정, 해결, zshrc, 에코, passkey, 버그)
             - 분실물: 캠퍼스(화장실, 사물함, 데스크 등) 내 물건 분실 및 습득 안내 (키워드: 분실, 습득, 텀블러, 화장품, 잃어버린, 찾으세요, 데스크, 운영실)
-            - 그 외: 기타 카테고리인데 위 3가지(인사이트·경험 공유/오류 해결/분실물) 중 어디에도 해당하지 않는 것
+            - 맛집: 식당·카페 추천 및 공유, 네이버 지도/naver.me 등 맛집 링크 공유 (키워드: 맛집, 식당, 카페, 점심, 저녁, 회식, 추천 맛집)
+            - 그 외: 기타 카테고리인데 위 4가지(인사이트·경험 공유/오류 해결/분실물/맛집) 중 어디에도 해당하지 않는 것
 
             JSON만 반환:
             {"category": "개발 툴·환경", "tags": []}
@@ -57,7 +58,7 @@ public class CategoryClassifier {
                 "type": "array",
                 "items": {
                     "type": "string",
-                    "enum": ["영상","블로그·글","깃허브","인사이트·경험 공유","오류 해결","분실물","그 외"]
+                    "enum": ["영상","블로그·글","깃허브","인사이트·경험 공유","오류 해결","분실물","맛집","그 외"]
                 }
                 }
             },
@@ -68,7 +69,7 @@ public class CategoryClassifier {
     // 카테고리별로 허용되는 태그만 남기고 나머지는 버림 - Claude가 프롬프트를 무시하고
     // 학습자료/기타가 아닌 카테고리에 기타 하위태그(인사이트·경험 공유 등)를 붙이는 경우 방지
     private static final Set<String> STUDY_TAGS = Set.of("영상", "블로그·글", "깃허브");
-    private static final Set<String> ETC_TAGS = Set.of("인사이트·경험 공유", "오류 해결", "분실물", "그 외");
+    private static final Set<String> ETC_TAGS = Set.of("인사이트·경험 공유", "오류 해결", "분실물", "맛집", "그 외");
 
     private final RestClient restClient = RestClient.create();
     private final JsonMapper jsonMapper = JsonMapper.builder().build();

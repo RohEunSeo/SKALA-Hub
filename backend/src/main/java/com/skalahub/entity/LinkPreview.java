@@ -56,4 +56,9 @@ public class LinkPreview {
     // DB 컬럼이 NOT NULL이라 새로 생성되는 행에서도 항상 값이 채워지도록 기본값을 둠
     // (안 두면 신규 INSERT 시 null이 들어가 제약조건 위반으로 저장이 실패함)
     private Boolean hidden = false;
+
+    // 썸네일(이미지 없을 때 자리를 채우는) 이모지 수동 지정 - 비어 있으면 서비스명 기반 자동 추정을 쓰고,
+    // 값이 있으면 이게 항상 우선함
+    @Column(name = "admin_emoji")
+    private String adminEmoji;
 }

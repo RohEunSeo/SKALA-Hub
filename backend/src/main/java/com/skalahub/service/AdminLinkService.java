@@ -55,6 +55,9 @@ public class AdminLinkService {
         if (request.typeTag() != null) {
             preview.setAdminTypeTag(request.typeTag().isBlank() ? null : request.typeTag().trim());
         }
+        if (request.emoji() != null) {
+            preview.setAdminEmoji(request.emoji().isBlank() ? null : request.emoji().trim());
+        }
         if (request.hidden() != null) {
             preview.setHidden(request.hidden());
         }
