@@ -52,17 +52,20 @@ public class LinkPreviewFetchService {
             // 기본값(ISO-8859-1)으로 잘못 디코딩되어 한글 제목이 깨지는 문제가 있었음
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).timeout(TIMEOUT_MS).get();
 
+            boolean isNaverMap = doc.location() != null && doc.location().contains("map.naver.com");
+
             String title = metaContent(doc, "og:title");
             if (title == null) {
                 title = doc.title();
             }
-            if ((title == null || title.isBlank())
-                    && doc.location() != null
-                    && doc.location().contains("map.naver.com")) {
+            if ((title == null || title.isBlank()) && isNaverMap) {
                 title = fetchNaverPlaceName(doc.location());
             }
             preview.setTitle(blankToNull(title));
-            preview.setImageUrl(toHttps(blankToNull(metaContent(doc, "og:image"))));
+            // 네이버 지도 페이지는 실제 장소 사진이 아니라 "네이버 지도" 고정 기본 로고 이미지를
+            // og:image로 내려줘서, 그걸 그대로 쓰면 카드 썸네일이 전부 같은 지도 아이콘으로 보임 -
+            // 비워둬서 프론트가 이모지(admin_emoji 또는 기본값)로 대체 표시하게 함
+            preview.setImageUrl(isNaverMap ? null : toHttps(blankToNull(metaContent(doc, "og:image"))));
             preview.setServiceName(blankToNull(metaContent(doc, "og:site_name")));
             preview.setFetchFailed(false);
         } catch (Exception e) {
