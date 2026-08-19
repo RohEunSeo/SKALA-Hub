@@ -38,6 +38,13 @@ const authStore = useAuthStore()
 // 링크 모음 카드의 "게시글 보러가기"로 상세 페이지에 갔다가 뒤로가기로 돌아올 때 ?tab=links가 붙어 오면 링크 탭으로 복원
 const activeTab = ref(route.query.tab === 'links' ? 'links' : 'posts')
 
+// 공지 등에서 카테고리/태그까지 지정한 딥링크로 들어올 수 있게 함
+// 예: /feed?tab=links&category=기타&tag=맛집 → 링크 모음 탭의 기타>맛집 필터가 선택된 채로 진입
+if (route.query.category) {
+  postsStore.category = route.query.category
+  postsStore.tag = route.query.tag || null
+}
+
 // 사이드바 카테고리 클릭처럼 이 화면을 벗어나지 않고 store.hasLink가 바뀌는 경우, 탭 UI도 함께 전환
 watch(
   () => postsStore.hasLink,
