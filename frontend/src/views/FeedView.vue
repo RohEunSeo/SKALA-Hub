@@ -25,6 +25,9 @@ const CAMPUS_CATEGORIES = ['개발 툴·환경', '학습자료']
 const DATE_CATEGORIES = ['개발 툴·환경', '학습자료']
 // "🗂️ 분류" 하위 태그 필터 버튼을 보여줄 카테고리 - 학습자료는 사이드바 필터만 쓰고 있어 제외
 const SUBCATEGORY_FILTER_CATEGORIES = ['교육생 서비스', '기타']
+// 링크 모음 탭에서만 숨길 하위 태그 - 분실물은 링크가 달릴 일이 거의 없어 필터로서 의미가 없음(게시글
+// 탭/사이드바/관리자 화면의 분류 체계는 그대로 유지, 이 화면의 링크 탭 필터 목록에서만 제외)
+const LINK_TAB_HIDDEN_TAGS = { 기타: ['분실물'] }
 
 const route = useRoute()
 const postsStore = usePostsStore()
@@ -60,9 +63,12 @@ function selectTab(tab) {
 // 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
 const showHidden = computed(() => activeTab.value === 'links' && postsStore.showHiddenLinks)
 
-const activeCategoryTags = computed(
-  () => CATEGORIES.find((cat) => cat.value === postsStore.category)?.tags ?? [],
-)
+const activeCategoryTags = computed(() => {
+  const tags = CATEGORIES.find((cat) => cat.value === postsStore.category)?.tags ?? []
+  if (!postsStore.hasLink) return tags
+  const hidden = LINK_TAB_HIDDEN_TAGS[postsStore.category]
+  return hidden ? tags.filter((t) => !hidden.includes(t.value)) : tags
+})
 // 학습자료는 게시글 탭에선 사이드바 필터만 쓰지만(기존 동작 유지), 링크 탭에서는 층 필터 대신
 // 유형(영상/블로그·글/깃허브) 필터로 이 자리에 노출한다
 const hasSubcategoryFilter = computed(

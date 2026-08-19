@@ -31,9 +31,12 @@ public class LinkService {
     // 작성자 이름에서 "N반_이름"만 남기고 앞의 기수/캠퍼스(예: "4기_판교_")는 잘라냄 - 전원 공통이라 반복 표시할 필요가 없음
     private static final Pattern CLASS_AND_NAME = Pattern.compile("(\\d+반_.+)$");
 
-    // 학습자료 하위 유형 배지 - frontend/src/constants/categories.js의 학습자료.tags 값과 동일해야 함
+    // 카테고리별 하위 유형 배지 - frontend/src/constants/categories.js의 각 카테고리 tags 값과 동일해야 함.
+    // 이 맵에 있는 카테고리만 링크 모음 카드에 유형 배지 + 관리자 유형 수동 지정을 지원함
     private static final String STUDY_MATERIAL_CATEGORY = "학습자료";
-    private static final Set<String> STUDY_MATERIAL_TYPE_TAGS = Set.of("영상", "블로그·글", "깃허브");
+    private static final Map<String, Set<String>> CATEGORY_TYPE_TAGS = Map.of(
+            "학습자료", Set.of("영상", "블로그·글", "깃허브"),
+            "기타", Set.of("인사이트·경험 공유", "오류 해결", "분실물", "맛집", "그 외"));
 
     private final PostService postService;
     private final LinkPreviewRepository linkPreviewRepository;
@@ -53,10 +56,11 @@ public class LinkService {
             String sort,
             int page,
             int size) {
-        // 학습자료 + 유형 필터는 게시글 원본 태그가 아니라 resolveTypeTag() 확정값 기준으로 걸러야
-        // 관리자가 링크 단위로 고친 유형이 필터에도 반영됨 - 그래서 이 경우엔 SQL 단계에서 tag로
-        // 거르지 않고(null로 넘김) 그룹을 다 만든 뒤 아래에서 typeTag로 다시 거른다
-        boolean filterByResolvedType = STUDY_MATERIAL_CATEGORY.equals(category) && tag != null && !tag.isBlank();
+        // 유형 배지를 지원하는 카테고리(학습자료/기타)는 게시글 원본 태그가 아니라 resolveTypeTag()
+        // 확정값 기준으로 걸러야 관리자가 링크 단위로 고친 유형이 필터에도 반영됨 - 그래서 이 경우엔
+        // SQL 단계에서 tag로 거르지 않고(null로 넘김) 그룹을 다 만든 뒤 아래에서 typeTag로 다시 거른다
+        boolean filterByResolvedType =
+                category != null && CATEGORY_TYPE_TAGS.containsKey(category) && tag != null && !tag.isBlank();
         List<Post> posts = postService.findLinkedPosts(
                 category, filterByResolvedType ? null : tag, keyword, author, date, campus, sort);
         Map<String, List<PostLinkEntry>> grouped = groupByUrl(postService.toResponses(posts));
@@ -94,9 +98,9 @@ public class LinkService {
             if (category != null) {
                 byCategory.merge(category, 1L, Long::sum);
             }
-            // 학습자료는 게시글 원본 태그가 아니라 resolveTypeTag() 확정값으로 집계 - 그래야 관리자가
-            // 링크 단위로 고친 유형이 필터 옆 숫자에도 바로 반영됨(배지 표시 로직과 동일 기준)
-            if (STUDY_MATERIAL_CATEGORY.equals(category)) {
+            // 유형 배지를 지원하는 카테고리는 게시글 원본 태그가 아니라 resolveTypeTag() 확정값으로
+            // 집계 - 그래야 관리자가 링크 단위로 고친 유형이 필터 옆 숫자에도 바로 반영됨(배지 표시 로직과 동일 기준)
+            if (category != null && CATEGORY_TYPE_TAGS.containsKey(category)) {
                 String resolved = resolveTypeTag(representative, overrides.get(entry.getKey()));
                 if (resolved != null) {
                     byTag.merge(resolved, 1L, Long::sum);
@@ -206,16 +210,19 @@ public class LinkService {
                 representative.post.category(),
                 resolveTypeTag(representative, override),
                 representative.post.tags(),
+                override != null ? override.getAdminEmoji() : null,
                 postDtos);
     }
 
-    // 학습자료 하위 유형 배지 확정 순서: ①관리자가 링크 단위로 직접 지정한 값(있으면 무조건 우선) →
-    // ②대표 게시글의 태그 중 학습자료 하위 태그와 겹치는 게 정확히 1개(모호하지 않은 경우만 - 게시글
-    // 태그 수정이 자연스럽게 반영되게 함) → ③링크 자체의 서비스명으로 추정 → ④그래도 없으면 배지 없음.
-    // 게시글 하나에 태그가 여러 개(영상+깃허브 등) 달려있을 수 있어, 그 목록을 그대로 쓰면 "이 링크
-    // 하나"의 실제 유형과 어긋날 수 있어서 하나로 확정해서 내려준다
+    // 카테고리 하위 유형 배지 확정 순서: ①관리자가 링크 단위로 직접 지정한 값(있으면 무조건 우선) →
+    // ②대표 게시글의 태그 중 해당 카테고리의 하위 태그와 겹치는 게 정확히 1개(모호하지 않은 경우만 -
+    // 게시글 태그 수정이 자연스럽게 반영되게 함) → ③(학습자료만) 링크 자체의 서비스명으로 추정 →
+    // ④그래도 없으면 배지 없음. 게시글 하나에 태그가 여러 개(영상+깃허브 등) 달려있을 수 있어, 그
+    // 목록을 그대로 쓰면 "이 링크 하나"의 실제 유형과 어긋날 수 있어서 하나로 확정해서 내려준다
     private String resolveTypeTag(PostLinkEntry representative, LinkPreview override) {
-        if (!STUDY_MATERIAL_CATEGORY.equals(representative.post.category())) {
+        String category = representative.post.category();
+        Set<String> typeTags = category == null ? null : CATEGORY_TYPE_TAGS.get(category);
+        if (typeTags == null) {
             return null;
         }
         if (override != null && override.getAdminTypeTag() != null) {
@@ -223,13 +230,15 @@ public class LinkService {
         }
         List<String> postTags = representative.post.tags();
         if (postTags != null) {
-            List<String> matched =
-                    postTags.stream().filter(STUDY_MATERIAL_TYPE_TAGS::contains).distinct().toList();
+            List<String> matched = postTags.stream().filter(typeTags::contains).distinct().toList();
             if (matched.size() == 1) {
                 return matched.get(0);
             }
         }
-        return inferTypeTagFromService(representative.link.serviceName());
+        if (STUDY_MATERIAL_CATEGORY.equals(category)) {
+            return inferTypeTagFromService(representative.link.serviceName());
+        }
+        return null;
     }
 
     private String inferTypeTagFromService(String serviceName) {

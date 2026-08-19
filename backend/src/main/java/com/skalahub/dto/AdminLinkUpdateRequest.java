@@ -2,5 +2,5 @@
 package com.skalahub.dto;
 
 public record AdminLinkUpdateRequest(
-        String url, String title, String source, String creators, String typeTag, Boolean hidden) {
+        String url, String title, String source, String creators, String typeTag, String emoji, Boolean hidden) {
 }

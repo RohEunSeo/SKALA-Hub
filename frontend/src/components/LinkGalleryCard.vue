@@ -31,23 +31,32 @@ const source = getLinkSource({
 })
 // 대표 게시글(반응수 가장 높은 게시글)의 카테고리를 배지로 표시
 const categoryInfo = computed(() => CATEGORIES.find((cat) => cat.value === props.group.category))
-// 학습자료 하위 유형(영상/블로그·글/깃허브·코드) 배지 - 백엔드가 이미 확정해서 내려준 group.typeTag
-// 하나만 보고 표시(게시글 tags 배열을 직접 안 봄 - 게시글에 태그가 여러 개 달려있으면 이 링크 하나의
-// 실제 유형과 어긋날 수 있어서 백엔드에서 하나로 정리해서 내려줌). 학습자료가 아니면 항상 null
-const SUBTAG_EMOJI = { 영상: '🎬', '블로그·글': '📝', 깃허브: '💻' }
-const isStudyMaterial = computed(() => props.group.category === '학습자료')
+// 카테고리 하위 유형(학습자료: 영상/블로그·글/깃허브, 기타: 인사이트·경험 공유/오류 해결/분실물/맛집/그 외
+// 등) 배지 - 백엔드가 이미 확정해서 내려준 group.typeTag 하나만 보고 표시(게시글 tags 배열을 직접 안
+// 봄 - 게시글에 태그가 여러 개 달려있으면 이 링크 하나의 실제 유형과 어긋날 수 있어서 백엔드에서 하나로
+// 정리해서 내려줌). 하위 태그가 없는 카테고리는 항상 null
+const SUBTAG_EMOJI = {
+  영상: '🎬',
+  '블로그·글': '📝',
+  깃허브: '💻',
+  '인사이트·경험 공유': '💡',
+  '오류 해결': '🛠️',
+  분실물: '🔎',
+  맛집: '🍽️',
+  '그 외': '🏷️',
+}
+// 하위 태그(tags)가 정의된 카테고리에서만 관리자가 유형 배지를 직접 지정할 수 있게 함(자동 추정이
+// 틀렸을 때 보정용) - 학습자료 전용이 아니라 categories.js에 tags가 있는 카테고리 전체에 적용됨
+const hasTypeTags = computed(() => (categoryInfo.value?.tags?.length ?? 0) > 0)
 const subTagInfo = computed(() => {
-  if (!isStudyMaterial.value || !props.group.typeTag) return null
+  if (!hasTypeTags.value || !props.group.typeTag) return null
   const tag = categoryInfo.value?.tags?.find((t) => t.value === props.group.typeTag)
   return tag ? { label: tag.label, emoji: SUBTAG_EMOJI[tag.value] ?? '🏷️' } : null
 })
-// 학습자료 카드에서만 관리자가 유형 배지를 직접 지정할 수 있게 함(자동 추정이 틀렸을 때 보정용)
-const TYPE_TAG_OPTIONS = [
+const TYPE_TAG_OPTIONS = computed(() => [
   { value: '', label: '자동 감지' },
-  { value: '영상', label: '영상' },
-  { value: '블로그·글', label: '블로그·글' },
-  { value: '깃허브', label: '깃허브·코드' },
-]
+  ...(categoryInfo.value?.tags ?? []),
+])
 const creatorsLabel = computed(() => (props.group.creators ?? []).map((name) => `${name}님`).join(', '))
 // 만든 사람 표시는 "교육생 서비스" 카테고리에서만 의미가 있음(누가 만들었는지가 중요한 카테고리) - 나머지
 // 카테고리(학습자료/GitHub 링크 등)는 만든 사람 개념이 없어서 굳이 표시하지 않음
@@ -67,6 +76,7 @@ const editTitle = ref('')
 const editSource = ref('')
 const editCreators = ref('')
 const editTypeTag = ref('')
+const editEmoji = ref('')
 const expanded = ref(false)
 
 function goToDetail(postId) {
@@ -90,6 +100,7 @@ function startEdit() {
   editSource.value = source
   editCreators.value = (props.group.creators ?? []).join(', ')
   editTypeTag.value = props.group.typeTag || ''
+  editEmoji.value = props.group.emoji || ''
   editing.value = true
 }
 
@@ -104,6 +115,7 @@ async function saveEdit() {
     source: editSource.value,
     creators: editCreators.value,
     typeTag: editTypeTag.value,
+    emoji: editEmoji.value,
   })
   editing.value = false
   postsStore.invalidateLinkGroupsCache()
@@ -140,7 +152,7 @@ async function restoreLink() {
   <a class="link-card" :href="linkUrl" target="_blank" rel="noopener noreferrer" @click="handleCardClick">
     <div class="link-card-thumb" :style="{ background: theme.bg }">
       <img v-if="group.imageUrl && !imageFailed" :src="group.imageUrl" alt="" @error="imageFailed = true" />
-      <span v-else class="link-card-emoji">{{ theme.emoji }}</span>
+      <span v-else class="link-card-emoji">{{ group.emoji || theme.emoji }}</span>
       <div class="link-card-badges">
         <span
           v-if="categoryInfo"
@@ -185,13 +197,21 @@ async function restoreLink() {
           @keydown.stop
         />
         <select
-          v-if="isStudyMaterial"
+          v-if="hasTypeTags"
           v-model="editTypeTag"
           class="link-card-edit-input link-card-edit-select"
           @click.stop.prevent
         >
           <option v-for="opt in TYPE_TAG_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
+        <input
+          v-model="editEmoji"
+          class="link-card-edit-input"
+          placeholder="썸네일 이모지 (Mac: control+cmd+space)"
+          maxlength="8"
+          @click.stop.prevent
+          @keydown.stop
+        />
         <div class="link-card-edit-actions">
           <span class="link-card-edit-save" @click.stop.prevent="saveEdit">저장</span>
           <span class="link-card-edit-cancel" @click.stop.prevent="cancelEdit">취소</span>

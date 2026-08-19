@@ -46,6 +46,7 @@ export const CATEGORIES = [
       { value: '인사이트·경험 공유', label: '인사이트·경험 공유' },
       { value: '오류 해결', label: '오류 해결' },
       { value: '분실물', label: '분실물' },
+      { value: '맛집', label: '맛집' },
       { value: '그 외', label: '그 외' },
     ],
   },

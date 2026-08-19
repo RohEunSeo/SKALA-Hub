@@ -22,5 +22,7 @@ public record LinkGroupDto(
         // 학습자료 외 카테고리(교육생 서비스 등)의 하위 분류 필터용 - 대표 게시글의 원본 tags 그대로.
         // typeTag와 달리 이건 프론트에서 카테고리/유형 필터를 서버 재조회 없이 client-side로 거르는 데 씀
         List<String> tags,
+        // 관리자가 지정한 썸네일 이모지 - 없으면 null이고, 이때 프론트가 서비스명 기반 기본 이모지로 대체함
+        String emoji,
         List<LinkGroupPostDto> posts) {
 }

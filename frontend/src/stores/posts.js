@@ -10,6 +10,10 @@ const PAGE_SIZE = 20
 // 페이지 크기를 작게 잡으면 스크롤할 때마다 이 무거운 재계산이 반복돼서 매번 로딩이 걸림. 채널 규모(5개월,
 // 340명) 대비 넉넉한 크기로 한 번에 받아와서, 사실상 첫 로딩 한 번 이후로는 스크롤이 로컬에서만 처리되게 함
 const LINK_PAGE_SIZE = 1000
+// 링크 모음 탭에서 하위 분류(tag)를 typeTag(관리자가 링크 단위로 확정한 값 하나)로 거르는 카테고리 -
+// backend LinkService.CATEGORY_TYPE_TAGS와 동일해야 함. 그 외 카테고리(교육생 서비스 등)는 대표
+// 게시글의 원본 tags 배열로 거름(하나의 게시글에 태그가 여러 개 달릴 수 있는 케이스)
+const TYPE_TAG_CATEGORIES = ['학습자료', '기타']
 
 export const usePostsStore = defineStore('posts', () => {
   const posts = ref([])
@@ -40,9 +44,10 @@ export const usePostsStore = defineStore('posts', () => {
     allLinkGroups.value.filter((group) => {
       if (category.value && group.category !== category.value) return false
       if (!tag.value) return true
-      // 학습자료 하위 유형은 typeTag(링크 단위로 확정된 값 하나)로, 그 외 카테고리(교육생 서비스 등)의
-      // 하위 분류는 대표 게시글의 원본 tags 배열로 거른다 - 서로 다른 필드라 분기 필요
-      if (category.value === '학습자료') return group.typeTag === tag.value
+      // typeTag 지원 카테고리(학습자료/기타)는 typeTag(링크 단위로 확정된 값 하나, 관리자 오버라이드
+      // 포함)로, 그 외 카테고리(교육생 서비스 등)의 하위 분류는 대표 게시글의 원본 tags 배열로 거른다 -
+      // 서로 다른 필드라 분기 필요
+      if (TYPE_TAG_CATEGORIES.includes(category.value)) return group.typeTag === tag.value
       return group.tags?.includes(tag.value) ?? false
     }),
   )
