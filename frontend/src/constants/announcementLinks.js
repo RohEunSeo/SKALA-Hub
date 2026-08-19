@@ -4,5 +4,6 @@ export const ANNOUNCEMENT_LINK_PRESETS = [
   { label: '홈', path: '/' },
   { label: '피드', path: '/feed' },
   { label: '피드 - 링크 모음 탭', path: '/feed?tab=links' },
+  { label: '피드 - 링크 모음 탭(기타>맛집)', path: '/feed?tab=links&category=기타&tag=맛집' },
   { label: '마이페이지', path: '/mypage' },
 ]
