@@ -86,6 +86,27 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     List<Object[]> countByCategory();
 
+    // 대시보드 게시글 기여도 히트맵 - 날짜별 게시글 수
+    @Query(
+            value =
+                    "SELECT DATE(created_at) AS d, count(*) FROM posts WHERE is_deleted = false AND created_at IS NOT NULL GROUP BY DATE(created_at)",
+            nativeQuery = true)
+    List<Object[]> countByCreatedAtDate();
+
+    // 대시보드 카테고리별 명예의 전당 Top3 - 반응 수 기준 (교육생 서비스도 투표 기능 없이 동일 기준)
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.is_deleted = false
+              AND p.reaction_count > 0
+              AND p.is_excluded_from_ranking = false
+              AND p.category = :category
+            ORDER BY p.reaction_count DESC
+            LIMIT 3
+            """,
+            nativeQuery = true)
+    List<Post> findTopReactionsByCategory(@Param("category") String category);
+
     // 학습자료 하위 태그(영상/블로그·글/깃허브)별 게시글 수 - 사이드바 하위 카테고리 개수 표시용
     @Query(
             value =

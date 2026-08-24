@@ -71,6 +71,13 @@ function handleLogout() {
         >
         <RouterLink
           v-if="authStore.effectiveIsAdmin"
+          to="/dashboard"
+          class="nav-item"
+          :class="{ active: route.name === 'dashboard' }"
+          >🌱 대시보드</RouterLink
+        >
+        <RouterLink
+          v-if="authStore.effectiveIsAdmin"
           to="/admin"
           class="nav-item admin-nav-item"
           :class="{ active: route.name === 'admin' }"

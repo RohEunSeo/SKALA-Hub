@@ -19,7 +19,7 @@ export const CATEGORIES = [
     label: '교육생 서비스',
     shortLabel: '교육생 서비스',
     icon: '🌐',
-    color: '#34AEBF',
+    color: '#8B6FD6',
     // 사이드바에 노출되는 필터용 하위카테고리
     tags: [
       { value: '캠퍼스 생활 편의', label: '캠퍼스 생활 편의' },
