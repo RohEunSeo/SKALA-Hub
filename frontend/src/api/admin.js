@@ -21,6 +21,11 @@ export function updatePostAsAdmin(id, payload) {
   return http.patch(`/api/admin/posts/${id}`, payload)
 }
 
+// 순위보드에서 제외된 게시글 목록 (홈 화면 관리자 전용 패널)
+export function fetchExcludedFromRanking() {
+  return http.get('/api/admin/posts/excluded-from-ranking')
+}
+
 // 링크 모음 탭 카드 제목 수동 수정 / 숨김 처리 (url 기준, 전역)
 export function updateLinkAsAdmin(payload) {
   return http.patch('/api/admin/links', payload)

@@ -9,7 +9,9 @@ import NotificationBell from '../components/NotificationBell.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { useHomeStore } from '../stores/home'
+import { useToastStore } from '../stores/toast'
 import { getSlackLoginUrl } from '../api/auth'
+import { updatePostAsAdmin, fetchExcludedFromRanking } from '../api/admin'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
 import { CATEGORIES } from '../constants/categories'
@@ -33,6 +35,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
 const homeStore = useHomeStore()
+const toastStore = useToastStore()
 const { summary, summaryError, leaderboard, leaderboardLoading, leaderboardError, leaderboardPeriod } =
   storeToRefs(homeStore)
 
@@ -73,6 +76,60 @@ function goToBoard(index) {
 
 function goToPost(id) {
   router.push({ name: 'post-detail', params: { id } })
+}
+
+const excludingPostId = ref(null)
+const showExcludedPanel = ref(false)
+const excludedPosts = ref([])
+const excludedLoading = ref(false)
+const restoringPostId = ref(null)
+
+// 관리자 전용 - 게시글은 삭제하지 않고 순위보드 계산에서만 제외 (재조회하면 다음 순위가 자동으로 승격됨)
+async function excludeFromRanking(postId) {
+  if (!window.confirm('이 글을 순위보드에서 제외할까요? (게시글 자체는 삭제되지 않습니다)')) return
+  excludingPostId.value = postId
+  try {
+    await updatePostAsAdmin(postId, { isExcludedFromRanking: true })
+    await homeStore.loadLeaderboard()
+    if (showExcludedPanel.value) await loadExcludedPosts()
+    toastStore.show('순위보드에서 제외했습니다')
+  } catch {
+    toastStore.show('제외 처리에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    excludingPostId.value = null
+  }
+}
+
+async function toggleExcludedPanel() {
+  showExcludedPanel.value = !showExcludedPanel.value
+  if (showExcludedPanel.value) await loadExcludedPosts()
+}
+
+async function loadExcludedPosts() {
+  excludedLoading.value = true
+  try {
+    const { data } = await fetchExcludedFromRanking()
+    excludedPosts.value = data
+  } catch {
+    toastStore.show('제외된 글 목록을 불러오지 못했습니다.')
+  } finally {
+    excludedLoading.value = false
+  }
+}
+
+// 제외 취소 - 원래 순위 계산에 다시 포함시킴 (실제 반응/댓글/저장 수는 계속 쌓여있었으므로 그 값 그대로 복귀)
+async function restoreToRanking(postId) {
+  restoringPostId.value = postId
+  try {
+    await updatePostAsAdmin(postId, { isExcludedFromRanking: false })
+    excludedPosts.value = excludedPosts.value.filter((post) => post.id !== postId)
+    await homeStore.loadLeaderboard()
+    toastStore.show('순위보드로 복원했습니다')
+  } catch {
+    toastStore.show('복원에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    restoringPostId.value = null
+  }
 }
 
 function previewText(content) {
@@ -206,6 +263,14 @@ onUnmounted(() => {
         <div class="period-tabs">
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'all' }" @click="selectPeriod('all')">전체</span>
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'week' }" @click="selectPeriod('week')">이번주</span>
+          <span
+            v-if="authStore.user?.role === 'admin'"
+            class="excluded-toggle"
+            :class="{ active: showExcludedPanel }"
+            @click="toggleExcludedPanel"
+          >
+            🚫 제외된 글 관리
+          </span>
         </div>
         <div class="leaderboard-viewport">
           <div class="leaderboard-track" :style="{ transform: `translateX(-${boardIndex * 100}%)` }">
@@ -224,6 +289,16 @@ onUnmounted(() => {
                   <span class="board-rank">{{ idx + 1 }}</span>
                   <span class="board-post-title">{{ previewText(entry.post.content) }}</span>
                   <span class="board-count">{{ entry.count }} {{ board.unit }}</span>
+                  <button
+                    v-if="authStore.user?.role === 'admin'"
+                    class="board-exclude-btn"
+                    type="button"
+                    :disabled="excludingPostId === entry.post.id"
+                    title="순위보드에서 제외 (게시글은 삭제되지 않음)"
+                    @click.stop="excludeFromRanking(entry.post.id)"
+                  >
+                    🚫
+                  </button>
                 </div>
                 <div v-if="boardEntries(board.key).length === 0" class="board-empty">{{ board.emptyText }}</div>
               </div>
@@ -242,6 +317,27 @@ onUnmounted(() => {
             ></span>
           </div>
           <span class="nav-btn" @click="nextBoard">다음 ›</span>
+        </div>
+
+        <div v-if="showExcludedPanel" class="excluded-panel">
+          <div class="excluded-panel-title">🚫 순위보드에서 제외된 글 (나한테만 보임)</div>
+          <div v-if="excludedLoading" class="board-empty">불러오는 중...</div>
+          <div v-else-if="excludedPosts.length === 0" class="board-empty">제외된 글이 없습니다</div>
+          <div v-else class="board-list">
+            <div v-for="post in excludedPosts" :key="post.id" class="board-row" @click="goToPost(post.id)">
+              <span class="board-post-title">{{ previewText(post.content) }}</span>
+              <span class="board-count">👍🏻 {{ post.reactionCount ?? 0 }}</span>
+              <button
+                class="board-exclude-btn"
+                type="button"
+                :disabled="restoringPostId === post.id"
+                title="순위보드로 복원"
+                @click.stop="restoreToRanking(post.id)"
+              >
+                ↩️
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -473,6 +569,35 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
+.excluded-toggle {
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #636e72;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.excluded-toggle.active {
+  background: #f1eefc;
+  color: #4a3f8f;
+}
+
+.excluded-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(26, 26, 46, 0.08);
+}
+
+.excluded-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 10px;
+}
+
 .leaderboard-viewport {
   overflow: hidden;
 }
@@ -545,6 +670,27 @@ onUnmounted(() => {
   font-weight: 600;
   color: #636e72;
   flex-shrink: 0;
+}
+
+.board-exclude-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.board-exclude-btn:hover {
+  opacity: 1;
+}
+
+.board-exclude-btn:disabled {
+  opacity: 0.2;
+  cursor: default;
 }
 
 .board-empty {

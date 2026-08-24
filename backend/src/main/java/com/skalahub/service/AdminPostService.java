@@ -43,6 +43,12 @@ public class AdminPostService {
         return postService.wrapPage(postRepository.findUncategorized(PageRequest.of(page, size)));
     }
 
+    // 순위보드에서 제외된 게시글 목록 - 홈 화면 관리자 전용 "제외된 글 보기" 패널에서 사용
+    @Transactional(readOnly = true)
+    public List<PostResponse> getExcludedFromRanking() {
+        return postService.toResponses(postRepository.findByIsExcludedFromRankingTrueAndIsDeletedFalseOrderByReactionCountDesc());
+    }
+
     @Transactional
     public PostResponse updatePost(Long id, AdminPostUpdateRequest request) {
         Post post = postRepository
@@ -57,6 +63,9 @@ public class AdminPostService {
         }
         if (request.isPinned() != null) {
             post.setIsPinned(request.isPinned());
+        }
+        if (request.isExcludedFromRanking() != null) {
+            post.setIsExcludedFromRanking(request.isExcludedFromRanking());
         }
         post = postRepository.save(post);
         return postService.toResponse(post);
