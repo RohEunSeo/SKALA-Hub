@@ -67,7 +67,7 @@ const sourceLabel = computed(() =>
 )
 
 // 관리자만 카드 위에서 바로 제목/만든사람 수정, 숨김 가능 - 별도 /admin 페이지 이동 없이
-const isAdmin = computed(() => authStore.user?.role === 'admin')
+const isAdmin = computed(() => authStore.effectiveIsAdmin)
 // 정렬 드롭다운의 "숨김" 옵션으로 보고 있는 카드인지 - 이때는 🗑️(숨김) 대신 ♻️(복원) 액션을 보여줌
 const isHiddenView = computed(() => postsStore.showHiddenLinks)
 

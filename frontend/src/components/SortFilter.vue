@@ -17,7 +17,7 @@ const SORTS = [
 ]
 
 // 일반 사용자에게는 이 옵션 자체가 DOM에 없음(v-if) - 관리자 + 링크 모음 탭일 때만 노출
-const showHiddenOption = computed(() => postsStore.hasLink && authStore.user?.role === 'admin')
+const showHiddenOption = computed(() => postsStore.hasLink && authStore.effectiveIsAdmin)
 
 const currentLabel = computed(() => {
   if (postsStore.showHiddenLinks) return '숨김'

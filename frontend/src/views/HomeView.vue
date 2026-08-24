@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import NotificationBell from '../components/NotificationBell.vue'
+import ViewModeToggle from '../components/ViewModeToggle.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { useHomeStore } from '../stores/home'
@@ -220,6 +221,7 @@ onUnmounted(() => {
     </div>
 
     <div v-if="authStore.isAuthenticated" class="top-bar">
+      <ViewModeToggle />
       <img
         v-if="authStore.user?.profileImg"
         class="avatar avatar-img"
@@ -264,7 +266,7 @@ onUnmounted(() => {
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'all' }" @click="selectPeriod('all')">전체</span>
           <span class="period-tab" :class="{ active: leaderboardPeriod === 'week' }" @click="selectPeriod('week')">이번주</span>
           <span
-            v-if="authStore.user?.role === 'admin'"
+            v-if="authStore.effectiveIsAdmin"
             class="excluded-toggle"
             :class="{ active: showExcludedPanel }"
             @click="toggleExcludedPanel"
@@ -290,7 +292,7 @@ onUnmounted(() => {
                   <span class="board-post-title">{{ previewText(entry.post.content) }}</span>
                   <span class="board-count">{{ entry.count }} {{ board.unit }}</span>
                   <button
-                    v-if="authStore.user?.role === 'admin'"
+                    v-if="authStore.effectiveIsAdmin"
                     class="board-exclude-btn"
                     type="button"
                     :disabled="excludingPostId === entry.post.id"
