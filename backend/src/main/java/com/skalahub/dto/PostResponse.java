@@ -16,6 +16,7 @@ public record PostResponse(
         Integer replyCount,
         Integer bookmarkCount,
         Boolean isPinned,
+        Boolean isExcludedFromRanking,
         Boolean isEdited,
         LocalDateTime createdAt,
         String slackPermalink,

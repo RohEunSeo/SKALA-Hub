@@ -97,6 +97,12 @@ public class AdminController {
         return adminPostService.updatePost(id, request);
     }
 
+    // 순위보드에서 제외된 게시글 목록 - 홈 화면 관리자 전용 "제외된 글 보기" 패널
+    @GetMapping("/posts/excluded-from-ranking")
+    public List<PostResponse> getExcludedFromRanking() {
+        return adminPostService.getExcludedFromRanking();
+    }
+
     // 링크 모음 탭 카드 제목 수동 수정 / 숨김 처리 (URL 기준, 전역)
     @PatchMapping("/links")
     public void updateLink(@RequestBody AdminLinkUpdateRequest request) {

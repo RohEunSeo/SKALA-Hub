@@ -240,6 +240,7 @@ public class PostService {
                 post.getReplyCount(),
                 post.getBookmarkCount(),
                 post.getIsPinned(),
+                post.getIsExcludedFromRanking(),
                 post.getIsEdited(),
                 post.getCreatedAt(),
                 buildPermalink(post.getSlackTs()),

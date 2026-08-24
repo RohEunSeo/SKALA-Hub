@@ -62,6 +62,9 @@ public class Post {
 
     private Boolean isPinned;
 
+    // 게시글 삭제 없이 "가장 반응이 많은 글" 순위보드에서만 제외
+    private Boolean isExcludedFromRanking;
+
     // 슬랙에서 수정된 메시지인지 (슬랙 응답의 edited 필드 유무로 판단)
     private Boolean isEdited;
 

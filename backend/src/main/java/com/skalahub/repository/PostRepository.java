@@ -18,6 +18,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // 로컬 환경(FRONTEND_URL=localhost)에서 동기화되어 슬랙 알림이 보류된 게시글 - 관리자 모드 "대기" 목록
     List<Post> findByPendingNotificationTrue();
 
+    // 순위보드에서 제외된 게시글 - 관리자 전용 "제외된 글 보기" 패널, 복원 가능하도록 목록으로 반환
+    List<Post> findByIsExcludedFromRankingTrueAndIsDeletedFalseOrderByReactionCountDesc();
+
     // 카테고리/태그/키워드/작성자/기간/캠퍼스 조건은 값이 없으면(null) 무시. 정렬은 sort 값에 따라 동적 분기
     @Query(
             value = """
@@ -178,6 +181,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             SELECT * FROM posts p
             WHERE p.is_deleted = false
               AND p.reaction_count > 0
+              AND p.is_excluded_from_ranking = false
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             ORDER BY p.reaction_count DESC
             LIMIT 3
@@ -192,6 +196,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             SELECT p.id AS id, p.reply_count AS comment_count
             FROM posts p
             WHERE p.is_deleted = false
+              AND p.is_excluded_from_ranking = false
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
               AND EXISTS (
                   SELECT 1 FROM replies r
@@ -214,6 +219,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             SELECT p.id AS id, count(b.id) AS save_count FROM posts p
             JOIN bookmarks b ON b.post_id = p.id
             WHERE p.is_deleted = false
+              AND p.is_excluded_from_ranking = false
               AND (CAST(:dateFrom AS timestamp) IS NULL OR p.created_at >= CAST(:dateFrom AS timestamp))
             GROUP BY p.id
             ORDER BY save_count DESC
