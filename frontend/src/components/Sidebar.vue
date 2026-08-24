@@ -71,6 +71,13 @@ function handleLogout() {
         >
         <RouterLink
           v-if="authStore.effectiveIsAdmin"
+          to="/dashboard"
+          class="nav-item"
+          :class="{ active: route.name === 'dashboard' }"
+          >🌱 대시보드</RouterLink
+        >
+        <RouterLink
+          v-if="authStore.effectiveIsAdmin"
           to="/admin"
           class="nav-item admin-nav-item"
           :class="{ active: route.name === 'admin' }"
@@ -177,8 +184,9 @@ function handleLogout() {
   color: #4a3f8f;
 }
 
-/* 접기 버튼은 데스크톱 전용 - 모바일은 오버레이 드로어(닫기는 바깥 클릭)만 사용 */
-@media (max-width: 768px) {
+/* 접기 버튼은 데스크톱 전용 - 모바일은 오버레이 드로어(닫기는 바깥 클릭)만 사용.
+   AppLayout.vue의 사이드바 드로어 전환 기준(900px)과 맞춘다 */
+@media (max-width: 900px) {
   .collapse-btn {
     display: none;
   }
