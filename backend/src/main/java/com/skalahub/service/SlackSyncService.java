@@ -54,6 +54,7 @@ public class SlackSyncService {
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
     private final SlackBotReplyService slackBotReplyService;
+    private final SlackDmNotificationService slackDmNotificationService;
     private final SyncFailureRepository syncFailureRepository;
     private final LinkPreviewFetchService linkPreviewFetchService;
     private final RestClient restClient = RestClient.create();
@@ -73,6 +74,7 @@ public class SlackSyncService {
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
             SlackBotReplyService slackBotReplyService,
+            SlackDmNotificationService slackDmNotificationService,
             SyncFailureRepository syncFailureRepository,
             LinkPreviewFetchService linkPreviewFetchService,
             @Value("${slack.user-token}") String userToken,
@@ -82,6 +84,7 @@ public class SlackSyncService {
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
         this.slackBotReplyService = slackBotReplyService;
+        this.slackDmNotificationService = slackDmNotificationService;
         this.syncFailureRepository = syncFailureRepository;
         this.linkPreviewFetchService = linkPreviewFetchService;
         this.userToken = userToken;
@@ -180,6 +183,9 @@ public class SlackSyncService {
                 } catch (Exception e) {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
                     recordSyncFailure(slackTs, msg, e);
+                    String preview = msg.path("text").asString("");
+                    slackDmNotificationService.sendSyncFailure(
+                            slackTs, preview, e.getMessage(), postRepository.countByIsDeletedFalse());
                     continue;
                 }
                 if (isNew) {
@@ -191,6 +197,7 @@ public class SlackSyncService {
                         postRepository.save(post);
                     } else {
                         slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                        slackDmNotificationService.sendSyncResult(post, postRepository.countByIsDeletedFalse());
                     }
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
