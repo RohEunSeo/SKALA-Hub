@@ -311,6 +311,7 @@ public class SlackSyncService {
         if (isNew) {
             post.setIsDeleted(false);
             post.setIsPinned(false); // 관리자가 수동으로만 변경하는 값 - 신규 글에만 초기화
+            post.setIsExcludedFromRanking(false); // 관리자가 수동으로만 변경하는 값 - 신규 글에만 초기화
         }
 
         post = postRepository.save(post);
