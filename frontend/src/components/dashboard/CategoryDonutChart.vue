@@ -2,11 +2,14 @@
 // 대시보드 - 카테고리별 분포 도넛차트 (v3.html PAGE 7 DASHBOARD 재현, 스크롤 진입 시 시계방향 0~360도로 채워짐)
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { CATEGORIES } from '../../constants/categories'
+import { useHoverTooltip } from '../../composables/useHoverTooltip'
 
 const props = defineProps({
   categoryDist: { type: Array, required: true }, // [{ category, count, pct }]
   revealed: { type: Boolean, default: false },
 })
+
+const { hoveredKey, rect, onEnter, onLeave } = useHoverTooltip()
 
 const revealProgress = ref(0)
 let raf = null
@@ -83,32 +86,59 @@ const clipPath = computed(() => {
 })
 
 const clipAttr = computed(() => (revealProgress.value < 1 ? 'url(#donut-reveal-clip)' : 'none'))
+
+const hoveredSeg = computed(() => segs.value.find((s) => s.key === hoveredKey.value))
+
+// 조각 위 근처에 %만 뜨도록 - 가운데 원/구멍 등 다른 효과는 추가하지 않는다
+const tooltipStyle = computed(() => {
+  if (!rect.value) return {}
+  return {
+    left: rect.value.left + rect.value.width / 2 + 'px',
+    top: rect.value.top + rect.value.height / 2 + 'px',
+    transform: 'translate(-50%, -50%)',
+  }
+})
 </script>
 
 <template>
   <div class="chart-card">
     <div class="chart-title">🗂️ 카테고리별 분포</div>
-    <div class="donut-wrap">
-      <svg viewBox="0 0 120 120" class="donut-svg">
-        <defs>
-          <clipPath id="donut-reveal-clip">
-            <path :d="clipPath"></path>
-          </clipPath>
-        </defs>
-        <g :clip-path="clipAttr">
-          <path v-for="s in segs" :key="s.key" :d="s.path" :fill="s.color" stroke="#FFFFFF" stroke-width="1.5"></path>
-        </g>
-      </svg>
-    </div>
-    <div class="legend-list">
-      <div v-for="c in sortedDist" :key="c.category" class="legend-row">
-        <div class="legend-left">
-          <span class="legend-dot" :style="{ background: colorFor(c.category) }"></span>
-          <span class="legend-label">{{ shortLabel(c.category) }}</span>
+    <div class="donut-body">
+      <div class="donut-wrap">
+        <svg viewBox="0 0 120 120" class="donut-svg">
+          <defs>
+            <clipPath id="donut-reveal-clip">
+              <path :d="clipPath"></path>
+            </clipPath>
+          </defs>
+          <g :clip-path="clipAttr">
+            <path
+              v-for="s in segs"
+              :key="s.key"
+              :d="s.path"
+              :fill="s.color"
+              stroke="#FFFFFF"
+              stroke-width="1.5"
+              @mouseenter="onEnter($event, s.key)"
+              @mouseleave="onLeave"
+            ></path>
+          </g>
+        </svg>
+      </div>
+      <div class="legend-list">
+        <div v-for="c in sortedDist" :key="c.category" class="legend-row">
+          <div class="legend-left">
+            <span class="legend-dot" :style="{ background: colorFor(c.category) }"></span>
+            <span class="legend-label">{{ shortLabel(c.category) }}</span>
+          </div>
+          <span class="legend-pct">{{ Math.round(c.pct) }}%</span>
         </div>
-        <span class="legend-pct">{{ Math.round(c.pct) }}%</span>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="hoveredSeg" class="seg-tooltip" :style="tooltipStyle">{{ Math.round(hoveredSeg.pct) }}%</div>
+    </Teleport>
   </div>
 </template>
 
@@ -137,6 +167,11 @@ const clipAttr = computed(() => (revealProgress.value < 1 ? 'url(#donut-reveal-c
   margin-bottom: 10px;
 }
 
+.donut-body {
+  display: flex;
+  flex-direction: column;
+}
+
 .donut-wrap {
   display: flex;
   justify-content: center;
@@ -148,6 +183,10 @@ const clipAttr = computed(() => (revealProgress.value < 1 ? 'url(#donut-reveal-c
   width: 128px;
   height: 128px;
   overflow: visible;
+}
+
+.donut-svg path {
+  cursor: pointer;
 }
 
 .legend-list {
@@ -188,5 +227,48 @@ const clipAttr = computed(() => (revealProgress.value < 1 ? 'url(#donut-reveal-c
   color: #636e72;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.seg-tooltip {
+  position: fixed;
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 7px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* 화면이 좁아지는 중간 구간(768~1180px)에서는 StatsRow가 이 카드를 2열 그리드 아래 한 줄 전체로 배치하므로,
+   그 넓어진 폭을 살려 원(도넛)을 왼쪽에 좀 더 크게, 범례를 오른쪽에 두는 가로 배치로 전환한다.
+   grid-column은 부모가 grid(.stats-grid)일 때만 의미가 있고 flex(carousel)일 때는 무시된다 */
+@media (max-width: 1180px) {
+  .chart-card {
+    grid-column: 1 / -1;
+  }
+
+  .donut-body {
+    flex-direction: row;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .donut-wrap {
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .donut-svg {
+    width: 156px;
+    height: 156px;
+  }
+
+  .legend-list {
+    flex: 1;
+    justify-content: center;
+  }
 }
 </style>

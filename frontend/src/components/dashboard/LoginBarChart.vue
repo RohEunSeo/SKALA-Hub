@@ -1,7 +1,6 @@
 <script setup>
 // 대시보드 - 가입자 분포 바차트 (v3.html PAGE 7 DASHBOARD 재현, 스크롤 진입 시 바가 차오름)
-// 학생 반 막대끼리, 스태프(운영진/매니저/교수님) 막대끼리 각각 자기 그룹 안에서만 상대 높이를 매긴다
-// (두 그룹은 인원 규모 자체가 달라서 같은 기준으로 비교하면 스태프 쪽이 항상 짧아 보임)
+// 모든 막대를 하나의 기준(전체 최대 인원)으로 스케일링해서, 막대 높이가 실제 인원수 차이를 그대로 반영한다
 import { computed } from 'vue'
 import { useHoverTooltip } from '../../composables/useHoverTooltip'
 
@@ -15,20 +14,11 @@ const STAFF_COLOR = '#C4B0F5'
 
 const { hoveredKey, rect, onEnter, onLeave } = useHoverTooltip()
 
-const studentMax = computed(() => {
-  const counts = props.loginByClass.filter((c) => !c.isStaff).map((c) => c.count)
-  return Math.max(1, ...counts, 0)
-})
-
-const staffMax = computed(() => {
-  const counts = props.loginByClass.filter((c) => c.isStaff).map((c) => c.count)
-  return Math.max(1, ...counts, 0)
-})
+const overallMax = computed(() => Math.max(1, ...props.loginByClass.map((c) => c.count)))
 
 function barHeightPct(c) {
   if (!props.revealed) return 0
-  const groupMax = c.isStaff ? staffMax.value : studentMax.value
-  return Math.round((c.count / groupMax) * 100)
+  return Math.round((c.count / overallMax.value) * 100)
 }
 
 const tooltipStyle = computed(() => {
@@ -95,7 +85,7 @@ const hoveredBar = computed(() => props.loginByClass.find((c) => c.label === hov
 .bars-row {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 4px;
   height: 150px;
   margin-top: 10px;
 }
@@ -124,15 +114,18 @@ const hoveredBar = computed(() => props.loginByClass.find((c) => c.label === hov
   cursor: pointer;
 }
 
+/* 잘리는 대신 필요하면 2줄로 줄바꿈해서, 어떤 화면 폭에서도 글자가 잘리지 않고 전부 보이게 한다 */
 .bar-name {
   margin-top: 6px;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 600;
   color: #636e72;
-  white-space: nowrap;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  white-space: normal;
+  word-break: keep-all;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
 }
 
 .bar-tooltip {

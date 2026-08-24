@@ -106,12 +106,13 @@ public class DashboardService {
         return heatmap;
     }
 
-    // 0개(활동 없음)/1~5개(연한 초록)/6~10개(진한 초록)/11개+(완전 진한 초록) 4단계
+    // 0개(활동 없음)/1~4개/5~9개/10~14개/15개+ - 깃허브 잔디처럼 5단계(0 + 4단계 초록)
     private int heatLevel(long count) {
         if (count <= 0) return 0;
-        if (count <= 5) return 1;
-        if (count <= 10) return 2;
-        return 3;
+        if (count <= 4) return 1;
+        if (count <= 9) return 2;
+        if (count <= 14) return 3;
+        return 4;
     }
 
     // 미래 날짜(아직 오지 않은 빈 칸)는 평균/최고기록/연속기록 계산에서 제외

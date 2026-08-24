@@ -87,8 +87,10 @@ function closeSidebar() {
   display: none;
 }
 
-/* 768px 이상(데스크톱~태블릿)에서만 접기 기능이 의미가 있음 - 모바일은 기존 드로어(sidebarOpen)만 사용 */
-@media (min-width: 768px) {
+/* 900px 이상(데스크톱~태블릿)에서만 접기 기능이 의미가 있음 - 모바일은 기존 드로어(sidebarOpen)만 사용.
+   사이드바가 고정 컬럼으로 있으면서 본문 폭을 너무 좁게 만드는 구간을 줄이기 위해 기존 768px보다
+   더 넓은 화면에서부터 일찍 드로어(모바일) 방식으로 전환한다 */
+@media (min-width: 900px) {
   .sidebar-wrap.collapsed {
     display: none;
   }
@@ -99,7 +101,7 @@ function closeSidebar() {
 }
 
 /* 모바일 폭으로 리사이즈된 상태로 접힘 상태가 남아있어도, 실제 햄버거 버튼과 겹쳐 두 개가 뜨지 않게 항상 숨김 */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .sidebar-expand-toggle {
     display: none !important;
   }
@@ -127,7 +129,7 @@ function closeSidebar() {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .menu-toggle {
     display: flex;
   }

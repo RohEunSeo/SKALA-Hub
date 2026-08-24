@@ -9,7 +9,8 @@ const props = defineProps({
   stats: { type: Object, required: true }, // { maxDayLabel, maxDayCount, avgPerDay, bestWeekday, streakDays }
 })
 
-const LEVEL_COLORS = ['#EBEDF0', '#7FD48B', '#3FAE5B', '#1E7A38']
+// 깃허브 잔디와 동일한 5단계(0=없음 + 4단계 초록) 팔레트
+const LEVEL_COLORS = ['#EBEDF0', '#9BE9A8', '#40C463', '#30A14E', '#216E39']
 
 const isMobile = useIsMobile()
 const { hoveredKey, rect, onEnter, onLeave } = useHoverTooltip()
@@ -61,17 +62,16 @@ const tooltipStyle = computed(() => {
     transform: 'translateY(-50%)',
   }
 })
+
+// 깃허브의 "N contributions in the last year"처럼 왼쪽 상단에 총 게시글 수를 영어로 표시
+const totalContributions = computed(() => props.heatmap.reduce((sum, d) => sum + d.count, 0))
 </script>
 
 <template>
   <div class="heatmap-section">
     <div class="heatmap-header">
-      <span class="heatmap-title">🌿 게시글 기여도</span>
-      <div class="legend">
-        Less
-        <span v-for="(color, i) in LEVEL_COLORS" :key="i" class="legend-swatch" :style="{ background: color }"></span>
-        More
-      </div>
+      <div class="heatmap-title">🌿 게시글 기여도</div>
+      <div class="heatmap-subtitle">{{ totalContributions }} contributions in this year</div>
     </div>
 
     <div class="heatmap-body">
@@ -95,6 +95,11 @@ const tooltipStyle = computed(() => {
               ></div>
             </div>
           </div>
+        </div>
+        <div class="legend">
+          Less
+          <span v-for="(color, i) in LEVEL_COLORS" :key="i" class="legend-swatch" :style="{ background: color }"></span>
+          More
         </div>
       </div>
 
@@ -134,36 +139,48 @@ const tooltipStyle = computed(() => {
   }
 }
 
-/* 옆 나무 카드보다 콘텐츠가 짧아서 growth-card 높이(align-items:stretch)만큼 늘어났을 때,
-   위쪽에만 붙지 않고 그 늘어난 높이 안에서 위아래로 고르게 배치되도록 flex column + center */
+/* container-type:inline-size로 이 카드 자체의 실제 렌더링 폭을 기준 삼는다 - 뷰포트 기준 미디어쿼리는
+   사이드바/나무 카드 폭에 따라 이 카드가 실제로 얼마나 좁아지는지와 안 맞아서 반영이 늦어 보였다.
+   제목은 위에 붙이고(옆 나무 카드 제목과 같은 높이), 나머지 콘텐츠도 그 바로 아래부터 자연스럽게 이어진다 */
 .heatmap-section {
+  container-type: inline-size;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .heatmap-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-  gap: 6px;
+  margin-top: 0;
+  margin-bottom: 4px;
 }
 
+/* line-height를 1 대신 고정 px로 - 이모지 글자마다 폰트에 내장된 세로 메트릭이 미묘하게 달라서
+   line-height:1(폰트 자체 기준)로는 "허브 단계" 제목과 몇 px씩 어긋났다. 고정값이면 이모지 종류와
+   무관하게 두 제목의 줄 상자 높이가 항상 완전히 동일해진다 */
 .heatmap-title {
   font-size: 15px;
   font-weight: 800;
+  line-height: 18px;
   color: #1a1a2e;
 }
 
+.heatmap-subtitle {
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a4f57;
+}
+
+/* 실제 깃허브처럼 잔디 영역 오른쪽 아래에 둔다 */
 .legend {
+  margin-top: 8px;
   font-size: 11px;
   color: #636e72;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 5px;
 }
 
@@ -259,8 +276,10 @@ const tooltipStyle = computed(() => {
   font-size: 12px;
 }
 
-/* 화면이 좁아지면 옆이 아니라 그리드 아래로 내려서 가로 한 줄로 배치 (항목은 데스크탑과 동일하게 3개 유지) */
-@media (max-width: 768px) {
+/* 잔디(weeks-area 최대 540px) + gap(28px) + 통계 사이드(150px) = 약 718px가 여유 있게 다 들어가는 폭.
+   이 카드 자체가 그보다 조금이라도 좁아지려는 순간 바로 세로 스택으로 바꿔서, 잔디 칸이 눌려서
+   작아지는 게 눈에 보이기 전에 항상 미리 전환되게 한다 (뷰포트가 아니라 이 카드의 실제 폭 기준) */
+@container (max-width: 730px) {
   .heatmap-body {
     flex-direction: column;
   }

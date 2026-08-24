@@ -123,7 +123,7 @@ const dateRangeLabel = computed(() => {
   background: #ffffff;
   border-radius: 16px;
   box-shadow: 0 1px 5px rgba(26, 26, 46, 0.05);
-  padding: 24px 24px 24px 36px;
+  padding: 36px 24px 24px 36px;
   display: flex;
   gap: 40px;
   align-items: stretch;

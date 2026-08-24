@@ -18,6 +18,10 @@ const isMobile = useIsMobile()
 const rowEl = ref(null)
 const viewportEl = ref(null)
 const revealed = ref(false)
+// 다시 화면에 들어올 때마다 값을 1씩 올려서 차트 컴포넌트를 :key로 강제 리마운트한다 - 각 차트 내부의
+// reveal 상태(라인 그리기 offset, 도넛 진행률 등)가 이전 재생 상태를 그대로 들고 있다가 재생이 안
+// 되는 문제를 원천 차단하기 위함(완전히 새 인스턴스로 시작하니 항상 처음부터 다시 그려짐)
+const revealKey = ref(0)
 const slideIndex = ref(0)
 const SLIDE_COUNT = 3
 let observer = null
@@ -26,7 +30,22 @@ onMounted(() => {
   observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((e) => {
-        if (e.isIntersecting) revealed.value = true
+        if (e.isIntersecting) {
+          revealKey.value++
+          // 리마운트 직후 첫 렌더는 반드시 revealed=false(안 그려진 상태)여야 한다.
+          // nextTick(마이크로태스크)만으로는 브라우저가 그 false 상태를 실제로 한 번 그리기(paint) 전에
+          // true로 바뀌어버려서 CSS transition이 아예 재생되지 않고 최종 상태로 바로 점프해버렸다
+          // (도넛차트만 멀쩡했던 이유 - 그건 transition이 아니라 JS/RAF로 직접 그리는 방식이라 안 걸림).
+          // rAF를 두 번 걸어서 브라우저가 false 상태를 최소 한 프레임 실제로 그린 뒤에 true로 바꾼다
+          revealed.value = false
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              revealed.value = true
+            })
+          })
+        } else {
+          revealed.value = false
+        }
       })
     },
     { threshold: 0.2 },
@@ -61,21 +80,21 @@ function onScroll() {
 <template>
   <div ref="rowEl">
     <div v-if="!isMobile" class="stats-grid">
-      <SignupLineChart :signup-trend="signupTrend" :revealed="revealed" />
-      <LoginBarChart :login-by-class="loginByClass" :revealed="revealed" />
-      <CategoryDonutChart :category-dist="categoryDist" :revealed="revealed" />
+      <SignupLineChart :key="`signup-${revealKey}`" :signup-trend="signupTrend" :revealed="revealed" />
+      <LoginBarChart :key="`login-${revealKey}`" :login-by-class="loginByClass" :revealed="revealed" />
+      <CategoryDonutChart :key="`cat-${revealKey}`" :category-dist="categoryDist" :revealed="revealed" />
     </div>
 
     <div v-else class="carousel">
       <div ref="viewportEl" class="carousel-viewport" @scroll="onScroll">
         <div class="carousel-slide">
-          <SignupLineChart :signup-trend="signupTrend" :revealed="revealed" />
+          <SignupLineChart :key="`signup-${revealKey}`" :signup-trend="signupTrend" :revealed="revealed" />
         </div>
         <div class="carousel-slide">
-          <LoginBarChart :login-by-class="loginByClass" :revealed="revealed" />
+          <LoginBarChart :key="`login-${revealKey}`" :login-by-class="loginByClass" :revealed="revealed" />
         </div>
         <div class="carousel-slide">
-          <CategoryDonutChart :category-dist="categoryDist" :revealed="revealed" />
+          <CategoryDonutChart :key="`cat-${revealKey}`" :category-dist="categoryDist" :revealed="revealed" />
         </div>
       </div>
       <div class="carousel-nav">
@@ -102,6 +121,14 @@ function onScroll() {
   gap: 20px;
 }
 
+/* 화면이 좁아지기 시작하면 신규가입자 추이/가입자 분포만 2열로 두고, 카테고리별 분포는 그 아래 한 줄
+   전체를 차지하게 한다 (CategoryDonutChart.vue 쪽 media query에서 grid-column:1/-1로 내려감) */
+@media (max-width: 1180px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .carousel {
   position: relative;
 }
@@ -125,6 +152,12 @@ function onScroll() {
   scroll-snap-align: start;
   display: flex;
   min-width: 0;
+}
+
+/* 내부 차트 컴포넌트(chart-card)는 콘텐츠 크기만큼만 차지하므로, 슬라이드 폭을 그대로 채워서
+   차트마다 카드 폭이 제각각(특히 카테고리별 분포가 훨씬 좁게)이 되는 걸 막는다 */
+.carousel-slide > * {
+  width: 100%;
 }
 
 .carousel-nav {
