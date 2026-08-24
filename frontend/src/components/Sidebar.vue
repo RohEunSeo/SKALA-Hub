@@ -70,7 +70,7 @@ function handleLogout() {
           >👤 마이페이지</RouterLink
         >
         <RouterLink
-          v-if="authStore.user?.role === 'admin'"
+          v-if="authStore.effectiveIsAdmin"
           to="/admin"
           class="nav-item admin-nav-item"
           :class="{ active: route.name === 'admin' }"

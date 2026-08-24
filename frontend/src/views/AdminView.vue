@@ -594,7 +594,7 @@ async function removeAnnouncement(id) {
 }
 
 onMounted(() => {
-  if (authStore.user?.role !== 'admin') return
+  if (!authStore.effectiveIsAdmin) return
   loadUncategorized()
   loadAllPosts()
   loadSyncFailures()
@@ -606,7 +606,7 @@ onMounted(() => {
 <template>
   <AppLayout :max-width="1040">
     <AuthRequired v-if="!authStore.isAuthenticated" message="관리자 페이지는 로그인이 필요합니다" />
-    <div v-else-if="authStore.user?.role !== 'admin'" class="no-permission">
+    <div v-else-if="!authStore.effectiveIsAdmin" class="no-permission">
       <div class="no-permission-icon">🚫</div>
       <div class="no-permission-message">관리자 권한이 없습니다.</div>
     </div>
