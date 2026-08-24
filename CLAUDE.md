@@ -18,6 +18,8 @@ SLACK_USER_TOKEN=
 SLACK_BOT_TOKEN=
 SLACK_CHANNEL_ID=C0BHGGH7PT3
 SLACK_GWANGJU_CHANNEL_ID=
+SLACK_SIGNING_SECRET=
+SLACK_ADMIN_DM_USER_ID=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -77,9 +79,13 @@ chat.postMessage / chat.update / chat.delete → 관리자가 동기화 안내�
 
 ## 동기화 전략
 
-Slack Event API(실시간 webhook)는 미구현 - 전부 스케줄러/수동 방식
-- 스케줄러: 30분마다 일반 동기화, 매일 새벽 4시 전체 재수집 (SlackSyncService @Scheduled)
+게시글 저장/분류/봇 댓글은 전부 스케줄러/수동 방식 (SlackSyncService)
+- 스케줄러: 5분마다 증분 동기화(SLACK_SYNC_INTERVAL_MS), 매일 새벽 4시 전체 재수집
 - 관리자 수동: /admin에서 가벼운 동기화 / 전체 재수집 / 링크 미리보기 재수집 버튼 3종 직접 실행 가능
+- Slack Events API(실시간 webhook)는 관리자 개인 DM 알림 전용으로만 사용 (SlackEventsController, POST /api/slack/events) -
+  새 글이 올라오는 즉시 SLACK_ADMIN_DM_USER_ID로 "새 글 감지" DM 발송, 이후 스케줄러가 실제로 동기화/분류를 마치면
+  성공/실패·전체 누적 순번·분류 카테고리를 담은 DM을 한 번 더 발송(SlackDmNotificationService). 게시글 저장 자체는
+  이 웹훅에서 하지 않고 여전히 스케줄러 경로로만 이루어짐
 
 
 ## 컬러 시스템
