@@ -119,9 +119,10 @@ function onScroll() {
 </template>
 
 <style scoped>
+/* 신규 가입자 추이는 x축에 날짜 라벨이 촘촘하게 들어가서 다른 두 카드보다 가로 폭을 조금 더 준다 */
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1.3fr 1fr 1fr;
   gap: 20px;
 }
 
@@ -129,7 +130,7 @@ function onScroll() {
    전체를 차지하게 한다 (CategoryDonutChart.vue 쪽 media query에서 grid-column:1/-1로 내려감) */
 @media (max-width: 1180px) {
   .stats-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.3fr 1fr;
   }
 }
 
