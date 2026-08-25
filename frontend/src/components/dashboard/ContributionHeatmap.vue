@@ -139,9 +139,10 @@ const totalContributions = computed(() => props.heatmap.reduce((sum, d) => sum +
   }
 }
 
-/* container-type:inline-size로 이 카드 자체의 실제 렌더링 폭을 기준 삼는다 - 뷰포트 기준 미디어쿼리는
-   사이드바/나무 카드 폭에 따라 이 카드가 실제로 얼마나 좁아지는지와 안 맞아서 반영이 늦어 보였다.
-   제목은 위에 붙이고(옆 나무 카드 제목과 같은 높이), 나머지 콘텐츠도 그 바로 아래부터 자연스럽게 이어진다 */
+/* container-type:inline-size로 "이 카드 자체의" 실제 렌더링 폭을 기준으로 잔디/통계를 세로로
+   쌓을지 정한다(옆 나무 카드가 폭을 얼마나 차지하는지와 무관하게, 히트맵 쪽이 실제로 좁아지는
+   시점에 바로 반응). growth-card의 align-items는 stretch가 아니라 flex-start라서, 이 카드가
+   내부적으로 세로로 쌓여 키가 커져도 옆 나무 카드가 그 높이에 억지로 안 맞춰진다 */
 .heatmap-section {
   container-type: inline-size;
   flex: 1;
@@ -167,7 +168,7 @@ const totalContributions = computed(() => props.heatmap.reduce((sum, d) => sum +
 }
 
 .heatmap-subtitle {
-  margin-top: 20px;
+  margin-top: 10px;
   font-size: 14px;
   font-weight: 600;
   color: #4a4f57;
@@ -193,14 +194,15 @@ const totalContributions = computed(() => props.heatmap.reduce((sum, d) => sum +
 
 .heatmap-body {
   display: flex;
-  gap: 28px;
+  gap: 40px;
   align-items: flex-start;
 }
 
 /* 가로 스크롤 없이 교육 기간 전체(오늘 이후 빈 칸 포함)가 항상 다 들어오는 유동형 그리드.
-   폭에 상한을 둬서 통계 블록이 바로 옆에 붙게 하되, 화면이 좁아지면 자연스럽게 같이 줄어든다 */
+   폭에 상한을 둬서 통계 블록이 바로 옆에 붙게 하되, 화면이 좁아지면 자연스럽게 같이 줄어든다.
+   칸이 정사각형(aspect-ratio:1)이라 이 폭을 줄이면 세로 높이도 같은 비율로 같이 줄어든다 */
 .weeks-area {
-  flex: 0 1 540px;
+  flex: 0 1 470px;
   min-width: 0;
 }
 
@@ -276,10 +278,12 @@ const totalContributions = computed(() => props.heatmap.reduce((sum, d) => sum +
   font-size: 12px;
 }
 
-/* 잔디(weeks-area 최대 540px) + gap(28px) + 통계 사이드(150px) = 약 718px가 여유 있게 다 들어가는 폭.
-   이 카드 자체가 그보다 조금이라도 좁아지려는 순간 바로 세로 스택으로 바꿔서, 잔디 칸이 눌려서
-   작아지는 게 눈에 보이기 전에 항상 미리 전환되게 한다 (뷰포트가 아니라 이 카드의 실제 폭 기준) */
-@container (max-width: 730px) {
+/* 잔디(weeks-area 최대 470px) + gap(40px) + 통계 사이드(150px) = 약 660px가 여유 있게 다 들어가는 폭.
+   이 카드 자체가 그보다 조금이라도 좁아지려는 순간(옆 나무 카드가 얼마나 넓든 상관없이) 바로 세로
+   스택으로 바꿔서, 잔디 칸이 눌려서 작아지는 게 눈에 보이기 전에 항상 미리 전환되게 한다.
+   나무 카드가 옆에서 폭을 차지해 growth-card 전체 뷰포트 브레이크포인트(768px)보다 이게 먼저 발동해도,
+   growth-card의 align-items가 stretch가 아니라 flex-start라서 나무 카드가 억지로 늘어나지 않는다 */
+@container (max-width: 670px) {
   .heatmap-body {
     flex-direction: column;
   }

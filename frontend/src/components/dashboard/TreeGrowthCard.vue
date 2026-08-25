@@ -1,6 +1,12 @@
 <script setup>
 // 대시보드 - 누적 게시글 수 기준 나무 성장 카드 (v3.html PAGE 7 DASHBOARD 나무 섹션 재현)
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useWeatherStore } from '../../stores/weather'
+import WeatherWidgetBg from './WeatherWidgetBg.vue'
+
+const weatherStore = useWeatherStore()
+onMounted(() => weatherStore.startPolling())
+onUnmounted(() => weatherStore.stopPolling())
 
 const props = defineProps({
   treeStage: { type: Object, required: true }, // { emoji, label, totalPostCount, nextThreshold, progressPct, barMax }
@@ -18,6 +24,21 @@ const STAGE_MARKS = [
 ]
 
 const barMax = computed(() => props.treeStage.barMax || 500)
+
+const WEATHER_LABELS = {
+  sunny: '☀️ 맑음',
+  cloudy: '☁️ 흐림',
+  rainy: '🌧️ 비',
+  snowy: '❄️ 눈',
+  foggy: '🌫️ 안개',
+  stormy: '⛈️ 뇌우',
+}
+
+const weatherLine = computed(() => {
+  if (!weatherStore.condition || weatherStore.temperature == null) return ''
+  const label = WEATHER_LABELS[weatherStore.condition] ?? '날씨'
+  return `${label} · ${weatherStore.temperature}°`
+})
 
 // 백엔드는 각 단계를 "시작 지점" 기준으로 이름 붙이지만(0=새싹,100=줄기,200=어린 나무...), 이 카드는
 // 씨앗을 추가하고 "다음 단계까지 필요한 수"로 라벨을 붙여서 전체가 한 칸씩 밀렸다(0=씨앗,100=새싹,200=줄기...).
@@ -50,41 +71,45 @@ function gridlineLeftPct(v) {
 
 <template>
   <div class="tree-card">
-    <div class="tree-title">🌱 허브 단계</div>
-    <div class="tree-emoji">{{ currentStage.emoji }}</div>
-    <div class="tree-label">{{ currentStage.label }}</div>
-    <div class="tick-numbers">
-      <span
-        v-for="stage in STAGE_MARKS"
-        :key="'num:' + stage.count"
-        class="tick-number"
-        :style="{ left: gridlineLeftPct(stage.count) + '%' }"
-      >
-        {{ stage.count }}
-      </span>
+    <div class="tree-bg-layer">
+      <WeatherWidgetBg :condition="weatherStore.condition" :is-day="weatherStore.isDay" />
     </div>
-    <div class="tree-bar-track">
-      <div class="tree-bar-fill" :style="{ width: treeStage.progressPct + '%' }"></div>
-      <div
-        v-for="v in barGridlines"
-        :key="v"
-        class="bar-gridline"
-        :style="{ left: gridlineLeftPct(v) + '%' }"
-      ></div>
-    </div>
-    <div class="tick-row">
-      <div
-        v-for="stage in STAGE_MARKS"
-        :key="stage.count"
-        class="tick"
-        :style="{ left: gridlineLeftPct(stage.count) + '%' }"
-      >
-        <span class="tick-emoji">{{ stage.emoji }}</span>
-        <span class="tick-label">{{ stage.label }}</span>
+
+    <div class="tree-content">
+      <div class="tree-title">🌱 허브 단계</div>
+      <div v-if="weatherLine" class="tree-weather-line">{{ weatherLine }}</div>
+      <div class="tree-emoji">{{ currentStage.emoji }}</div>
+      <div class="tree-label">{{ currentStage.label }}</div>
+      <div class="tick-numbers">
+        <span
+          v-for="stage in STAGE_MARKS"
+          :key="'num:' + stage.count"
+          class="tick-number"
+          :style="{ left: gridlineLeftPct(stage.count) + '%' }"
+        >
+          {{ stage.count }}
+        </span>
       </div>
-    </div>
-    <div class="tree-progress-text">
-      누적 게시글 <span class="tree-progress-value">{{ treeStage.totalPostCount }}개</span>
+      <div class="tree-bar-track">
+        <div class="tree-bar-fill" :style="{ width: treeStage.progressPct + '%' }"></div>
+        <div
+          v-for="v in barGridlines"
+          :key="v"
+          class="bar-gridline"
+          :style="{ left: gridlineLeftPct(v) + '%' }"
+        ></div>
+      </div>
+      <div class="tick-row">
+        <div
+          v-for="stage in STAGE_MARKS"
+          :key="stage.count"
+          class="tick"
+          :style="{ left: gridlineLeftPct(stage.count) + '%' }"
+        >
+          <span class="tick-emoji">{{ stage.emoji }}</span>
+          <span class="tick-label">{{ stage.label }}</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -112,8 +137,11 @@ function gridlineLeftPct(v) {
 }
 
 /* 폭을 넉넉히 줘야 6단계 라벨이 서로 안 겹친다. 오른쪽 패딩은 마지막(무성한 나무) 라벨이
-   중앙정렬된 채 절반쯤 삐져나와도 구분선(border-right)과 안 겹칠 만큼 넉넉하게 둔다 */
+   중앙정렬된 채 절반쯤 삐져나와도 구분선(border-right)과 안 겹칠 만큼 넉넉하게 둔다.
+   overflow는 hidden으로 두지 않는다 - 씨앗(맨 왼쪽 눈금)이 절반 삐져나오게 배치돼 있어서
+   여기서 자르면 잘려 보인다. 날씨 배경(WeatherWidgetBg)은 그 컴포넌트 자체에서 이미 클리핑한다 */
 .tree-card {
+  position: relative;
   width: clamp(230px, 30vw, 320px);
   flex-shrink: 0;
   display: flex;
@@ -125,20 +153,44 @@ function gridlineLeftPct(v) {
   border-right: 1px solid #f0f0f2;
 }
 
+/* 오늘 판교 실시간 날씨(WeatherWidgetBg) - 사각형 색 배경 없이 해/구름/비/눈 같은 개별 그림 요소만
+   카드의 원래 흰 배경 위에 얹히므로, 박스 형태의 경계가 생기지 않는다 (그래서 투명도도 거의 그대로) */
+.tree-bg-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+}
+
+.tree-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .tree-title {
   align-self: flex-start;
-  margin-top: 0;
   font-size: 15px;
   font-weight: 800;
   line-height: 18px;
   color: #1a1a2e;
-  margin-bottom: 14px;
+}
+
+.tree-weather-line {
+  align-self: flex-start;
+  margin-top: 3px;
+  margin-bottom: 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8a8fa0;
 }
 
 .tree-emoji {
-  font-size: 90px;
+  font-size: 68px;
   line-height: 1;
-  margin-top: 6px;
+  margin-top: 10px;
   animation:
     tree-grow 0.7s ease both,
     tree-sway 3s ease-in-out infinite;
@@ -146,7 +198,7 @@ function gridlineLeftPct(v) {
 }
 
 .tree-label {
-  margin-top: 10px;
+  margin-top: 6px;
   font-size: 14px;
   font-weight: 700;
   color: #1a1a2e;
@@ -157,7 +209,7 @@ function gridlineLeftPct(v) {
   position: relative;
   width: 100%;
   height: 12px;
-  margin-top: 18px;
+  margin-top: 12px;
 }
 
 .tick-number {
@@ -200,7 +252,7 @@ function gridlineLeftPct(v) {
 .tick-row {
   position: relative;
   width: 100%;
-  height: 38px;
+  height: 32px;
   margin-top: 6px;
 }
 
@@ -216,7 +268,7 @@ function gridlineLeftPct(v) {
 }
 
 .tick-emoji {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .tick-label {
@@ -224,17 +276,6 @@ function gridlineLeftPct(v) {
   color: #636e72;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.tree-progress-text {
-  margin-top: 10px;
-  font-size: 12.5px;
-  color: #636e72;
-}
-
-.tree-progress-value {
-  color: #4a3f8f;
-  font-weight: 800;
 }
 
 @media (max-width: 768px) {
