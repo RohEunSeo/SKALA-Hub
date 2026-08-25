@@ -25,6 +25,9 @@ Thumbs.db
 # 디자인 목업 (용량 커서 추적 제외)
 design/
 
+# 작업 일지 (로컬 전용, 깃허브에 올리지 않음)
+worklog/
+
 # 테스트 파일 (초기 슬랙 API 테스트용 Express 프로토타입)
 test.html
 server.js
