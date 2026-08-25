@@ -54,16 +54,63 @@ function isRevealed(rankIdx) {
   return cardStep.value >= revealThreshold(rankIdx)
 }
 
+// 카드가 어느 방향으로 슬라이드해서 들어올지 - 다음 카테고리면 오른쪽에서, 이전이면 왼쪽에서 들어오게
+const slideDirection = ref(1)
+
 function selectCategory(idx) {
+  if (idx === activeIndex.value) return
+  slideDirection.value = idx > activeIndex.value ? 1 : -1
   activeIndex.value = idx
 }
 
 function prevCategory() {
+  slideDirection.value = -1
   activeIndex.value = (activeIndex.value - 1 + CATEGORIES.length) % CATEGORIES.length
 }
 
 function nextCategory() {
+  slideDirection.value = 1
   activeIndex.value = (activeIndex.value + 1) % CATEGORIES.length
+}
+
+// 카드 영역을 옆으로 드래그(마우스/터치 공통 - pointer events)해도 다음/이전 카테고리로 넘어가게
+const dragStartX = ref(null)
+const SWIPE_THRESHOLD_PX = 40
+
+function onPointerDown(e) {
+  dragStartX.value = e.clientX
+}
+
+function onPointerUp(e) {
+  if (dragStartX.value == null) return
+  const delta = e.clientX - dragStartX.value
+  dragStartX.value = null
+  if (Math.abs(delta) < SWIPE_THRESHOLD_PX) return
+  if (delta < 0) nextCategory()
+  else prevCategory()
+}
+
+// 트랙패드 좌우 두 손가락 스와이프는 클릭드래그가 아니라 가로 방향 wheel(deltaX) 이벤트로 들어온다.
+// 손가락을 뗀 뒤에도 관성(모멘텀) 스크롤로 같은 제스처의 wheel 이벤트가 500ms 넘게 이어지는 경우가
+// 있어서, "트리거 시점부터 고정 500ms" 쿨다운으로는 그 사이 관성 이벤트가 다시 임계값을 넘겨
+// 한 번의 스와이프가 두 칸으로 넘어가 버렸다. 대신 "이 제스처(연속 wheel 이벤트)당 한 번만" 방식으로:
+// wheel 이벤트가 들어올 때마다 무음 타이머를 다시 걸어두고, 실제로 이벤트가 멈춰서(=제스처 종료)
+// 그 타이머가 끝나야만 다음 제스처를 다시 받아들인다
+let wheelGestureActive = false
+let wheelIdleTimer = null
+
+function onWheel(e) {
+  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return // 세로 스크롤은 페이지 스크롤 그대로 두기
+  e.preventDefault()
+  if (Math.abs(e.deltaX) < 12) return
+
+  clearTimeout(wheelIdleTimer)
+  wheelIdleTimer = setTimeout(() => (wheelGestureActive = false), 200)
+
+  if (wheelGestureActive) return
+  wheelGestureActive = true
+  if (e.deltaX > 0) nextCategory()
+  else prevCategory()
 }
 
 function goToPost(postId) {
@@ -100,30 +147,44 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
       <span class="pager-btn" @click="nextCategory">다음 ▶</span>
     </div>
 
-    <div v-if="entries.length === 0" class="hof-empty">아직 데이터가 없어요</div>
-    <div v-else class="podium-grid">
-      <div
-        v-for="rankIdx in podiumOrder"
-        :key="rankIdx"
-        class="podium-item"
-        :style="{ opacity: isRevealed(rankIdx) ? 1 : 0, transform: isRevealed(rankIdx) ? 'translateY(0)' : 'translateY(24px)' }"
-        @click="goToPost(entries[rankIdx].postId)"
-      >
-        <div class="podium-post-title">{{ previewTitle(entries[rankIdx].content) }}</div>
-        <div class="podium-author">{{ entries[rankIdx].userName }}</div>
-        <div class="podium-metric">👍 {{ entries[rankIdx].reactionCount ?? 0 }}</div>
-        <div
-          class="podium-block"
-          :style="{
-            height: RANK_HEIGHTS[rankIdx],
-            background: RANK_THEMES[rankIdx].bg,
-            boxShadow: `0 3px 10px ${RANK_THEMES[rankIdx].glow}30`,
-            color: RANK_TEXT_COLORS[rankIdx],
-          }"
-        >
-          {{ rankIdx + 1 }}
+    <div class="podium-swipe-area" @pointerdown="onPointerDown" @pointerup="onPointerUp" @wheel="onWheel">
+      <Transition :name="slideDirection > 0 ? 'slide-next' : 'slide-prev'" mode="out-in">
+        <div v-if="entries.length === 0" :key="'empty:' + activeIndex" class="hof-empty">아직 데이터가 없어요</div>
+        <div v-else :key="activeIndex" class="podium-grid">
+          <div
+            v-for="rankIdx in podiumOrder"
+            :key="rankIdx"
+            class="podium-item"
+            :style="{ opacity: isRevealed(rankIdx) ? 1 : 0, transform: isRevealed(rankIdx) ? 'translateY(0)' : 'translateY(24px)' }"
+            @click="goToPost(entries[rankIdx].postId)"
+          >
+            <div class="podium-post-title">{{ previewTitle(entries[rankIdx].content) }}</div>
+            <div class="podium-author">{{ entries[rankIdx].userName }}</div>
+            <div class="podium-metric">👍 {{ entries[rankIdx].reactionCount ?? 0 }}</div>
+            <div
+              class="podium-block"
+              :style="{
+                height: RANK_HEIGHTS[rankIdx],
+                background: RANK_THEMES[rankIdx].bg,
+                boxShadow: `0 3px 10px ${RANK_THEMES[rankIdx].glow}30`,
+                color: RANK_TEXT_COLORS[rankIdx],
+              }"
+            >
+              {{ rankIdx + 1 }}
+            </div>
+          </div>
         </div>
-      </div>
+      </Transition>
+    </div>
+
+    <div class="hof-dots">
+      <span
+        v-for="(cat, idx) in CATEGORIES"
+        :key="cat.value"
+        class="hof-dot"
+        :class="{ active: idx === activeIndex }"
+        @click="selectCategory(idx)"
+      ></span>
     </div>
   </div>
 </template>
@@ -205,6 +266,66 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
   padding: 40px 0;
   color: #a0a4ac;
   font-size: 13.5px;
+}
+
+/* 마우스 드래그/터치 스와이프로도 카테고리 전환 - pan-y라 세로 스크롤은 그대로 방해받지 않는다 */
+.podium-swipe-area {
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+.podium-swipe-area:active {
+  cursor: grabbing;
+}
+
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-prev-enter-active,
+.slide-prev-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+.slide-next-enter-from {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.slide-next-leave-to {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.slide-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.slide-prev-leave-to {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.hof-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.hof-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(74, 63, 143, 0.2);
+  cursor: pointer;
+}
+
+.hof-dot.active {
+  background: #4a3f8f;
+  width: 18px;
+  border-radius: 4px;
 }
 
 .podium-grid {
