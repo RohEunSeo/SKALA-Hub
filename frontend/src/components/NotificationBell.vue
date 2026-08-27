@@ -33,6 +33,13 @@ function toggleOpen() {
   }
 }
 
+// 뱃지 타입별 색상 구분 - 공지(핑크/빨강), 버그 해결(초록), 그 외(기본 보라)
+function badgeClass(badgeType) {
+  if (badgeType === '공지') return 'badge-notice'
+  if (badgeType === '버그 해결') return 'badge-bug'
+  return 'badge-update'
+}
+
 function goToLink(path) {
   if (!path) return
   open.value = false
@@ -61,7 +68,7 @@ function goToLink(path) {
           class="bell-item"
           :class="{ unread: !item.isRead }"
         >
-          <span class="bell-item-badge">{{ item.badgeType }}</span>
+          <span class="bell-item-badge" :class="badgeClass(item.badgeType)">{{ item.badgeType }}</span>
           <div class="bell-item-body">
             <div class="bell-item-title">{{ item.title }}</div>
             <div class="bell-item-meta">
@@ -180,11 +187,24 @@ function goToLink(path) {
   flex-shrink: 0;
   padding: 2px 7px;
   border-radius: 999px;
-  background: #f1eefc;
-  color: #4a3f8f;
   font-size: 10.5px;
   font-weight: 700;
   height: fit-content;
+}
+
+.bell-item-badge.badge-update {
+  background: #f1eefc;
+  color: #4a3f8f;
+}
+
+.bell-item-badge.badge-notice {
+  background: #fde8ec;
+  color: #e03131;
+}
+
+.bell-item-badge.badge-bug {
+  background: #e3f5e8;
+  color: #2f9e44;
 }
 
 .bell-item-title {
