@@ -68,6 +68,11 @@ public class AdminPostService {
             post.setIsExcludedFromRanking(request.isExcludedFromRanking());
         }
         if (request.content() != null) {
+            // 카테고리/태그만 바꾼 저장 요청도 content를 항상 같이 보내오므로, 실제로 값이 바뀐 경우에만
+            // "수동 편집" 표시를 해서 무관한 저장에 편승해 플래그가 잘못 세워지지 않게 함
+            if (!request.content().equals(post.getContent())) {
+                post.setContentManuallyEdited(true);
+            }
             post.setContent(request.content());
         }
         if (request.isDeleted() != null) {
