@@ -42,6 +42,9 @@ public class Post {
 
     private String content;
 
+    // 관리자가 본문을 수동으로 고친 게시글 - true면 슬랙 재동기화 때 원문으로 덮어쓰지 않음
+    private Boolean contentManuallyEdited = false;
+
     @Column(length = 50)
     private String category;
 

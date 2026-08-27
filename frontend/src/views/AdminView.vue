@@ -542,7 +542,15 @@ async function saveAllPosts() {
 const announcements = ref([])
 const announcementsLoading = ref(false)
 const announcementsError = ref('')
-const newAnnouncement = reactive({ badgeType: '공지', title: '', content: '', linkPath: '' })
+const newAnnouncement = reactive({
+  badgeType: '공지',
+  title: '',
+  content: '',
+  linkLabel: '',
+  linkPath: '',
+  linkLabel2: '',
+  linkPath2: '',
+})
 const sendingAnnouncement = ref(false)
 const editingAnnouncementId = ref(null)
 
@@ -556,7 +564,7 @@ const ANNOUNCEMENT_PRESETS = [
   },
   {
     label: '버그 예시',
-    badgeType: '버그',
+    badgeType: '버그 해결',
     title: '이미지 로딩 오류가 수정되었습니다',
     content: '일부 게시글에서 이미지가 안 뜨던 문제를 고쳤습니다.',
   },
@@ -578,12 +586,19 @@ function applyAnnouncementLinkPreset(preset) {
   newAnnouncement.linkPath = preset.path
 }
 
+function applyAnnouncementLinkPreset2(preset) {
+  newAnnouncement.linkPath2 = preset.path
+}
+
 function resetAnnouncementForm() {
   editingAnnouncementId.value = null
   newAnnouncement.badgeType = '공지'
   newAnnouncement.title = ''
   newAnnouncement.content = ''
+  newAnnouncement.linkLabel = ''
   newAnnouncement.linkPath = ''
+  newAnnouncement.linkLabel2 = ''
+  newAnnouncement.linkPath2 = ''
 }
 
 function startEditAnnouncement(a) {
@@ -591,7 +606,10 @@ function startEditAnnouncement(a) {
   newAnnouncement.badgeType = a.badgeType
   newAnnouncement.title = a.title
   newAnnouncement.content = a.content ?? ''
+  newAnnouncement.linkLabel = a.linkLabel ?? ''
   newAnnouncement.linkPath = a.linkPath ?? ''
+  newAnnouncement.linkLabel2 = a.linkLabel2 ?? ''
+  newAnnouncement.linkPath2 = a.linkPath2 ?? ''
 }
 
 async function loadAnnouncements() {
@@ -1035,7 +1053,7 @@ onMounted(() => {
           <div class="control-row">
             <select v-model="newAnnouncement.badgeType" class="category-select">
               <option value="공지">공지</option>
-              <option value="버그">버그</option>
+              <option value="버그 해결">버그 해결</option>
               <option value="업데이트">업데이트</option>
             </select>
             <input v-model="newAnnouncement.title" class="tag-input announcement-title-input" placeholder="공지 제목" />
@@ -1047,7 +1065,7 @@ onMounted(() => {
             placeholder="공지 내용 (선택)"
           ></textarea>
 
-          <p class="card-desc small">이동 경로 (선택) - 공지를 클릭하면 이 경로로 이동합니다</p>
+          <p class="card-desc small">링크 1 (선택) - 버튼 이름 + 클릭 시 이동할 경로</p>
           <div class="category-chips sub-chips">
             <span
               v-for="preset in ANNOUNCEMENT_LINK_PRESETS"
@@ -1059,9 +1077,37 @@ onMounted(() => {
           </div>
           <div class="control-row">
             <input
+              v-model="newAnnouncement.linkLabel"
+              class="tag-input announcement-title-input"
+              placeholder="버튼 이름 (비우면 '바로가기')"
+            />
+            <input
               v-model="newAnnouncement.linkPath"
               class="tag-input announcement-title-input"
               placeholder="예: /feed?tab=links"
+            />
+          </div>
+
+          <p class="card-desc small">링크 2 (선택)</p>
+          <div class="category-chips sub-chips">
+            <span
+              v-for="preset in ANNOUNCEMENT_LINK_PRESETS"
+              :key="preset.label"
+              class="chip"
+              @click="applyAnnouncementLinkPreset2(preset)"
+              >{{ preset.label }}</span
+            >
+          </div>
+          <div class="control-row">
+            <input
+              v-model="newAnnouncement.linkLabel2"
+              class="tag-input announcement-title-input"
+              placeholder="버튼 이름 (비우면 '바로가기')"
+            />
+            <input
+              v-model="newAnnouncement.linkPath2"
+              class="tag-input announcement-title-input"
+              placeholder="예: /posts/195"
             />
           </div>
 
@@ -1088,7 +1134,8 @@ onMounted(() => {
                 <span class="row-time">{{ formatRelativeTime(a.createdAt) }}</span>
               </div>
               <div v-if="a.content" class="row-preview">{{ a.content }}</div>
-              <div v-if="a.linkPath" class="row-preview">🔗 {{ a.linkPath }}</div>
+              <div v-if="a.linkPath" class="row-preview">🔗 {{ a.linkLabel || '바로가기' }} → {{ a.linkPath }}</div>
+              <div v-if="a.linkPath2" class="row-preview">🔗 {{ a.linkLabel2 || '바로가기' }} → {{ a.linkPath2 }}</div>
               <div class="control-row">
                 <button class="secondary-btn" @click="startEditAnnouncement(a)">수정</button>
                 <button class="secondary-btn" @click="removeAnnouncement(a.id)">삭제</button>

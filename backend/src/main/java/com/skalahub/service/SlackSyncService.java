@@ -312,7 +312,10 @@ public class SlackSyncService {
         post.setUserName(userName);
         post.setUserAvatarUrl(userInfo.avatarUrl());
         post.setIsInstructor(userName.contains("교수") || userName.contains("전임"));
-        post.setContent(resolveChannelMentions(resolveMentions(msg.path("text").asString(""), userInfoCache)));
+        // 관리자가 본문을 수동으로 고친 게시글은 재동기화가 슬랙 원문으로 되돌리지 않도록 건너뜀
+        if (!Boolean.TRUE.equals(post.getContentManuallyEdited())) {
+            post.setContent(resolveChannelMentions(resolveMentions(msg.path("text").asString(""), userInfoCache)));
+        }
         post.setReactionCount(sumReactions(msg));
         post.setReplyCount(msg.path("reply_count").asInt(0));
         post.setAttachments(toJsonOrNull(msg.path("attachments")));

@@ -8,7 +8,10 @@ public record AnnouncementDto(
         String badgeType,
         String title,
         String content,
+        String linkLabel,
         String linkPath,
+        String linkLabel2,
+        String linkPath2,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         boolean isRead) {
