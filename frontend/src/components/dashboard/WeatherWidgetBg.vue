@@ -8,7 +8,8 @@ const props = defineProps({
   isDay: { type: Boolean, default: true },
 })
 
-// 맑은데 밤이면 "맑은 밤"(별) 테마로 따로 처리 - 나머지 날씨는 밤이어도 톤만 어둡게(overlay)
+// 맑은데 밤이면 "맑은 밤"(별) 테마로 따로 처리 - 나머지 날씨는 밤이어도 낮과 동일하게 표시한다
+// (어두운 톤 오버레이를 넣어봤는데 어색하다는 피드백으로 제거함)
 const theme = computed(() => {
   if (!props.condition) return null
   if (props.condition === 'sunny' && !props.isDay) return 'clear-night'
@@ -46,7 +47,7 @@ function seeded(i, mod) {
     </template>
 
     <template v-else-if="theme === 'clear-night'">
-      <div class="moon-glow"></div>
+      <div class="moon-glow">🌙</div>
       <span
         v-for="i in STARS"
         :key="'star:' + i"
@@ -190,16 +191,15 @@ function seeded(i, mod) {
   }
 }
 
-/* ── 맑은 밤 ── 고정 px로 - %로 두면 카드가 짧을 때 그림자가 위쪽 경계에 걸려 잘릴 수 있다 */
+/* ── 맑은 밤 ── 원형 그라디언트 대신 초승달 이모지 그대로 사용 + 은은한 글로우(drop-shadow).
+   고정 px로 - %로 두면 카드가 짧을 때 그림자가 위쪽 경계에 걸려 잘릴 수 있다 */
 .moon-glow {
   position: absolute;
-  top: 28px;
+  top: 20px;
   right: 18%;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff3c4 0%, #f0d27a 70%, transparent 78%);
-  box-shadow: 0 0 16px rgba(230, 200, 110, 0.55);
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(230, 200, 110, 0.55));
 }
 
 .star {
@@ -264,8 +264,24 @@ function seeded(i, mod) {
   background-position: -30px -4px;
 }
 
+/* 비/뇌우용 먹구름 - 색 자체는 너무 진하지 않게 더 연하게 하고, 대신 그림자는 그대로 진하게 둬서
+   (색은 연하지만 여전히 입체감 있게) 무겁지 않으면서도 묵직하게 떠 있는 느낌을 유지한다 */
 .cloud.dark {
-  background-image: linear-gradient(180deg, #7a8494 0%, #4c5566 100%);
+  background-image: linear-gradient(180deg, #ced5de 0%, #838c9c 100%);
+  filter: drop-shadow(0 4px 6px rgba(25, 30, 46, 0.4));
+}
+
+/* 비/뇌우는 구름을 cloud-a/cloud-b 위치를 그대로 재사용하는데, 그 둘은 원래 맑음/흐림 쪽 7개 구름
+   배치용으로 위쪽(8%/22%)에 있어서 카드가 짧으면 구름 위쪽 퍼프가 weather-bg의 overflow:hidden
+   경계에 잘려 보였다. 비/뇌우일 때만 더 아래로 내려서 절대 위쪽 테두리에 안 걸리게 한다 */
+.rainy .cloud-a,
+.stormy .cloud-a {
+  top: 18%;
+}
+
+.rainy .cloud-b,
+.stormy .cloud-b {
+  top: 32%;
 }
 
 /* left를 %로 애니메이션해야 카드 폭이 얼마든 화면을 완전히 가로질러 지나간다(예전엔 translateX를

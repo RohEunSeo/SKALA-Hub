@@ -37,7 +37,8 @@ const WEATHER_LABELS = {
 const weatherLine = computed(() => {
   if (!weatherStore.condition || weatherStore.temperature == null) return ''
   const label = WEATHER_LABELS[weatherStore.condition] ?? '날씨'
-  return `${label} · ${weatherStore.temperature}°`
+  const humidityPart = weatherStore.humidity != null ? ` · 습도 ${weatherStore.humidity}%` : ''
+  return `${label} · ${weatherStore.temperature}°${humidityPart}`
 })
 
 // 백엔드는 각 단계를 "시작 지점" 기준으로 이름 붙이지만(0=새싹,100=줄기,200=어린 나무...), 이 카드는
@@ -182,6 +183,7 @@ function gridlineLeftPct(v) {
   align-self: flex-start;
   margin-top: 3px;
   margin-bottom: 11px;
+  margin-left: 6px;
   font-size: 11px;
   font-weight: 600;
   color: #8a8fa0;

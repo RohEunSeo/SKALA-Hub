@@ -4,5 +4,10 @@ package com.skalahub.dto;
 import java.util.List;
 
 public record AdminPostUpdateRequest(
-        String category, List<String> tags, Boolean isPinned, Boolean isExcludedFromRanking) {
+        String category,
+        List<String> tags,
+        Boolean isPinned,
+        Boolean isExcludedFromRanking,
+        String content,
+        Boolean isDeleted) {
 }

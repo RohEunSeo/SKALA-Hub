@@ -26,6 +26,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
             SELECT b.* FROM bookmarks b
             JOIN posts p ON p.id = b.post_id
             WHERE b.user_id = :slackId
+              AND p.is_deleted = false
               AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
               AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
             ORDER BY b.saved_at DESC
@@ -34,6 +35,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
             SELECT count(*) FROM bookmarks b
             JOIN posts p ON p.id = b.post_id
             WHERE b.user_id = :slackId
+              AND p.is_deleted = false
               AND (CAST(:category AS varchar) IS NULL OR p.category = CAST(:category AS varchar))
               AND (CAST(:tag AS varchar) IS NULL OR CAST(:tag AS varchar) = ANY(p.tags))
             """,
@@ -49,7 +51,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
             value = """
             SELECT p.category, count(*) FROM bookmarks b
             JOIN posts p ON p.id = b.post_id
-            WHERE b.user_id = :slackId AND p.category IS NOT NULL
+            WHERE b.user_id = :slackId AND p.category IS NOT NULL AND p.is_deleted = false
             GROUP BY p.category
             """,
             nativeQuery = true)
@@ -59,7 +61,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
             value = """
             SELECT tag, count(*) FROM bookmarks b
             JOIN posts p ON p.id = b.post_id, unnest(p.tags) AS tag
-            WHERE b.user_id = :slackId
+            WHERE b.user_id = :slackId AND p.is_deleted = false
             GROUP BY tag
             """,
             nativeQuery = true)

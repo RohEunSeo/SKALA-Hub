@@ -49,6 +49,10 @@ claude:
   api-key: ${CLAUDE_API_KEY}
   model: ${CLAUDE_MODEL:claude-haiku-4-5}
 
+# OpenWeather API (대시보드 판교 날씨 위젯)
+openweather:
+  api-key: ${OPENWEATHER_API_KEY}
+
 # JWT 인증
 jwt:
   secret: ${JWT_SECRET}

@@ -40,6 +40,9 @@ public class SlackSyncService {
     // 슬랙 유저 멘션(<@U0123ABC>) 원문 패턴 - 프론트에서 렌더링할 수 있도록 이름을 붙여 <@U0123ABC|이름> 형태로 치환
     private static final Pattern USER_MENTION_PATTERN = Pattern.compile("<@([A-Z0-9]+)>");
 
+    // 슬랙 채널 멘션(<#C0123ABC>) 원문 패턴 - 프론트에서 채널명으로 표시/링크할 수 있도록 <#C0123ABC|채널명> 형태로 치환
+    private static final Pattern CHANNEL_MENTION_PATTERN = Pattern.compile("<#([A-Z0-9]+)>");
+
     // 시스템 알림 메시지는 게시글로 취급하지 않음
     private static final Set<String> SKIP_SUBTYPES = Set.of(
             "channel_join", "channel_leave", "channel_topic", "channel_purpose",
@@ -68,6 +71,9 @@ public class SlackSyncService {
 
     // 유저 이름/프로필사진은 거의 안 바뀌므로 동기화 실행 간에도 재사용 - 매번 재조회하지 않아 API 호출량/소요시간 절감
     private final Map<String, SlackUserInfo> userInfoCache = new ConcurrentHashMap<>();
+
+    // 채널명도 거의 안 바뀌므로 동기화 실행 간에도 재사용
+    private final Map<String, String> channelNameCache = new ConcurrentHashMap<>();
 
     public SlackSyncService(
             PostRepository postRepository,
@@ -264,7 +270,7 @@ public class SlackSyncService {
             entity.setUserSlackId(userId);
             entity.setUserName(userInfo.name());
             entity.setUserAvatarUrl(userInfo.avatarUrl());
-            entity.setContent(resolveMentions(reply.path("text").asString(""), userInfoCache));
+            entity.setContent(resolveChannelMentions(resolveMentions(reply.path("text").asString(""), userInfoCache)));
             entity.setCreatedAt(tsToLocalDateTime(slackTs));
             replyRepository.save(entity);
             count++;
@@ -306,7 +312,7 @@ public class SlackSyncService {
         post.setUserName(userName);
         post.setUserAvatarUrl(userInfo.avatarUrl());
         post.setIsInstructor(userName.contains("교수") || userName.contains("전임"));
-        post.setContent(resolveMentions(msg.path("text").asString(""), userInfoCache));
+        post.setContent(resolveChannelMentions(resolveMentions(msg.path("text").asString(""), userInfoCache)));
         post.setReactionCount(sumReactions(msg));
         post.setReplyCount(msg.path("reply_count").asInt(0));
         post.setAttachments(toJsonOrNull(msg.path("attachments")));
@@ -401,6 +407,36 @@ public class SlackSyncService {
         }
         matcher.appendTail(result);
         return result.toString();
+    }
+
+    // <#C0123ABC> 형태의 원시 채널 멘션을 <#C0123ABC|채널명> 형태로 치환 (프론트가 채널명 링크로 표시할 수 있도록)
+    private String resolveChannelMentions(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        Matcher matcher = CHANNEL_MENTION_PATTERN.matcher(text);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String channelId = matcher.group(1);
+            String name = channelNameCache.computeIfAbsent(channelId, this::fetchChannelNameFromSlack);
+            matcher.appendReplacement(result, Matcher.quoteReplacement("<#" + channelId + "|" + name + ">"));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    // conversations.info 조회 실패(권한 부족 등) 시 채널ID를 그대로 이름 자리에 채워 프론트에서 최소한 링크는 뜨게 함
+    private String fetchChannelNameFromSlack(String channelId) {
+        try {
+            JsonNode response = getWithRetry("https://slack.com/api/conversations.info?channel={id}", channelId);
+            if (!response.path("ok").asBoolean(false)) {
+                return channelId;
+            }
+            return response.path("channel").path("name").asString(channelId);
+        } catch (Exception e) {
+            log.debug("채널 정보 조회 실패 (channelId={})", channelId, e);
+            return channelId;
+        }
     }
 
     private SlackUserInfo resolveUserInfo(String userId, Map<String, SlackUserInfo> cache) {

@@ -152,6 +152,7 @@ public class PostService {
     public PostResponse getPost(Long id) {
         Post post = postRepository
                 .findById(id)
+                .filter(p -> !Boolean.TRUE.equals(p.getIsDeleted()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다"));
         return toResponse(post);
     }
