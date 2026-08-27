@@ -47,10 +47,12 @@ public class Announcement {
     private String linkLabel;
 
     // 두 번째 링크 (선택) - 첫 번째와 마찬가지로 라벨+경로 한 쌍
-    @Column(length = 50)
+    // Hibernate 기본 네이밍 전략은 linkLabel2 -> link_label2(숫자 앞 언더스코어 없음)로 변환하는데
+    // 마이그레이션 SQL 컬럼명(link_label_2)과 어긋나서 명시적으로 지정
+    @Column(name = "link_label_2", length = 50)
     private String linkLabel2;
 
-    @Column(length = 300)
+    @Column(name = "link_path_2", length = 300)
     private String linkPath2;
 
     // 수정된 적 있으면 값이 들어감 - 관리자 목록에 "(수정됨)" 표시용
