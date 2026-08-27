@@ -58,6 +58,7 @@ export function renderSlackText(raw) {
   const links = []
   const emojis = []
   const mentions = []
+  const channels = []
 
   let text = raw
 
@@ -87,18 +88,25 @@ export function renderSlackText(raw) {
     return placeholder('LINK', links.length - 1)
   })
 
-  // 3-1. 사용자 멘션 <@ID|이름>, 채널 멘션 <#ID|이름>, 특수 멘션 <!here>/<!channel>/<!everyone>
+  // 3-1. 사용자 멘션 <@ID|이름>, 특수 멘션 <!here>/<!channel>/<!everyone>
   text = text.replace(/<@[A-Z0-9]+\|([^>]+)>/g, (_, name) => {
     mentions.push(`@${name}`)
-    return placeholder('MENTION', mentions.length - 1)
-  })
-  text = text.replace(/<#[A-Z0-9]+\|([^>]+)>/g, (_, name) => {
-    mentions.push(`#${name}`)
     return placeholder('MENTION', mentions.length - 1)
   })
   text = text.replace(/<!(here|channel|everyone)>/g, (_, kind) => {
     mentions.push(`@${kind}`)
     return placeholder('MENTION', mentions.length - 1)
+  })
+
+  // 3-2. 채널 멘션 <#ID|이름> (백엔드가 이름을 채워준 경우) 또는 <#ID>(이름 없는 원본, 과거 데이터/조회 실패 대비 폴백)
+  // → 슬랙처럼 클릭하면 해당 채널로 이동하는 링크로 렌더링
+  text = text.replace(/<#([A-Z0-9]+)\|([^>]+)>/g, (_, id, name) => {
+    channels.push({ id, label: `#${name}` })
+    return placeholder('CHANNEL', channels.length - 1)
+  })
+  text = text.replace(/<#([A-Z0-9]+)>/g, (_, id) => {
+    channels.push({ id, label: `#${id}` })
+    return placeholder('CHANNEL', channels.length - 1)
   })
 
   // 4. 나머지 텍스트 HTML escape (플레이스홀더는 영문/숫자/@만 포함되어 영향 없음)
@@ -156,6 +164,10 @@ export function renderSlackText(raw) {
     const { url, label } = links[i]
     return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="slack-link">${escapeHtml(label)}</a>`
   })
+  text = text.replace(/@@CHANNEL(\d+)@@/g, (_, i) => {
+    const { id, label } = channels[i]
+    return `<a href="https://theskala.slack.com/archives/${id}" target="_blank" rel="noopener noreferrer" class="slack-link">${escapeHtml(label)}</a>`
+  })
   text = text.replace(/@@EMOJI(\d+)@@/g, (_, i) => emojis[i])
   text = text.replace(/@@MENTION(\d+)@@/g, (_, i) => `<span class="slack-mention">${escapeHtml(mentions[i])}</span>`)
 
@@ -187,6 +199,7 @@ export function stripSlackMarkdown(raw, { collapseNewlines = true } = {}) {
   text = text.replace(/<(https?:\/\/[^|>\s]+)>/g, '$1')
   text = text.replace(/<@[A-Z0-9]+\|([^>]+)>/g, '@$1')
   text = text.replace(/<#[A-Z0-9]+\|([^>]+)>/g, '#$1')
+  text = text.replace(/<#([A-Z0-9]+)>/g, '#$1')
   text = text.replace(/<!(here|channel|everyone)>/g, '@$1')
   text = text.replace(/^>\s?/gm, '')
   text = text.replace(/:[a-z0-9_+-]+:/gi, (shortcode) => emojifyWithFallback(shortcode))

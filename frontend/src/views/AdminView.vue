@@ -344,6 +344,18 @@ function togglePostExpand(postId) {
   expandedPostIds.value = next
 }
 
+// 본문 수정 모드 토글 - 켜져있는 동안만 미리보기 대신 textarea가 보임
+const editingContentIds = ref(new Set())
+function toggleContentEdit(postId) {
+  const next = new Set(editingContentIds.value)
+  if (next.has(postId)) {
+    next.delete(postId)
+  } else {
+    next.add(postId)
+  }
+  editingContentIds.value = next
+}
+
 function managePreview(content) {
   const stripped = stripSlackMarkdown(content, { collapseNewlines: false })
   return stripped.length > MANAGE_PREVIEW_LENGTH
@@ -367,6 +379,7 @@ function initEditState(posts) {
       tags: [...(post.tags || [])],
       isPinned: !!post.isPinned,
       tagInput: '',
+      content: post.content || '',
     }
   }
 }
@@ -440,6 +453,7 @@ async function savePost(postId) {
       category: state.category || null,
       tags: state.tags,
       isPinned: state.isPinned,
+      content: state.content,
     })
     const index = allPosts.value.findIndex((post) => post.id === postId)
     const movedOutOfFilter = manageCategoryFilter.value !== '' && data.category !== manageCategoryFilter.value
@@ -453,10 +467,39 @@ async function savePost(postId) {
       }
     }
     savedId.value = postId
+    if (editingContentIds.value.has(postId)) {
+      const next = new Set(editingContentIds.value)
+      next.delete(postId)
+      editingContentIds.value = next
+    }
     toastStore.show(`${categoryLabel(data.category)} 카테고리로 이동했습니다`)
     postsStore.refreshCategoryCounts()
+    invalidateFeedCaches()
   } catch {
     toastStore.show('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    savingId.value = null
+  }
+}
+
+// 스칼라 허브에서만 삭제(is_deleted=true) - 슬랙 원본은 절대 건드리지 않음
+async function deletePost(postId) {
+  if (!window.confirm('이 게시글을 스칼라 허브에서 삭제할까요? (슬랙 원본에는 영향 없습니다)')) {
+    return
+  }
+  savingId.value = postId
+  try {
+    await updatePostAsAdmin(postId, { isDeleted: true })
+    const index = allPosts.value.findIndex((post) => post.id === postId)
+    if (index !== -1) {
+      allPosts.value.splice(index, 1)
+      allPostsTotal.value -= 1
+    }
+    toastStore.show('게시글을 삭제했습니다')
+    postsStore.refreshCategoryCounts()
+    invalidateFeedCaches()
+  } catch {
+    toastStore.show('삭제에 실패했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     savingId.value = null
   }
@@ -484,6 +527,7 @@ async function saveAllPosts() {
     }
     await loadAllPosts()
     postsStore.refreshCategoryCounts()
+    invalidateFeedCaches()
     toastStore.show(
       failCount === 0
         ? `${successCount}개 게시글이 저장되었습니다`
@@ -890,15 +934,23 @@ onMounted(() => {
               <span class="row-author">{{ post.userName }}</span>
               <span class="row-time">{{ formatRelativeTime(post.createdAt) }}</span>
             </div>
-            <div v-if="expandedPostIds.has(post.id)" class="manage-preview manage-preview-full" v-html="renderSlackText(post.content)"></div>
-            <div v-else class="manage-preview">{{ managePreview(post.content) }}</div>
-            <div
-              v-if="stripSlackMarkdown(post.content, { collapseNewlines: false }).length > MANAGE_PREVIEW_LENGTH"
-              class="expand-toggle"
-              @click="togglePostExpand(post.id)"
-            >
-              {{ expandedPostIds.has(post.id) ? '접기 ▴' : '더보기 ▾' }}
-            </div>
+            <textarea
+              v-if="editingContentIds.has(post.id) && editState[post.id]"
+              v-model="editState[post.id].content"
+              class="content-edit-textarea"
+              rows="4"
+            ></textarea>
+            <template v-else>
+              <div v-if="expandedPostIds.has(post.id)" class="manage-preview manage-preview-full" v-html="renderSlackText(post.content)"></div>
+              <div v-else class="manage-preview">{{ managePreview(post.content) }}</div>
+              <div
+                v-if="stripSlackMarkdown(post.content, { collapseNewlines: false }).length > MANAGE_PREVIEW_LENGTH"
+                class="expand-toggle"
+                @click="togglePostExpand(post.id)"
+              >
+                {{ expandedPostIds.has(post.id) ? '접기 ▴' : '더보기 ▾' }}
+              </div>
+            </template>
 
             <div v-if="editState[post.id]" class="manage-controls">
               <div class="control-row">
@@ -912,10 +964,18 @@ onMounted(() => {
                   📌 고정
                 </label>
 
+                <button class="secondary-btn" type="button" @click="toggleContentEdit(post.id)">
+                  {{ editingContentIds.has(post.id) ? '본문 수정 취소' : '본문 수정' }}
+                </button>
+
                 <button class="save-btn" :disabled="savingId === post.id" @click="savePost(post.id)">
                   {{ savingId === post.id ? '저장 중...' : '저장' }}
                 </button>
                 <span v-if="savedId === post.id" class="saved-check">✅ 저장됨</span>
+
+                <button class="delete-btn" type="button" :disabled="savingId === post.id" @click="deletePost(post.id)">
+                  삭제
+                </button>
               </div>
 
               <div class="control-row tag-row">
@@ -1497,6 +1557,39 @@ onMounted(() => {
   font-size: 12.5px;
   color: #2bb3a3;
   font-weight: 600;
+}
+
+.delete-btn {
+  padding: 7px 16px;
+  background: #fff;
+  color: #e01e5a;
+  border: 1px solid #e01e5a;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #fdeaef;
+}
+
+.delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.content-edit-textarea {
+  margin-top: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: #1a1a2e;
+  border: 1px solid rgba(26, 26, 46, 0.16);
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .error-text {

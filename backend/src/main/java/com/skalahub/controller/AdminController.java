@@ -91,7 +91,7 @@ public class AdminController {
         return adminPostService.getUncategorized(page, Math.max(1, Math.min(size, 100)));
     }
 
-    // 게시글 카테고리/태그/핀 고정 수동 수정
+    // 게시글 카테고리/태그/핀 고정/본문/삭제 여부 수동 수정 (슬랙 원본에는 영향 없음, 스칼라 허브 로컬 데이터만 변경)
     @PatchMapping("/posts/{id}")
     public PostResponse updatePost(@PathVariable Long id, @RequestBody AdminPostUpdateRequest request) {
         return adminPostService.updatePost(id, request);

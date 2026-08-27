@@ -1,4 +1,4 @@
-// 관리자 게시글 관리 - 카테고리/태그/핀 수동 수정, 미분류 게시글 조회/일괄 분류
+// 관리자 게시글 관리 - 카테고리/태그/핀/본문 수동 수정, 소프트 삭제, 미분류 게시글 조회/일괄 분류
 package com.skalahub.service;
 
 import com.skalahub.dto.AdminPostUpdateRequest;
@@ -66,6 +66,12 @@ public class AdminPostService {
         }
         if (request.isExcludedFromRanking() != null) {
             post.setIsExcludedFromRanking(request.isExcludedFromRanking());
+        }
+        if (request.content() != null) {
+            post.setContent(request.content());
+        }
+        if (request.isDeleted() != null) {
+            post.setIsDeleted(request.isDeleted());
         }
         post = postRepository.save(post);
         return postService.toResponse(post);
