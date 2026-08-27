@@ -33,10 +33,10 @@ function toggleOpen() {
   }
 }
 
-function selectAnnouncement(announcement) {
-  if (!announcement.linkPath) return
+function goToLink(path) {
+  if (!path) return
   open.value = false
-  router.push(announcement.linkPath)
+  router.push(path)
 }
 </script>
 
@@ -59,15 +59,19 @@ function selectAnnouncement(announcement) {
           v-for="item in notificationsStore.announcements"
           :key="item.id"
           class="bell-item"
-          :class="{ unread: !item.isRead, clickable: item.linkPath }"
-          @click="selectAnnouncement(item)"
+          :class="{ unread: !item.isRead }"
         >
           <span class="bell-item-badge">{{ item.badgeType }}</span>
           <div class="bell-item-body">
             <div class="bell-item-title">{{ item.title }}</div>
             <div class="bell-item-meta">
               <span class="bell-item-time">{{ formatRelativeTime(item.createdAt) }}</span>
-              <span v-if="item.linkPath" class="bell-item-link-hint">바로가기 ›</span>
+              <span v-if="item.linkPath" class="bell-item-link-hint" @click.stop="goToLink(item.linkPath)"
+                >{{ item.linkLabel || '바로가기' }} ›</span
+              >
+              <span v-if="item.linkPath2" class="bell-item-link-hint" @click.stop="goToLink(item.linkPath2)"
+                >{{ item.linkLabel2 || '바로가기' }} ›</span
+              >
             </div>
           </div>
         </div>
@@ -168,14 +172,6 @@ function selectAnnouncement(announcement) {
   border-radius: 10px;
 }
 
-.bell-item.clickable {
-  cursor: pointer;
-}
-
-.bell-item.clickable:hover {
-  background: rgba(26, 26, 46, 0.04);
-}
-
 .bell-item.unread {
   background: #f8f7fd;
 }
@@ -214,6 +210,11 @@ function selectAnnouncement(announcement) {
   font-size: 11px;
   font-weight: 700;
   color: #4a3f8f;
+  cursor: pointer;
+}
+
+.bell-item-link-hint:hover {
+  text-decoration: underline;
 }
 
 .bell-read-all {

@@ -42,6 +42,17 @@ public class Announcement {
     @Column(length = 300)
     private String linkPath;
 
+    // 링크 버튼에 표시할 커스텀 이름 (예: "daily-it-news 게시글 바로가기") - 비어있으면 프론트에서 "바로가기"로 표시
+    @Column(length = 50)
+    private String linkLabel;
+
+    // 두 번째 링크 (선택) - 첫 번째와 마찬가지로 라벨+경로 한 쌍
+    @Column(length = 50)
+    private String linkLabel2;
+
+    @Column(length = 300)
+    private String linkPath2;
+
     // 수정된 적 있으면 값이 들어감 - 관리자 목록에 "(수정됨)" 표시용
     private LocalDateTime updatedAt;
 }

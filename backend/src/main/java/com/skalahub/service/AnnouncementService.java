@@ -34,7 +34,10 @@ public class AnnouncementService {
         announcement.setBadgeType(request.badgeType() == null || request.badgeType().isBlank() ? "공지" : request.badgeType());
         announcement.setTitle(request.title());
         announcement.setContent(request.content());
+        announcement.setLinkLabel(blankToNull(request.linkLabel()));
         announcement.setLinkPath(blankToNull(request.linkPath()));
+        announcement.setLinkLabel2(blankToNull(request.linkLabel2()));
+        announcement.setLinkPath2(blankToNull(request.linkPath2()));
         announcement.setCreatedBy(creatorSlackId);
         announcement.setCreatedAt(LocalDateTime.now());
         announcement.setIsDeleted(false);
@@ -51,7 +54,10 @@ public class AnnouncementService {
         announcement.setBadgeType(request.badgeType() == null || request.badgeType().isBlank() ? "공지" : request.badgeType());
         announcement.setTitle(request.title());
         announcement.setContent(request.content());
+        announcement.setLinkLabel(blankToNull(request.linkLabel()));
         announcement.setLinkPath(blankToNull(request.linkPath()));
+        announcement.setLinkLabel2(blankToNull(request.linkLabel2()));
+        announcement.setLinkPath2(blankToNull(request.linkPath2()));
         announcement.setUpdatedAt(LocalDateTime.now());
         return announcement;
     }
@@ -81,7 +87,8 @@ public class AnnouncementService {
 
         return announcementRepository.findByIsDeletedFalseOrderByCreatedAtDesc().stream()
                 .map(a -> new AnnouncementDto(
-                        a.getId(), a.getBadgeType(), a.getTitle(), a.getContent(), a.getLinkPath(),
+                        a.getId(), a.getBadgeType(), a.getTitle(), a.getContent(),
+                        a.getLinkLabel(), a.getLinkPath(), a.getLinkLabel2(), a.getLinkPath2(),
                         a.getCreatedAt(), a.getUpdatedAt(), readIds.contains(a.getId())))
                 .toList();
     }
