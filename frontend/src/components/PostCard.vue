@@ -1,15 +1,17 @@
 <script setup>
 // 게시글 한 건을 카드 형태로 보여주는 컴포넌트 (슬랙 원본 렌더링 + 저장/댓글/딥링크)
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useToastStore } from '../stores/toast'
 import { fetchReplies } from '../api/posts'
+import { addCurriculumPost } from '../api/admin'
 import { renderSlackText, highlightInHtml } from '../utils/renderSlackText'
 import { formatRelativeTime, formatDateTime } from '../utils/relativeTime'
 import { getFileIcon } from '../utils/fileIcon'
 import { CATEGORIES } from '../constants/categories'
+import CurriculumPicker from './CurriculumPicker.vue'
 
 const props = defineProps({
   post: { type: Object, required: true },
@@ -18,6 +20,9 @@ const props = defineProps({
   linkToDetail: { type: Boolean, default: true },
   // 검색 중인 키워드가 있으면 본문에서 해당 부분을 하이라이트 표시
   highlightKeyword: { type: String, default: '' },
+  // 이 게시글이 이미 SKALA 커리큘럼 탭에 등록되어 있는지 ({ stage, subCategory } | null) - 피드 탭에서
+  // 관리자 전용 배치 조회로 내려줌. 다른 화면(상세/마이페이지 등)에서는 안 넘어와도 무방(추가 버튼은 항상 동작)
+  curriculumStatus: { type: Object, default: null },
 })
 
 const router = useRouter()
@@ -136,6 +141,27 @@ async function toggleBookmark() {
 function openInSlack() {
   if (props.post.slackPermalink) {
     window.open(props.post.slackPermalink, '_blank', 'noopener,noreferrer')
+  }
+}
+
+// SKALA 커리큘럼 탭 퀵애드 - 관리자가 피드를 보다가 바로 카테고리를 골라 등록할 수 있게 함
+const curriculumPopoverOpen = ref(false)
+const localCurriculumStatus = ref(props.curriculumStatus)
+watch(
+  () => props.curriculumStatus,
+  (val) => {
+    localCurriculumStatus.value = val
+  },
+)
+
+async function saveCurriculum({ stage, subCategory }) {
+  try {
+    await addCurriculumPost({ postId: props.post.id, stage, subCategory })
+    localCurriculumStatus.value = { stage, subCategory }
+    curriculumPopoverOpen.value = false
+    toastStore.show('커리큘럼에 추가했습니다')
+  } catch {
+    toastStore.show('추가에 실패했습니다. 잠시 후 다시 시도해주세요.')
   }
 }
 </script>
@@ -269,6 +295,24 @@ function openInSlack() {
         {{ isBookmarked ? '✅ 저장됨' : '🔖 저장하기' }}
       </span>
       <span class="action" @click="openInSlack">💬 슬랙에서 보기</span>
+      <span
+        v-if="authStore.effectiveIsAdmin"
+        class="action curriculum-action"
+        :class="{ active: !!localCurriculumStatus }"
+        @click.stop="curriculumPopoverOpen = !curriculumPopoverOpen"
+      >
+        {{ localCurriculumStatus ? '📚 커리큘럼 등록됨' : '📚 커리큘럼에 추가' }}
+      </span>
+    </div>
+
+    <div v-if="curriculumPopoverOpen" class="curriculum-popover" @click.stop>
+      <CurriculumPicker
+        :initial-stage="localCurriculumStatus?.stage"
+        :initial-sub-category="localCurriculumStatus?.subCategory"
+        confirm-label="추가"
+        @confirm="saveCurriculum"
+        @cancel="curriculumPopoverOpen = false"
+      />
     </div>
   </article>
 </template>
@@ -798,5 +842,22 @@ function openInSlack() {
 .save-action.disabled {
   color: #b2b2b2;
   cursor: not-allowed;
+}
+
+.curriculum-action.active {
+  color: #4a3f8f;
+}
+
+.curriculum-popover {
+  position: absolute;
+  bottom: 54px;
+  right: 20px;
+  z-index: 5;
+}
+
+@media (max-width: 480px) {
+  .curriculum-popover {
+    right: 16px;
+  }
 }
 </style>

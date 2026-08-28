@@ -1,18 +1,25 @@
 // 관리자 전용 API (role=admin만 접근 - SecurityConfig에서 강제)
 package com.skalahub.controller;
 
+import com.skalahub.dto.AdminCurriculumExcludeRequest;
+import com.skalahub.dto.AdminCurriculumUpsertRequest;
 import com.skalahub.dto.AdminLinkUpdateRequest;
 import com.skalahub.dto.AdminPostUpdateRequest;
 import com.skalahub.dto.BotReplyResponse;
 import com.skalahub.dto.BotReplyUpdateRequest;
+import com.skalahub.dto.CurriculumPostResponse;
+import com.skalahub.dto.CurriculumStatusDto;
 import com.skalahub.dto.LinkGroupDto;
 import com.skalahub.dto.PostPageResponse;
 import com.skalahub.dto.PostResponse;
 import com.skalahub.entity.SyncFailure;
+import com.skalahub.service.AdminCurriculumService;
 import com.skalahub.service.AdminLinkService;
 import com.skalahub.service.AdminPostService;
 import com.skalahub.service.LinkService;
 import com.skalahub.service.SlackSyncService;
+import java.security.Principal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -36,16 +43,19 @@ public class AdminController {
     private final AdminPostService adminPostService;
     private final AdminLinkService adminLinkService;
     private final LinkService linkService;
+    private final AdminCurriculumService adminCurriculumService;
 
     public AdminController(
             SlackSyncService slackSyncService,
             AdminPostService adminPostService,
             AdminLinkService adminLinkService,
-            LinkService linkService) {
+            LinkService linkService,
+            AdminCurriculumService adminCurriculumService) {
         this.slackSyncService = slackSyncService;
         this.adminPostService = adminPostService;
         this.adminLinkService = adminLinkService;
         this.linkService = linkService;
+        this.adminCurriculumService = adminCurriculumService;
     }
 
     // 최근 N일 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류) - API 호출량이 적어 자주 눌러도 부담 없음
@@ -179,5 +189,29 @@ public class AdminController {
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    // SKALA 커리큘럼 탭 - 게시글 추가 / 카테고리 변경(둘 다 upsert 하나로 처리, 피드 탭 퀵애드에서도 사용)
+    @PostMapping("/curriculum/posts")
+    public CurriculumPostResponse addCurriculumPost(
+            @RequestBody AdminCurriculumUpsertRequest request, Principal principal) {
+        return adminCurriculumService.addOrUpdate(request, principal.getName());
+    }
+
+    // 커리큘럼 탭에서만 게시글 제외/복원 - 원본 게시글(posts)은 전혀 변경되지 않음
+    @PatchMapping("/curriculum/posts/{postId}/exclude")
+    public void excludeCurriculumPost(
+            @PathVariable Long postId, @RequestBody AdminCurriculumExcludeRequest request) {
+        adminCurriculumService.setExcluded(postId, Boolean.TRUE.equals(request.excluded()));
+    }
+
+    // 피드 탭에 보이는 게시글 id들 중 이미 커리큘럼에 등록된 것만 배치 조회 (퀵애드 아이콘 상태 표시용)
+    @GetMapping("/curriculum/status")
+    public List<CurriculumStatusDto> getCurriculumStatus(@RequestParam String postIds) {
+        List<Long> ids = Arrays.stream(postIds.split(","))
+                .filter(s -> !s.isBlank())
+                .map(Long::valueOf)
+                .toList();
+        return adminCurriculumService.getStatusForPostIds(ids);
     }
 }

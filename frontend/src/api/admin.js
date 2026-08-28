@@ -90,3 +90,19 @@ export function updateAnnouncement(id, payload) {
 export function deleteAnnouncement(id) {
   return http.delete(`/api/admin/announcements/${id}`)
 }
+
+// SKALA 커리큘럼 탭 - 게시글 추가/카테고리 변경(upsert). 피드 탭 퀵애드에서도 동일하게 사용
+export function addCurriculumPost(payload) {
+  return http.post('/api/admin/curriculum/posts', payload)
+}
+
+// 커리큘럼 탭에서만 게시글 제외/복원 (원본 게시글은 변경되지 않음)
+export function excludeCurriculumPost(postId, excluded) {
+  return http.patch(`/api/admin/curriculum/posts/${postId}/exclude`, { excluded })
+}
+
+// 피드에 보이는 게시글들이 이미 커리큘럼에 등록됐는지 배치 조회 (퀵애드 아이콘 상태 표시용)
+export function fetchCurriculumStatus(postIds) {
+  if (!postIds.length) return Promise.resolve({ data: [] })
+  return http.get('/api/admin/curriculum/status', { params: { postIds: postIds.join(',') } })
+}
