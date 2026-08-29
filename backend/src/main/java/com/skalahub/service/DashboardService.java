@@ -261,6 +261,7 @@ public class DashboardService {
                 post.getUserName(),
                 post.getIsInstructor(),
                 post.getContent(),
+                post.getAiTitle(),
                 post.getReactionCount(),
                 post.getCreatedAt());
     }

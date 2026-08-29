@@ -260,4 +260,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             countQuery = "SELECT count(*) FROM posts WHERE is_deleted = false AND (category IS NULL OR category = '')",
             nativeQuery = true)
     Page<Post> findUncategorized(Pageable pageable);
+
+    // 관리자 - AI 제목이 아직 없는 게시글 (일괄 생성용)
+    @Query(value = "SELECT * FROM posts WHERE is_deleted = false AND ai_title IS NULL ORDER BY created_at DESC", nativeQuery = true)
+    List<Post> findAllMissingAiTitle();
+
+    @Query(value = "SELECT count(*) FROM posts WHERE is_deleted = false AND ai_title IS NULL", nativeQuery = true)
+    long countMissingAiTitle();
 }

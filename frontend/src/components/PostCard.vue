@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useToastStore } from '../stores/toast'
-import { fetchReplies } from '../api/posts'
+import { fetchReplies, updatePostAiTitle } from '../api/posts'
 import { addCurriculumPost } from '../api/admin'
 import { renderSlackText, highlightInHtml } from '../utils/renderSlackText'
 import { formatRelativeTime, formatDateTime } from '../utils/relativeTime'
@@ -48,6 +48,53 @@ const isBookmarked = computed(() => bookmarksStore.bookmarkedPostIds.includes(pr
 
 const imageFiles = computed(() => (props.post.files ?? []).filter((file) => file.isImage))
 const otherFiles = computed(() => (props.post.files ?? []).filter((file) => !file.isImage))
+
+// AI 제목 수정 - 작성자 본인 또는 관리자만. 이 카드의 다른 관리자 전용 버튼(커리큘럼 추가 등)과 동일하게
+// effectiveIsAdmin을 써서, "일반 모드 미리보기" 중엔 관리자도 실제 학생과 똑같이 본인 글만 수정 가능하게
+// 보이고, "관리자 모드"로 돌아오면 모든 글을 수정할 수 있음(백엔드 권한 체크는 실제 role 기준이라 이건
+// 어디까지나 화면 노출 문제일 뿐, 실제 학생 계정은 애초에 isAdmin이 false라 영향 없음)
+const canEditTitle = computed(
+  () => authStore.effectiveIsAdmin || (authStore.isAuthenticated && props.post.userSlackId === authStore.user?.sub),
+)
+const editingTitle = ref(false)
+const titleInput = ref('')
+const savingTitle = ref(false)
+const localAiTitle = ref(props.post.aiTitle)
+watch(
+  () => props.post.aiTitle,
+  (val) => {
+    localAiTitle.value = val
+  },
+)
+
+function startEditTitle() {
+  titleInput.value = localAiTitle.value ?? ''
+  editingTitle.value = true
+}
+
+function cancelEditTitle() {
+  editingTitle.value = false
+}
+
+async function saveTitle() {
+  if (savingTitle.value) return
+  const trimmed = titleInput.value.trim()
+  if (trimmed.length < 2 || trimmed.length > 60) {
+    toastStore.show('제목은 2~60자로 입력해주세요')
+    return
+  }
+  savingTitle.value = true
+  try {
+    const { data } = await updatePostAiTitle(props.post.id, trimmed)
+    localAiTitle.value = data.aiTitle
+    editingTitle.value = false
+    toastStore.show('제목을 수정했습니다')
+  } catch {
+    toastStore.show('제목 수정에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    savingTitle.value = false
+  }
+}
 
 // /api/files/proxy는 인증이 필요한데 <img src>는 브라우저가 직접 요청해서 Authorization 헤더를
 // 못 붙이므로, 쿼리 파라미터로 토큰을 실어 보낸다 (JwtAuthFilter가 헤더 없으면 이 파라미터를 봐줌)
@@ -193,6 +240,30 @@ async function saveCurriculum({ stage, subCategory }) {
     <div class="badges">
       <span v-if="categoryInfo" class="badge category-badge">{{ categoryInfo.icon }} {{ categoryInfo.shortLabel }}</span>
       <span v-for="postTag in post.tags" :key="postTag" class="badge tag-badge">🏷️ {{ postTag }}</span>
+    </div>
+
+    <!-- aiTitle이 null이면 아직 생성 전(대기 중 표시), 빈 문자열이면 "만들 재료가 없어 스킵됨"이라
+         아무것도 안 보여줌(영원히 "생성 중"으로 남는 걸 방지) -->
+    <div v-if="editingTitle" class="ai-title ai-title-edit">
+      <input
+        v-model="titleInput"
+        class="ai-title-input"
+        type="text"
+        maxlength="60"
+        placeholder="한 줄 제목"
+        @keyup.enter="saveTitle"
+        @keyup.esc="cancelEditTitle"
+      />
+      <span class="ai-title-btn" :class="{ disabled: savingTitle }" @click="saveTitle">저장</span>
+      <span class="ai-title-btn" @click="cancelEditTitle">취소</span>
+    </div>
+    <div v-else-if="localAiTitle" class="ai-title">
+      <span class="ai-title-mark">✨ {{ localAiTitle }}</span>
+      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click="startEditTitle">✏️</span>
+    </div>
+    <div v-else-if="localAiTitle === null" class="ai-title ai-title-pending">
+      ✨ 제목 생성 중...
+      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click="startEditTitle">✏️</span>
     </div>
 
     <!-- eslint-disable-next-line vue/no-v-html -->
@@ -447,6 +518,70 @@ async function saveCurriculum({ stage, subCategory }) {
 .tag-badge {
   background: #f4f4f4;
   color: #636e72;
+}
+
+.ai-title {
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.ai-title-mark {
+  font-size: 15px;
+  font-weight: 700;
+  color: #4a3f8f;
+  background: #ece6fb;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.ai-title-pending {
+  font-weight: 600;
+  color: #a0a4b8;
+}
+
+.ai-title-edit-icon {
+  margin-left: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.ai-title-edit-icon:hover {
+  opacity: 1;
+}
+
+.ai-title-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-title-input {
+  flex: 1;
+  min-width: 160px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+  padding: 6px 10px;
+  border: 1px solid rgba(74, 63, 143, 0.3);
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.ai-title-btn {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4a3f8f;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ai-title-btn.disabled {
+  color: #b2b2b2;
+  cursor: not-allowed;
 }
 
 .post-content {

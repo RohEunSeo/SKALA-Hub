@@ -7,7 +7,7 @@ import { stripSlackMarkdown } from '../../utils/renderSlackText'
 import { useIsMobile } from '../../composables/useIsMobile'
 
 const props = defineProps({
-  hallOfFame: { type: Object, required: true }, // { [categoryValue]: [{ postId, userName, isInstructor, content, reactionCount, createdAt }] }
+  hallOfFame: { type: Object, required: true }, // { [categoryValue]: [{ postId, userName, isInstructor, content, aiTitle, reactionCount, createdAt }] }
 })
 
 const router = useRouter()
@@ -117,8 +117,10 @@ function goToPost(postId) {
   router.push({ name: 'post-detail', params: { id: postId } })
 }
 
-function previewTitle(content) {
-  return stripSlackMarkdown(content).slice(0, 40)
+// AI 한 줄 제목이 있으면 그대로, 아직 없으면(생성 전/재료 없음) 원문 초반부로 대신 보여줌
+function previewTitle(entry) {
+  if (entry.aiTitle) return entry.aiTitle
+  return stripSlackMarkdown(entry.content).slice(0, 40)
 }
 
 watch(activeIndex, playReveal)
@@ -158,7 +160,7 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
             :style="{ opacity: isRevealed(rankIdx) ? 1 : 0, transform: isRevealed(rankIdx) ? 'translateY(0)' : 'translateY(24px)' }"
             @click="goToPost(entries[rankIdx].postId)"
           >
-            <div class="podium-post-title">{{ previewTitle(entries[rankIdx].content) }}</div>
+            <div class="podium-post-title">{{ previewTitle(entries[rankIdx]) }}</div>
             <div class="podium-author">{{ entries[rankIdx].userName }}</div>
             <div class="podium-metric">👍 {{ entries[rankIdx].reactionCount ?? 0 }}</div>
             <div

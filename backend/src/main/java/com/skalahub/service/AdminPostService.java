@@ -23,6 +23,7 @@ public class AdminPostService {
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
+    private final PostTitleService postTitleService;
     private final PostService postService;
     private final SlackBotReplyService slackBotReplyService;
 
@@ -30,11 +31,13 @@ public class AdminPostService {
             PostRepository postRepository,
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
+            PostTitleService postTitleService,
             PostService postService,
             SlackBotReplyService slackBotReplyService) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
+        this.postTitleService = postTitleService;
         this.postService = postService;
         this.slackBotReplyService = slackBotReplyService;
     }
@@ -109,6 +112,23 @@ public class AdminPostService {
     }
 
     public record ClassifyResult(int classified, int failed) {
+    }
+
+    // AI 제목이 없는 게시글 전체를 백그라운드 큐에 올림 - classifyAllUncategorized()와 달리 완료를
+    // 기다리지 않고 즉시 반환한다(요약 프롬프트 + 링크 fetch가 있어 건당 오래 걸릴 수 있어서, 관리자
+    // 브라우저 요청이 타임아웃되지 않게 하기 위함). 진행 상황은 별도 조회 API(getMissingAiTitleCount)로 확인
+    @Transactional(readOnly = true)
+    public int queueAllMissingAiTitles() {
+        List<Post> missing = postRepository.findAllMissingAiTitle();
+        for (Post post : missing) {
+            postTitleService.generateTitleAsync(post.getId());
+        }
+        return missing.size();
+    }
+
+    @Transactional(readOnly = true)
+    public long getMissingAiTitleCount() {
+        return postRepository.countMissingAiTitle();
     }
 
     // 슬랙 봇이 남긴 동기화 안내 댓글 + 알림이 보류된(pending) 게시글을 합쳐서 반환 - 관리자 모드에서

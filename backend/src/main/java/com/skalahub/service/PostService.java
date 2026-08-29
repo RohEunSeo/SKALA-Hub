@@ -33,7 +33,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -157,6 +159,32 @@ public class PostService {
         return toResponse(post);
     }
 
+    // 게시글 작성자 본인 또는 관리자만 AI 제목을 직접 고쳐 쓸 수 있음 - 작성자가 아니고 관리자 권한도
+    // 없으면 403. 저장된 값이 null이 아니게 되므로 이후 동기화가 자동으로 덮어쓰지 않음
+    // (SlackSyncService.upsertPost()는 ai_title이 null일 때만 재생성을 트리거함)
+    @Transactional
+    public PostResponse updateAiTitle(Long postId, String newTitle, Authentication auth) {
+        Post post = postRepository
+                .findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다"));
+
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+        boolean isOwner = post.getUserSlackId() != null && post.getUserSlackId().equals(auth.getName());
+        if (!isAdmin && !isOwner) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인 게시글만 수정할 수 있습니다");
+        }
+
+        String trimmed = newTitle == null ? "" : newTitle.trim();
+        if (trimmed.length() < 2 || trimmed.length() > 60) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "제목은 2~60자로 입력해주세요");
+        }
+
+        post.setAiTitle(trimmed);
+        post = postRepository.save(post);
+        return toResponse(post);
+    }
+
     // 존재 확인 쿼리를 따로 두지 않고 바로 조회 - 프론트에서 이미 로드된 게시글에 대해서만 호출되므로
     // 없는 postId가 들어올 일이 없고, DB가 원격(Supabase)이라 왕복 쿼리를 하나라도 줄이는 게 체감 속도에 큼
     public List<ReplyResponse> getReplies(Long postId) {
@@ -231,10 +259,12 @@ public class PostService {
     private PostResponse buildResponse(Post post, List<LinkPreviewDto> attachments, List<LinkPreviewDto> links) {
         return new PostResponse(
                 post.getId(),
+                post.getUserSlackId(),
                 post.getUserName(),
                 post.getUserAvatarUrl(),
                 post.getIsInstructor(),
                 post.getContent(),
+                post.getAiTitle(),
                 post.getCategory(),
                 post.getTags(),
                 post.getReactionCount(),

@@ -46,6 +46,16 @@ export function classifyAllUncategorized() {
   return http.post('/api/admin/posts/classify-all')
 }
 
+// AI 제목이 없는 게시글 전체를 백그라운드 생성 큐에 올림 (즉시 반환, 완료를 기다리지 않음)
+export function generateAiTitles() {
+  return http.post('/api/admin/posts/generate-titles')
+}
+
+// 위에서 큐잉한 AI 제목 생성 진행 상황 (남은 개수)
+export function fetchAiTitleProgress() {
+  return http.get('/api/admin/posts/title-progress')
+}
+
 // 동기화 실패 목록 (슬랙에는 알리지 않고 관리자 모드에서만 확인)
 export function fetchSyncFailures() {
   return http.get('/api/admin/sync-failures')

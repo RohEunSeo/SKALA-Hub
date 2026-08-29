@@ -139,6 +139,19 @@ public class AdminController {
         return Map.of("classified", result.classified(), "failed", result.failed());
     }
 
+    // AI 제목이 없는 게시글 전체를 백그라운드로 큐잉 (즉시 반환, 완료는 안 기다림)
+    @PostMapping("/posts/generate-titles")
+    public Map<String, Object> generateTitles() {
+        int queued = adminPostService.queueAllMissingAiTitles();
+        return Map.of("queued", queued);
+    }
+
+    // 위에서 큐잉한 AI 제목 생성이 얼마나 남았는지 - 프론트에서 폴링해서 진행률 표시
+    @GetMapping("/posts/title-progress")
+    public Map<String, Object> getTitleProgress() {
+        return Map.of("remaining", adminPostService.getMissingAiTitleCount());
+    }
+
     // 동기화 실패 목록 - 슬랙 채널에는 알리지 않고 여기서만 확인
     @GetMapping("/sync-failures")
     public List<SyncFailure> getSyncFailures() {
