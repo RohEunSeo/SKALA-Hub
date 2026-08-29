@@ -20,6 +20,7 @@ import { useAuthStore } from '../stores/auth'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
 import { fetchCurriculumStatus } from '../api/admin'
+import skLogo from '../assets/sk_logo.png'
 
 // 층(4층/5층) 필터가 의미 있는 카테고리 - 자격증·취업/교수님/기타/교육생 서비스는 층 구분이 무의미해서 제외
 const CAMPUS_CATEGORIES = ['개발 툴·환경', '학습자료']
@@ -290,7 +291,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
             🔗 링크 모음
           </div>
           <div class="feed-tab" :class="{ active: activeTab === 'curriculum' }" @click="selectTab('curriculum')">
-            🎓 SKALA 커리큘럼
+            <img :src="skLogo" class="feed-tab-logo" alt="" /> SKALA 커리큘럼
           </div>
         </div>
 
@@ -512,6 +513,13 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 .feed-tab.active {
   color: #4a3f8f;
   border-bottom-color: #4a3f8f;
+}
+
+.feed-tab-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: -6px;
 }
 
 .hidden-links-banner {
