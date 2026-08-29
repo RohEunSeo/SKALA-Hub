@@ -59,7 +59,7 @@ function onAdded() {
           :class="{ active: curriculumStore.selectedSubCategory === sub.value }"
           @click="selectSubCategory(sub.value)"
         >
-          {{ sub.label }}
+          {{ sub.label }} ({{ curriculumStore.subCounts[curriculumStore.selectedStage]?.[sub.value] ?? 0 }})
         </span>
       </div>
       <span v-if="isAdmin" class="add-post-btn" @click="showAddModal = true">+ 게시글 추가</span>

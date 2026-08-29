@@ -10,3 +10,8 @@ export function fetchCurriculumPosts(stage, subCategory) {
 export function fetchCurriculumCounts() {
   return http.get('/api/curriculum/counts')
 }
+
+// 하위 카테고리 필터 pill에 표시할 단계별 하위 카테고리 게시글 수
+export function fetchCurriculumSubCategoryCounts() {
+  return http.get('/api/curriculum/counts/subcategory')
+}

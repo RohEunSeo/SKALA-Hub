@@ -31,4 +31,10 @@ public class CurriculumController {
     public Map<String, Long> getCounts() {
         return curriculumService.getCounts();
     }
+
+    // 하위 카테고리 필터 pill에 표시할 단계별 하위 카테고리 게시글 수
+    @GetMapping("/counts/subcategory")
+    public Map<String, Map<String, Long>> getSubCategoryCounts() {
+        return curriculumService.getSubCategoryCounts();
+    }
 }

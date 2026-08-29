@@ -2,12 +2,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { CURRICULUM_STAGES } from '../constants/curriculum'
-import { fetchCurriculumPosts, fetchCurriculumCounts } from '../api/curriculum'
+import { fetchCurriculumPosts, fetchCurriculumCounts, fetchCurriculumSubCategoryCounts } from '../api/curriculum'
 
 export const useCurriculumStore = defineStore('curriculum', () => {
   const selectedStage = ref(CURRICULUM_STAGES[0].value)
   const selectedSubCategory = ref(null)
   const counts = ref({})
+  const subCounts = ref({}) // stage -> { subCategory: count }
   const postsByKey = ref({}) // `${stage}:${subCategory ?? ''}` -> post list
   const loading = ref(false)
   const error = ref('')
@@ -23,6 +24,12 @@ export const useCurriculumStore = defineStore('curriculum', () => {
     } catch {
       // 카운트는 다이어그램 배지용 부가 정보라 실패해도 목록 조회는 계속 진행
       counts.value = {}
+    }
+    try {
+      const { data } = await fetchCurriculumSubCategoryCounts()
+      subCounts.value = data ?? {}
+    } catch {
+      subCounts.value = {}
     }
   }
 
@@ -58,6 +65,7 @@ export const useCurriculumStore = defineStore('curriculum', () => {
     selectedStage,
     selectedSubCategory,
     counts,
+    subCounts,
     loading,
     error,
     loadCounts,

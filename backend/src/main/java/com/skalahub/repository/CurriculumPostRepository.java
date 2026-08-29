@@ -28,4 +28,16 @@ public interface CurriculumPostRepository extends JpaRepository<CurriculumPost, 
             """,
             nativeQuery = true)
     List<Object[]> countByStage();
+
+    // 하위 카테고리 필터 pill에 표시할 단계+하위카테고리별 게시글 수 (하위카테고리 없이 등록된 건 제외)
+    @Query(
+            value =
+                    """
+            SELECT cp.stage AS stage, cp.sub_category AS sub, count(*) AS cnt FROM curriculum_posts cp
+            JOIN posts p ON p.id = cp.post_id
+            WHERE cp.is_excluded = false AND p.is_deleted = false AND cp.sub_category IS NOT NULL
+            GROUP BY cp.stage, cp.sub_category
+            """,
+            nativeQuery = true)
+    List<Object[]> countByStageAndSubCategory();
 }

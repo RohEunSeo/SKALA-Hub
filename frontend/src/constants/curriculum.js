@@ -1,4 +1,6 @@
 // SKALA 커리큘럼 4단계 정의 (SKALA 교육 커리큘럼 ①~④, curriculum_posts.stage/sub_category 값과 1:1 대응)
+import skLogo from '../assets/sk_logo.png'
+
 export const CURRICULUM_STAGES = [
   {
     value: 'fullstack',
@@ -6,7 +8,7 @@ export const CURRICULUM_STAGES = [
     shortLabel: 'Full-stack',
     subtitle: 'AI 서비스를 위한 SW 기초',
     icon: '💻',
-    color: '#2BB3A3',
+    color: '#8C6FD6',
     subCategories: [
       { value: 'git', label: 'Git' },
       { value: 'frontend', label: '프론트엔드' },
@@ -20,7 +22,7 @@ export const CURRICULUM_STAGES = [
     shortLabel: '데이터·AIOps',
     subtitle: 'AI의 서비스화',
     icon: '📊',
-    color: '#6C5CE7',
+    color: '#6FCF97',
     subCategories: [
       { value: 'python', label: 'Python' },
       { value: 'analysis', label: '데이터분석·통계' },
@@ -34,7 +36,7 @@ export const CURRICULUM_STAGES = [
     shortLabel: 'Cloud Native',
     subtitle: 'AI 서비스 배포 및 운영',
     icon: '☁️',
-    color: '#8B6FD6',
+    color: '#3FA7E1',
     subCategories: [
       { value: 'agile_msa', label: 'Agile·MSA' },
       { value: 'container', label: '컨테이너' },
@@ -52,11 +54,20 @@ export const CURRICULUM_STAGES = [
     subCategories: [
       { value: 'llm', label: 'LLM 모델 이해·활용' },
       { value: 'vectordb_rag', label: 'Vector DB·RAG' },
-      { value: 'service', label: '서비스 이해·활용' },
       { value: 'agent', label: 'AI Agent 설계·구축' },
       { value: 'sllm', label: 'sLLM·Fine Tuning' },
       { value: 'mcp', label: 'MCP 연계' },
     ],
+  },
+  {
+    value: 'ax',
+    label: 'AX',
+    shortLabel: 'AX',
+    subtitle: 'AI 전환·산업 활용 사례',
+    icon: '✨',
+    iconImage: skLogo,
+    color: '#E8823D',
+    subCategories: [],
   },
 ]
 

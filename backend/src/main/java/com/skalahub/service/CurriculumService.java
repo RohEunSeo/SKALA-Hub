@@ -41,6 +41,19 @@ public class CurriculumService {
         return counts;
     }
 
+    // 하위 카테고리 필터 pill에 표시할 개수 - stage -> (subCategory -> count)
+    @Transactional(readOnly = true)
+    public Map<String, Map<String, Long>> getSubCategoryCounts() {
+        Map<String, Map<String, Long>> counts = new LinkedHashMap<>();
+        for (Object[] row : curriculumPostRepository.countByStageAndSubCategory()) {
+            String stage = (String) row[0];
+            String subCategory = (String) row[1];
+            long count = ((Number) row[2]).longValue();
+            counts.computeIfAbsent(stage, key -> new LinkedHashMap<>()).put(subCategory, count);
+        }
+        return counts;
+    }
+
     private CurriculumPostResponse toResponse(CurriculumPost entry) {
         return new CurriculumPostResponse(
                 postService.toResponse(entry.getPost()),
