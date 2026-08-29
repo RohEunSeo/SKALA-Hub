@@ -15,6 +15,7 @@ import { getSlackLoginUrl } from '../api/auth'
 import { updatePostAsAdmin, fetchExcludedFromRanking } from '../api/admin'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
+import { folderBodyColor, folderTabColor, folderTextColor } from '../utils/folderColors'
 import { CATEGORIES } from '../constants/categories'
 
 const AUTO_SLIDE_MS = 4000
@@ -163,31 +164,6 @@ function goToTodayFeed() {
   postsStore.date = 'today'
   postsStore.fetchPosts(true)
   router.push({ name: 'feed' })
-}
-
-// 카테고리 원색(cat.color)을 그대로 쓰면 너무 쨍해서, 흰색/검은색을 섞어 연한 파스텔 톤으로 가공
-function hexToRgb(hex) {
-  const value = hex.replace('#', '')
-  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16))
-}
-
-function mixWith(hex, target, amount, alpha = 1) {
-  const [r, g, b] = hexToRgb(hex)
-  const mix = (c) => Math.round(c + (target - c) * amount)
-  return alpha === 1 ? `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})` : `rgba(${mix(r)}, ${mix(g)}, ${mix(b)}, ${alpha})`
-}
-
-// 본체는 원색에 흰색을 섞어 연하게, 탭은 본체보다 더 밝게 - 맥 Finder 폴더처럼 탭/본체 톤 차이로 입체감
-function folderBodyColor(color) {
-  return mixWith(color, 255, 0.4)
-}
-
-function folderTabColor(color) {
-  return mixWith(color, 255, 0.68)
-}
-
-function folderTextColor(color) {
-  return mixWith(color, 0, 0.42)
 }
 
 onMounted(() => {

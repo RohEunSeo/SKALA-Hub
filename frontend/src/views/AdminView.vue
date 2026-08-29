@@ -1,6 +1,6 @@
 <script setup>
 // 관리자 전용 화면 - 전체 동기화 / 미분류 게시글 일괄 분류 / 게시글별 카테고리·태그·고정 수동 수정
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
 import { useAuthStore } from '../stores/auth'
@@ -15,6 +15,8 @@ import {
   fetchUncategorizedPosts,
   updatePostAsAdmin,
   classifyAllUncategorized,
+  generateAiTitles,
+  fetchAiTitleProgress,
   fetchSyncFailures,
   fetchBotReplies,
   deleteBotReply,
@@ -295,6 +297,50 @@ async function runClassifyAll() {
     classifying.value = false
   }
 }
+
+// AI 제목(한 줄 요약) 일괄 생성 - 백그라운드에서 처리되므로 큐잉 후 남은 개수를 주기적으로 폴링
+const aiTitleRemaining = ref(0)
+const aiTitleQueuing = ref(false)
+const aiTitlePolling = ref(false)
+const aiTitleError = ref('')
+let aiTitlePollTimer = null
+
+async function loadAiTitleProgress() {
+  try {
+    const { data } = await fetchAiTitleProgress()
+    aiTitleRemaining.value = data?.remaining ?? 0
+  } catch {
+    // 진행률은 부가 정보라 실패해도 조용히 무시
+  }
+}
+
+function pollAiTitleProgress() {
+  clearTimeout(aiTitlePollTimer)
+  aiTitlePollTimer = setTimeout(async () => {
+    await loadAiTitleProgress()
+    if (aiTitleRemaining.value > 0) {
+      pollAiTitleProgress()
+    } else {
+      aiTitlePolling.value = false
+    }
+  }, 3000)
+}
+
+async function runGenerateAiTitles() {
+  aiTitleQueuing.value = true
+  aiTitleError.value = ''
+  try {
+    await generateAiTitles()
+    aiTitlePolling.value = true
+    pollAiTitleProgress()
+  } catch {
+    aiTitleError.value = 'AI 제목 생성 시작에 실패했습니다. 잠시 후 다시 시도해주세요.'
+  } finally {
+    aiTitleQueuing.value = false
+  }
+}
+
+onUnmounted(() => clearTimeout(aiTitlePollTimer))
 
 // 전체 게시글 관리 (카테고리/태그/핀 수동 수정)
 const allPosts = ref([])
@@ -662,6 +708,7 @@ onMounted(() => {
   loadSyncFailures()
   loadBotReplies()
   loadAnnouncements()
+  loadAiTitleProgress()
 })
 </script>
 
@@ -878,6 +925,23 @@ onMounted(() => {
               <div class="row-preview">{{ stripSlackMarkdown(post.content) }}</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">✨ AI 제목 생성 (한 줄 요약)</div>
+        <div class="card">
+          <button
+            class="primary-btn"
+            :disabled="aiTitleQueuing || aiTitlePolling || aiTitleRemaining === 0"
+            @click="runGenerateAiTitles"
+          >
+            {{ aiTitleQueuing ? '시작하는 중...' : `제목 없는 게시글 ${aiTitleRemaining}개 AI 제목 생성` }}
+          </button>
+          <div v-if="aiTitlePolling" class="result-box">
+            백그라운드에서 생성 중입니다 - {{ aiTitleRemaining }}개 남음 (피드에 순차적으로 반영됩니다)
+          </div>
+          <div v-if="aiTitleError" class="result-box error">{{ aiTitleError }}</div>
         </div>
       </section>
 

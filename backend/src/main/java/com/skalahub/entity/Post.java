@@ -48,6 +48,10 @@ public class Post {
     @Column(length = 50)
     private String category;
 
+    // AI가 생성한 한 줄 제목/요약. null이면 아직 생성 전(동기화 시 또는 관리자 일괄 생성으로 채워짐)
+    @Column(name = "ai_title", length = 200)
+    private String aiTitle;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     private List<String> tags;
 

@@ -56,6 +56,7 @@ public class SlackSyncService {
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
+    private final PostTitleService postTitleService;
     private final SlackBotReplyService slackBotReplyService;
     private final SlackDmNotificationService slackDmNotificationService;
     private final SyncFailureRepository syncFailureRepository;
@@ -79,6 +80,7 @@ public class SlackSyncService {
             PostRepository postRepository,
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
+            PostTitleService postTitleService,
             SlackBotReplyService slackBotReplyService,
             SlackDmNotificationService slackDmNotificationService,
             SyncFailureRepository syncFailureRepository,
@@ -89,6 +91,7 @@ public class SlackSyncService {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
+        this.postTitleService = postTitleService;
         this.slackBotReplyService = slackBotReplyService;
         this.slackDmNotificationService = slackDmNotificationService;
         this.syncFailureRepository = syncFailureRepository;
@@ -335,6 +338,11 @@ public class SlackSyncService {
         if (post.getCategory() == null || post.getCategory().isBlank()) {
             categoryClassifier.classify(post);
             post = postRepository.save(post);
+        }
+
+        // 게시글 원본은 이미 저장 완료 - AI 제목은 느릴 수 있어(외부 링크 fetch 포함) 백그라운드로 채움
+        if (post.getAiTitle() == null) {
+            postTitleService.generateTitleAsync(post.getId());
         }
 
         fetchMissingLinkPreviews(post.getContent(), msg.path("attachments"));

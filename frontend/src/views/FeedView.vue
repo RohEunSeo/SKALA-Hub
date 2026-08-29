@@ -13,11 +13,14 @@ import PostCard from '../components/PostCard.vue'
 import LinkGalleryCard from '../components/LinkGalleryCard.vue'
 import LinkCardSkeleton from '../components/LinkCardSkeleton.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import CurriculumBoard from '../components/CurriculumBoard.vue'
 import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useAuthStore } from '../stores/auth'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
+import { fetchCurriculumStatus } from '../api/admin'
+import skLogo from '../assets/sk_logo.png'
 
 // 층(4층/5층) 필터가 의미 있는 카테고리 - 자격증·취업/교수님/기타/교육생 서비스는 층 구분이 무의미해서 제외
 const CAMPUS_CATEGORIES = ['개발 툴·환경', '학습자료']
@@ -46,9 +49,12 @@ if (route.query.category) {
 }
 
 // 사이드바 카테고리 클릭처럼 이 화면을 벗어나지 않고 store.hasLink가 바뀌는 경우, 탭 UI도 함께 전환
+// (커리큘럼 탭에 있을 때는 hasLink를 건드리지 않으므로 이 watch가 저절로 안 불리지만, 링크 탭으로 강제
+// 전환되는 경우(val이 true)는 커리큘럼 탭에서도 예외 없이 따라가야 함)
 watch(
   () => postsStore.hasLink,
   (val) => {
+    if (activeTab.value === 'curriculum' && !val) return
     activeTab.value = val ? 'links' : 'posts'
   },
 )
@@ -64,7 +70,10 @@ function selectTab(tab) {
   if (tab !== 'links' && postsStore.showHiddenLinks) {
     postsStore.setShowHiddenLinks(false)
   }
-  postsStore.setHasLink(tab === 'links' ? true : null)
+  // 커리큘럼 탭은 게시글/링크 탭과 완전히 독립된 화면이라 postsStore.hasLink(게시글↔링크 전환용)를 건드리지 않음
+  if (tab !== 'curriculum') {
+    postsStore.setHasLink(tab === 'links' ? true : null)
+  }
 }
 
 // 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
@@ -118,6 +127,24 @@ function revealMore() {
 
 const visiblePosts = computed(() => postsStore.posts.slice(0, visibleCount.value))
 const canShowMore = computed(() => visibleCount.value < postsStore.posts.length || postsStore.hasMore)
+
+// 관리자가 게시글 탭을 볼 때만 - 지금 보이는 게시글들이 이미 SKALA 커리큘럼에 등록됐는지 배치 조회해서
+// PostCard의 📚 퀵애드 아이콘 상태(추가/등록됨)에 반영. 일반 유저·다른 탭에서는 호출하지 않음
+const curriculumStatusMap = ref({})
+
+async function loadCurriculumStatus() {
+  if (!authStore.effectiveIsAdmin || activeTab.value !== 'posts' || visiblePosts.value.length === 0) return
+  try {
+    const { data } = await fetchCurriculumStatus(visiblePosts.value.map((p) => p.id))
+    const map = {}
+    for (const entry of data ?? []) map[entry.postId] = { stage: entry.stage, subCategory: entry.subCategory }
+    curriculumStatusMap.value = map
+  } catch {
+    curriculumStatusMap.value = {}
+  }
+}
+
+watch(visiblePosts, loadCurriculumStatus)
 
 // 필터/검색 등으로 목록이 처음부터 다시 조회될 때마다 노출 개수도 함께 리셋
 watch(
@@ -263,131 +290,141 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           <div class="feed-tab" :class="{ active: activeTab === 'links' }" @click="selectTab('links')">
             🔗 링크 모음
           </div>
-        </div>
-
-        <CategoryFilter v-if="!showHidden" />
-
-        <div v-if="!showHidden && (hasSubcategoryFilter || showCampusFilter || showDateFilter)" class="filter-combined-row">
-          <div v-if="hasSubcategoryFilter" class="edu-category-filter">
-            <span class="label">{{ subcategoryFilterLabel }}</span>
-            <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
-              <span class="pill-label">전체</span
-              ><span class="pill-count"
-                >({{
-                  postsStore.hasLink
-                    ? postsStore.linkCategoryCount(postsStore.category)
-                    : postsStore.categoryCount(postsStore.category)
-                }})</span
-              >
-            </div>
-            <div
-              v-for="sub in activeCategoryTags"
-              :key="sub.value"
-              class="pill"
-              :class="{ active: postsStore.tag === sub.value }"
-              @click="selectSubTag(sub.value)"
-            >
-              <span class="pill-label">{{ sub.label }}</span
-              ><span class="pill-count"
-                >({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})</span
-              >
-            </div>
-          </div>
-
-          <div v-if="showCampusFilter || showDateFilter" class="filter-row">
-            <CampusFilter v-if="showCampusFilter" />
-            <DateFilter v-if="showDateFilter" />
+          <div class="feed-tab" :class="{ active: activeTab === 'curriculum' }" @click="selectTab('curriculum')">
+            <img :src="skLogo" class="feed-tab-logo" alt="" /> SKALA 커리큘럼
           </div>
         </div>
 
-        <div class="sync-sort-row">
-          <span v-if="postsStore.lastSyncedAt" class="last-sync">
-            🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
-          </span>
-          <SortFilter />
-        </div>
+        <template v-if="activeTab !== 'curriculum'">
+          <CategoryFilter v-if="!showHidden" />
+
+          <div v-if="!showHidden && (hasSubcategoryFilter || showCampusFilter || showDateFilter)" class="filter-combined-row">
+            <div v-if="hasSubcategoryFilter" class="edu-category-filter">
+              <span class="label">{{ subcategoryFilterLabel }}</span>
+              <div class="pill" :class="{ active: !postsStore.tag }" @click="selectSubTag(null)">
+                <span class="pill-label">전체</span
+                ><span class="pill-count"
+                  >({{
+                    postsStore.hasLink
+                      ? postsStore.linkCategoryCount(postsStore.category)
+                      : postsStore.categoryCount(postsStore.category)
+                  }})</span
+                >
+              </div>
+              <div
+                v-for="sub in activeCategoryTags"
+                :key="sub.value"
+                class="pill"
+                :class="{ active: postsStore.tag === sub.value }"
+                @click="selectSubTag(sub.value)"
+              >
+                <span class="pill-label">{{ sub.label }}</span
+                ><span class="pill-count"
+                  >({{ postsStore.hasLink ? postsStore.linkTagCount(sub.value) : postsStore.tagCount(sub.value) }})</span
+                >
+              </div>
+            </div>
+
+            <div v-if="showCampusFilter || showDateFilter" class="filter-row">
+              <CampusFilter v-if="showCampusFilter" />
+              <DateFilter v-if="showDateFilter" />
+            </div>
+          </div>
+
+          <div class="sync-sort-row">
+            <span v-if="postsStore.lastSyncedAt" class="last-sync">
+              🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
+            </span>
+            <SortFilter />
+          </div>
+        </template>
       </div>
 
-      <div v-if="showHidden" class="hidden-links-banner">
-        🔒 관리자에게만 보이는 숨긴 링크입니다. 카드의 ♻️ 버튼으로 복원할 수 있어요.
-      </div>
+      <CurriculumBoard v-if="activeTab === 'curriculum'" />
 
-      <div
-        v-if="
-          showHidden
-            ? postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length === 0
-            : activeTab === 'links' && postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
-        "
-        class="link-gallery-grid"
-        aria-hidden="true"
-      >
-        <LinkCardSkeleton v-for="n in 6" :key="n" />
-      </div>
-      <div
-        v-else-if="!showHidden && activeTab !== 'links' && postsStore.loading && postsStore.posts.length === 0"
-        class="post-list"
-        aria-hidden="true"
-      >
-        <div class="post-card-skeleton" v-for="n in 3" :key="n">
-          <SkeletonBlock width="70%" height="16px" />
-          <SkeletonBlock width="100%" height="13px" />
-          <SkeletonBlock width="90%" height="13px" />
-          <SkeletonBlock width="40%" height="13px" />
-        </div>
-      </div>
-      <div v-else-if="showHidden" class="link-gallery-grid">
-        <LinkGalleryCard v-for="group in postsStore.hiddenLinkGroups" :key="group.url" :group="group" />
-      </div>
-      <div v-else-if="activeTab === 'links'" class="link-gallery-grid-wrapper">
-        <div v-if="postsStore.linkFilterLoading" class="link-gallery-overlay">
-          <span class="spinner spinner-lg" aria-hidden="true"></span>
-        </div>
-        <div class="link-gallery-grid">
-          <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
-          <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
-        </div>
-      </div>
-      <div v-else class="post-list">
-        <PostCard
-          v-for="post in visiblePosts"
-          :key="post.id"
-          :post="post"
-          :highlight-keyword="postsStore.keyword"
-        />
-      </div>
-
-      <template v-if="showHidden">
-        <div v-if="postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length > 0" class="loading-indicator">
-          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
-        </div>
-        <div v-else-if="postsStore.hiddenLinkGroups.length === 0" class="status-message">숨긴 링크가 없습니다.</div>
-      </template>
-      <template v-else-if="activeTab === 'links'">
-        <div
-          v-if="postsStore.linkGroupsLoading && !postsStore.linkFilterLoading && postsStore.linkGroups.length > 0"
-          class="loading-indicator"
-        >
-          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
-        </div>
-        <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
-        <div v-else-if="postsStore.linkGroups.length === 0" class="status-message">
-          링크가 달린 게시글이 없습니다.
-        </div>
-      </template>
       <template v-else>
-        <div v-if="postsStore.loading && postsStore.posts.length > 0" class="loading-indicator">
-          <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+        <div v-if="showHidden" class="hidden-links-banner">
+          🔒 관리자에게만 보이는 숨긴 링크입니다. 카드의 ♻️ 버튼으로 복원할 수 있어요.
         </div>
-        <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
-        <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
-          아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
-        </div>
-        <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
-      </template>
 
-      <div v-if="canShowMore && !postsStore.loading && activeTab !== 'links'" class="load-more" @click="loadMore">
-        더보기
-      </div>
+        <div
+          v-if="
+            showHidden
+              ? postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length === 0
+              : activeTab === 'links' && postsStore.linkGroupsLoading && postsStore.linkGroups.length === 0
+          "
+          class="link-gallery-grid"
+          aria-hidden="true"
+        >
+          <LinkCardSkeleton v-for="n in 6" :key="n" />
+        </div>
+        <div
+          v-else-if="!showHidden && activeTab !== 'links' && postsStore.loading && postsStore.posts.length === 0"
+          class="post-list"
+          aria-hidden="true"
+        >
+          <div class="post-card-skeleton" v-for="n in 3" :key="n">
+            <SkeletonBlock width="70%" height="16px" />
+            <SkeletonBlock width="100%" height="13px" />
+            <SkeletonBlock width="90%" height="13px" />
+            <SkeletonBlock width="40%" height="13px" />
+          </div>
+        </div>
+        <div v-else-if="showHidden" class="link-gallery-grid">
+          <LinkGalleryCard v-for="group in postsStore.hiddenLinkGroups" :key="group.url" :group="group" />
+        </div>
+        <div v-else-if="activeTab === 'links'" class="link-gallery-grid-wrapper">
+          <div v-if="postsStore.linkFilterLoading" class="link-gallery-overlay">
+            <span class="spinner spinner-lg" aria-hidden="true"></span>
+          </div>
+          <div class="link-gallery-grid">
+            <LinkGalleryCard v-for="group in postsStore.linkGroups" :key="group.url" :group="group" />
+            <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
+          </div>
+        </div>
+        <div v-else class="post-list">
+          <PostCard
+            v-for="post in visiblePosts"
+            :key="post.id"
+            :post="post"
+            :highlight-keyword="postsStore.keyword"
+            :curriculum-status="curriculumStatusMap[post.id] ?? null"
+          />
+        </div>
+
+        <template v-if="showHidden">
+          <div v-if="postsStore.hiddenLinkGroupsLoading && postsStore.hiddenLinkGroups.length > 0" class="loading-indicator">
+            <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+          </div>
+          <div v-else-if="postsStore.hiddenLinkGroups.length === 0" class="status-message">숨긴 링크가 없습니다.</div>
+        </template>
+        <template v-else-if="activeTab === 'links'">
+          <div
+            v-if="postsStore.linkGroupsLoading && !postsStore.linkFilterLoading && postsStore.linkGroups.length > 0"
+            class="loading-indicator"
+          >
+            <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+          </div>
+          <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
+          <div v-else-if="postsStore.linkGroups.length === 0" class="status-message">
+            링크가 달린 게시글이 없습니다.
+          </div>
+        </template>
+        <template v-else>
+          <div v-if="postsStore.loading && postsStore.posts.length > 0" class="loading-indicator">
+            <span class="spinner" aria-hidden="true"></span> 불러오는 중...
+          </div>
+          <div v-else-if="postsStore.error" class="status-message error">{{ postsStore.error }}</div>
+          <div v-else-if="postsStore.posts.length === 0 && postsStore.isFutureMonth" class="status-message">
+            아직 시작되지 않은 달이에요. 작성된 게시글이 없습니다.
+          </div>
+          <div v-else-if="postsStore.posts.length === 0" class="status-message">게시글이 없습니다.</div>
+        </template>
+
+        <div v-if="canShowMore && !postsStore.loading && activeTab !== 'links'" class="load-more" @click="loadMore">
+          더보기
+        </div>
+      </template>
 
       <button v-if="showScrollTop" class="scroll-top-btn" aria-label="맨 위로" @click="scrollToTop">
         <span class="scroll-top-icon">↑</span>
@@ -476,6 +513,13 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 .feed-tab.active {
   color: #4a3f8f;
   border-bottom-color: #4a3f8f;
+}
+
+.feed-tab-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: -6px;
 }
 
 .hidden-links-banner {

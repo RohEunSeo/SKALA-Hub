@@ -6,10 +6,12 @@ import java.util.List;
 
 public record PostResponse(
         Long id,
+        String userSlackId,
         String userName,
         String userAvatarUrl,
         Boolean isInstructor,
         String content,
+        String aiTitle,
         String category,
         List<String> tags,
         Integer reactionCount,

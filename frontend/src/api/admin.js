@@ -46,6 +46,16 @@ export function classifyAllUncategorized() {
   return http.post('/api/admin/posts/classify-all')
 }
 
+// AI 제목이 없는 게시글 전체를 백그라운드 생성 큐에 올림 (즉시 반환, 완료를 기다리지 않음)
+export function generateAiTitles() {
+  return http.post('/api/admin/posts/generate-titles')
+}
+
+// 위에서 큐잉한 AI 제목 생성 진행 상황 (남은 개수)
+export function fetchAiTitleProgress() {
+  return http.get('/api/admin/posts/title-progress')
+}
+
 // 동기화 실패 목록 (슬랙에는 알리지 않고 관리자 모드에서만 확인)
 export function fetchSyncFailures() {
   return http.get('/api/admin/sync-failures')
@@ -89,4 +99,20 @@ export function updateAnnouncement(id, payload) {
 // 전체 공지 삭제
 export function deleteAnnouncement(id) {
   return http.delete(`/api/admin/announcements/${id}`)
+}
+
+// SKALA 커리큘럼 탭 - 게시글 추가/카테고리 변경(upsert). 피드 탭 퀵애드에서도 동일하게 사용
+export function addCurriculumPost(payload) {
+  return http.post('/api/admin/curriculum/posts', payload)
+}
+
+// 커리큘럼 탭에서만 게시글 제외/복원 (원본 게시글은 변경되지 않음)
+export function excludeCurriculumPost(postId, excluded) {
+  return http.patch(`/api/admin/curriculum/posts/${postId}/exclude`, { excluded })
+}
+
+// 피드에 보이는 게시글들이 이미 커리큘럼에 등록됐는지 배치 조회 (퀵애드 아이콘 상태 표시용)
+export function fetchCurriculumStatus(postIds) {
+  if (!postIds.length) return Promise.resolve({ data: [] })
+  return http.get('/api/admin/curriculum/status', { params: { postIds: postIds.join(',') } })
 }
