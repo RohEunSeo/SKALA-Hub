@@ -1,5 +1,5 @@
 <script setup>
-// 마이페이지 "대시보드" 탭 (관리자 전용) - v3.html PAGE 7 DASHBOARD를 실제 데이터로 재현
+// 대시보드 탭 (로그인한 사용자면 누구나) - v3.html PAGE 7 DASHBOARD를 실제 데이터로 재현
 // 지식 그래프 섹션은 범위 제외
 import { computed, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'

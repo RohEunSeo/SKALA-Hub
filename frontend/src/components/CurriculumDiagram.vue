@@ -13,36 +13,38 @@ const emit = defineEmits(['select'])
 </script>
 
 <template>
-  <div class="curriculum-diagram">
-    <!-- folder-slot: 탭 진입 시 좌→우 순차 등장 애니메이션 전용 래퍼.
-         stage-folder(실제 카드)에 직접 애니메이션을 걸면 forwards로 고정된 transform이
-         hover/active의 transform을 계속 덮어써서 먹히지 않으므로 레이어를 분리함 -->
-    <div v-for="(stage, index) in CURRICULUM_STAGES" :key="stage.value" class="folder-slot" :style="{ '--index': index }">
-      <div
-        class="stage-folder"
-        :class="{ active: selectedStage === stage.value }"
-        :style="{
-          background: folderBodyColor(stage.color),
-          '--tab-color': folderTabColor(stage.color),
-        }"
-        @click="emit('select', stage.value)"
-      >
-        <!-- 선택된 폴더 표시 - 오른쪽 위에 체크 배지가 팝인 -->
+  <div class="curriculum-diagram-wrap">
+    <div class="curriculum-diagram">
+      <!-- folder-slot: 탭 진입 시 좌→우 순차 등장 애니메이션 전용 래퍼.
+           stage-folder(실제 카드)에 직접 애니메이션을 걸면 forwards로 고정된 transform이
+           hover/active의 transform을 계속 덮어써서 먹히지 않으므로 레이어를 분리함 -->
+      <div v-for="(stage, index) in CURRICULUM_STAGES" :key="stage.value" class="folder-slot" :style="{ '--index': index }">
         <div
-          class="selected-badge"
-          :class="{ show: selectedStage === stage.value }"
-          :style="{ color: stage.color }"
-          aria-hidden="true"
+          class="stage-folder"
+          :class="{ active: selectedStage === stage.value }"
+          :style="{
+            background: folderBodyColor(stage.color),
+            '--tab-color': folderTabColor(stage.color),
+          }"
+          @click="emit('select', stage.value)"
         >
-          ✓
-        </div>
-        <img v-if="stage.iconImage" :src="stage.iconImage" class="stage-icon stage-icon-image" alt="" />
-        <div v-else class="stage-icon">{{ stage.icon }}</div>
-        <div>
-          <div class="stage-label" :style="{ color: folderTextColor(stage.color) }">{{ stage.label }}</div>
-          <div class="stage-subtitle" :style="{ color: folderTextColor(stage.color) }">{{ stage.subtitle }}</div>
-          <div class="stage-count" :style="{ color: folderTextColor(stage.color) }">
-            {{ counts[stage.value] ?? 0 }}개
+          <!-- 선택된 폴더 표시 - 오른쪽 위에 체크 배지가 팝인 -->
+          <div
+            class="selected-badge"
+            :class="{ show: selectedStage === stage.value }"
+            :style="{ color: stage.color }"
+            aria-hidden="true"
+          >
+            ✓
+          </div>
+          <img v-if="stage.iconImage" :src="stage.iconImage" class="stage-icon stage-icon-image" alt="" />
+          <div v-else class="stage-icon">{{ stage.icon }}</div>
+          <div class="stage-info">
+            <div class="stage-label" :style="{ color: folderTextColor(stage.color) }">{{ stage.label }}</div>
+            <div class="stage-subtitle" :style="{ color: folderTextColor(stage.color) }">{{ stage.subtitle }}</div>
+            <div class="stage-count" :style="{ color: folderTextColor(stage.color) }">
+              {{ counts[stage.value] ?? 0 }}개
+            </div>
           </div>
         </div>
       </div>
@@ -51,6 +53,12 @@ const emit = defineEmits(['select'])
 </template>
 
 <style scoped>
+/* 사이드바 펼침/접힘처럼 뷰포트는 그대로인데 "이 영역"만 좁아지는 경우가 있어서, 뷰포트 기준
+   @media 대신 이 래퍼의 실제 렌더링 폭 기준 @container로 반응형을 건다 */
+.curriculum-diagram-wrap {
+  container-type: inline-size;
+}
+
 .curriculum-diagram {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -59,6 +67,10 @@ const emit = defineEmits(['select'])
 }
 
 .folder-slot {
+  /* 그리드 아이템 기본값(min-width:auto)이 라벨 텍스트의 최소 콘텐츠 폭을 기준으로 잡혀서,
+     영단어라 잘 안 끊기는 라벨("Full-stack Engineering")이 있는 칸만 더 넓어지고, 그 칸만
+     aspect-ratio 때문에 카드 높이도 같이 커지는 문제가 있었음 - 0으로 리셋해 5칸이 항상 동일 폭 */
+  min-width: 0;
   margin-top: 14px;
   /* 커리큘럼 탭에 들어올 때마다(다이어그램이 새로 mount될 때) 폴더가 왼쪽부터 순서대로 떠오름 */
   opacity: 0;
@@ -156,6 +168,14 @@ const emit = defineEmits(['select'])
   opacity: 1;
 }
 
+/* overflow:hidden이 붙은 stage-label 때문에 이 아이콘/정보 블록의 flexbox 자동 최소 높이가
+   0으로 취급돼서, 카드 폭이 애매하게 좁을 때 flex-shrink가 stage-label 박스를 한 줄보다 살짝
+   낮게 눌러버려 "g" 같은 디센더 글자 아래쪽이 잘려 보이는 문제가 있었음 - 절대 안 눌리게 고정 */
+.stage-icon,
+.stage-info {
+  flex-shrink: 0;
+}
+
 .stage-icon {
   font-size: 23px;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
@@ -176,16 +196,17 @@ const emit = defineEmits(['select'])
   transform: scale(1.1);
 }
 
-/* 라벨/서브타이틀은 줄 수를 고정해서 - 텍스트 길이가 제각각이라도 카드 높이가 항상
-   aspect-ratio대로 유지되도록 함 (넘치는 텍스트는 말줄임) */
+/* 라벨/서브타이틀 둘 다 항상 1줄 고정(넘치면 말줄임) - 예전엔 라벨이 최대 2줄까지 늘어날 수
+   있어서, "Full-stack Engineering"처럼 화면 폭이 애매할 때만 유독 2줄로 줄바꿈되는 폴더가
+   생기면 그 카드만 내용이 aspect-ratio 높이를 넘쳐 혼자 커 보였음. 1줄로 고정하면 라벨 텍스트
+   길이/줄바꿈 여부와 무관하게 5개 카드 높이가 항상 완전히 동일함 */
 .stage-label {
   font-weight: 700;
   font-size: 14px;
   line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-subtitle {
@@ -203,9 +224,11 @@ const emit = defineEmits(['select'])
   margin-top: 6px;
 }
 
-/* 화면이 좁아질수록 글씨/여백을 단계적으로 줄여서 좁은 카드에서도 내용이 안 넘치게 함
-   (aspect-ratio는 항상 4/3 그대로 유지 - 폭에 맞춰 높이만 비례해서 줄어듦) */
-@media (max-width: 900px) {
+/* 이 영역 자체가 좁아질수록(사이드바를 펼쳐서 콘텐츠 폭만 줄어드는 경우 포함) 글씨/여백을
+   단계적으로 줄이고 칸 수를 줄여서 카드가 잘리거나 넘치지 않게 함 - 뷰포트 폭이 아니라
+   .curriculum-diagram-wrap의 실제 렌더링 폭 기준(@container)이라 사이드바 상태와 무관하게 항상
+   정확히 반응함 (aspect-ratio는 항상 4/3 그대로 유지 - 폭에 맞춰 높이만 비례해서 줄어듦) */
+@container (max-width: 760px) {
   .curriculum-diagram {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -231,7 +254,7 @@ const emit = defineEmits(['select'])
   }
 }
 
-@media (max-width: 700px) {
+@container (max-width: 700px) {
   .stage-label {
     font-size: 11.5px;
   }
@@ -241,7 +264,7 @@ const emit = defineEmits(['select'])
   }
 }
 
-@media (max-width: 560px) {
+@container (max-width: 560px) {
   .curriculum-diagram {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;

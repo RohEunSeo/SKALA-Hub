@@ -103,6 +103,7 @@ const tooltipStyle = computed(() => {
 <template>
   <div class="chart-card">
     <div class="chart-title">🗂️ 카테고리별 분포</div>
+    <div class="chart-sub">조각에 마우스를 올리면 게시글 개수가 표시됩니다</div>
     <div class="donut-body">
       <div class="donut-wrap">
         <svg viewBox="0 0 120 120" class="donut-svg">
@@ -137,7 +138,7 @@ const tooltipStyle = computed(() => {
     </div>
 
     <Teleport to="body">
-      <div v-if="hoveredSeg" class="seg-tooltip" :style="tooltipStyle">{{ Math.round(hoveredSeg.pct) }}%</div>
+      <div v-if="hoveredSeg" class="seg-tooltip" :style="tooltipStyle">{{ hoveredSeg.count }}개</div>
     </Teleport>
   </div>
 </template>

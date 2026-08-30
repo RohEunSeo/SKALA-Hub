@@ -13,7 +13,8 @@ export const CURRICULUM_STAGES = [
       { value: 'git', label: 'Git' },
       { value: 'frontend', label: '프론트엔드' },
       { value: 'backend', label: '백엔드' },
-      { value: 'db', label: 'DB' },
+      { value: 'db', label: '스마트 데이터 이해 및 활용' },
+      { value: 'spring_ai', label: 'Spring AI' },
     ],
   },
   {
@@ -25,8 +26,9 @@ export const CURRICULUM_STAGES = [
     color: '#6FCF97',
     subCategories: [
       { value: 'python', label: 'Python' },
-      { value: 'analysis', label: '데이터분석·통계' },
+      { value: 'analysis', label: '데이터분석·기초통계' },
       { value: 'ml_dl', label: '머신러닝·딥러닝' },
+      { value: 'model_opt', label: '모델 개발·최적화' },
       { value: 'aiops', label: '모델서빙·AIOps' },
     ],
   },

@@ -1,4 +1,4 @@
-// 대시보드 탭 집계 (관리자 전용) - 나무 성장/게시글 기여도 히트맵/명예의 전당/신규 가입자 추이/반별 로그인 현황/카테고리 분포
+// 대시보드 탭 집계 (로그인한 사용자면 누구나) - 나무 성장/게시글 기여도 히트맵/명예의 전당/신규 가입자 추이/반별 로그인 현황/카테고리 분포
 package com.skalahub.service;
 
 import com.skalahub.dto.DashboardCategoryDistDto;
