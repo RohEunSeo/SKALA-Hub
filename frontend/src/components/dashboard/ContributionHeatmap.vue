@@ -5,7 +5,7 @@ import { useIsMobile } from '../../composables/useIsMobile'
 import { useHoverTooltip } from '../../composables/useHoverTooltip'
 
 const props = defineProps({
-  heatmap: { type: Array, required: true }, // [{ date: 'YYYY-MM-DD', count, level }] - 오늘까지만 내려옴
+  heatmap: { type: Array, required: true }, // [{ date: 'YYYY-MM-DD', count, level }] - 교육 기간 전체(courseStart~courseEnd), 미래 날짜는 level 0으로 내려옴
   stats: { type: Object, required: true }, // { maxDayLabel, maxDayCount, avgPerDay, bestWeekday, streakDays }
 })
 
@@ -31,20 +31,27 @@ const weeks = computed(() => {
   return result
 })
 
-// 데스크탑용 - 주 중간(4번째 요일) 기준으로 달이 바뀌는 시점에만 월 라벨 표시
+// 데스크탑용 - 그 주에 "1일"이 실제로 포함된 칸의 바로 다음 칸에 월 라벨을 달아서(깃허브처럼
+// 라벨이 그 달 칸에 딱 붙지 않고 한 칸 뒤에 오도록), 시작 칸 바로 위에 있을 때보다 자연스럽게 보이게 함.
+// 다만 첫 주는 교육 기간이 월 중간(7/14)에 시작해 1일이 없으므로, 그 주의 첫 유효한 날짜를 시작월로 봄
+const monthStarts = computed(() =>
+  weeks.value.map((week, wi) => {
+    const target = week.find((d) => d && d.date.slice(8, 10) === '01') ?? (wi === 0 ? week.find((d) => d) : null)
+    return target ? Number(target.date.slice(5, 7)) : null
+  }),
+)
+
 const weeksWithLabel = computed(() => {
-  let prevMonth = null
-  return weeks.value.map((week) => {
-    const mid = week[3]
-    let monthLabel = ''
-    if (mid) {
-      const monthNum = Number(mid.date.slice(5, 7))
-      if (monthNum !== prevMonth) {
-        monthLabel = monthNum + '월'
-        prevMonth = monthNum
-      }
+  const starts = monthStarts.value
+  return weeks.value.map((week, wi) => {
+    // 11월만 다음 칸이 아니라 원래 칸(1일이 포함된 칸)에 표시 - 다른 달과 한 칸 어긋나 보여서 예외 처리
+    let monthNum = null
+    if (starts[wi] === 11) {
+      monthNum = 11
+    } else if (wi > 0 && starts[wi - 1] && starts[wi - 1] !== 11) {
+      monthNum = starts[wi - 1]
     }
-    return { monthLabel, days: week }
+    return { monthLabel: monthNum ? monthNum + '월' : '', days: week }
   })
 })
 

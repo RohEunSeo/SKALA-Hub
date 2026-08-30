@@ -50,7 +50,7 @@ function onAdded() {
           :class="{ active: !curriculumStore.selectedSubCategory }"
           @click="selectSubCategory(null)"
         >
-          전체
+          전체 ({{ curriculumStore.counts[curriculumStore.selectedStage] ?? 0 }})
         </span>
         <span
           v-for="sub in currentStageInfo.subCategories"

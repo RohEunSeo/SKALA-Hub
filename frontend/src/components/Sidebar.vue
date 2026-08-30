@@ -69,11 +69,7 @@ function handleLogout() {
         <RouterLink to="/mypage" class="nav-item" :class="{ active: route.name === 'mypage' }"
           >👤 마이페이지</RouterLink
         >
-        <RouterLink
-          v-if="authStore.effectiveIsAdmin"
-          to="/dashboard"
-          class="nav-item"
-          :class="{ active: route.name === 'dashboard' }"
+        <RouterLink to="/dashboard" class="nav-item" :class="{ active: route.name === 'dashboard' }"
           >🌱 대시보드</RouterLink
         >
         <RouterLink

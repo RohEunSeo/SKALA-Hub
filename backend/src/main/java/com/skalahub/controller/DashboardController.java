@@ -1,4 +1,4 @@
-// 대시보드 탭 요약 API (관리자 전용 - /api/admin/**이라 SecurityConfig에서 ROLE_ADMIN만 접근 가능)
+// 대시보드 탭 요약 API (로그인한 사용자면 누구나 접근 가능 - /api/dashboard/**라 SecurityConfig에서 인증만 요구)
 package com.skalahub.controller;
 
 import com.skalahub.dto.DashboardSummaryResponse;
@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/admin/dashboard")
+@RequestMapping("/api/dashboard")
 public class DashboardController {
 
     private final DashboardService dashboardService;

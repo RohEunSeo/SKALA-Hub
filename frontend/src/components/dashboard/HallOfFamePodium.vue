@@ -114,13 +114,15 @@ function onWheel(e) {
 }
 
 function goToPost(postId) {
-  router.push({ name: 'post-detail', params: { id: postId } })
+  router.push({ name: 'post-detail', params: { id: postId }, query: { from: 'dashboard' } })
 }
 
 // AI 한 줄 제목이 있으면 그대로, 아직 없으면(생성 전/재료 없음) 원문 초반부로 대신 보여줌
+// "검색·저장"처럼 가운뎃점(·)으로 이어진 단어는 그 자리에서 줄바꿈되면 어색해서, 단어 연결자(word
+// joiner)로 감싸 가운뎃점 앞뒤에서는 줄이 안 끊기게 하고 공백에서만 자연스럽게 끊기게 함
 function previewTitle(entry) {
-  if (entry.aiTitle) return entry.aiTitle
-  return stripSlackMarkdown(entry.content).slice(0, 40)
+  const title = entry.aiTitle ? entry.aiTitle : stripSlackMarkdown(entry.content).slice(0, 40)
+  return title.replace(/·/g, '⁠·⁠')
 }
 
 watch(activeIndex, playReveal)
@@ -131,6 +133,7 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
 <template>
   <div class="hof-card">
     <div class="hof-title">🏛️ 카테고리별 명예의 전당</div>
+    <div class="hof-sub">* 반응 수 기준으로 집계</div>
 
     <div v-if="!isMobile" class="hof-tabs">
       <div
@@ -213,6 +216,12 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
   font-size: 15px;
   font-weight: 800;
   color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.hof-sub {
+  font-size: 12px;
+  color: #636e72;
   margin-bottom: 14px;
 }
 
@@ -355,6 +364,9 @@ onUnmounted(() => revealTimers.forEach(clearTimeout))
   line-height: 1.4;
   text-align: center;
   min-height: 36px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 
 .podium-author {
