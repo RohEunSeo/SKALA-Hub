@@ -39,7 +39,9 @@ const authStore = useAuthStore()
 
 // 상단 탭("게시글"/"🔗 링크 모음") - 뷰 로컬 상태, 카테고리/층/기간 필터는 스토어에서 그대로 공유됨.
 // 링크 모음 카드의 "게시글 보러가기"로 상세 페이지에 갔다가 뒤로가기로 돌아올 때 ?tab=links가 붙어 오면 링크 탭으로 복원
-const activeTab = ref(route.query.tab === 'links' ? 'links' : 'posts')
+const activeTab = ref(
+  route.query.tab === 'links' ? 'links' : route.query.tab === 'curriculum' ? 'curriculum' : 'posts',
+)
 
 // 공지 등에서 카테고리/태그까지 지정한 딥링크로 들어올 수 있게 함
 // 예: /feed?tab=links&category=기타&tag=맛집 → 링크 모음 탭의 기타>맛집 필터가 선택된 채로 진입
@@ -75,6 +77,18 @@ function selectTab(tab) {
     postsStore.setHasLink(tab === 'links' ? true : null)
   }
 }
+
+// 이미 /feed에 있는 상태에서 알림 등을 통해 ?tab=curriculum(또는 links) 딥링크로 다시 들어오는 경우 -
+// 같은 라우트라 컴포넌트가 새로 mount되지 않아 위 activeTab 초기값 로직이 다시 실행되지 않으므로,
+// route.query.tab 자체를 감시해서 탭을 맞춰준다
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab === 'curriculum' || tab === 'links') {
+      selectTab(tab)
+    }
+  },
+)
 
 // 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
 const showHidden = computed(() => activeTab.value === 'links' && postsStore.showHiddenLinks)
