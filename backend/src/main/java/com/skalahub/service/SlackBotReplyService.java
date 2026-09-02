@@ -51,11 +51,15 @@ public class SlackBotReplyService {
         return frontendUrl.contains("localhost") || frontendUrl.contains("127.0.0.1");
     }
 
-    public void notifySyncSuccess(String threadTs, Long postId) {
+    public void notifySyncSuccess(String threadTs, Long postId, String aiTitle) {
         String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
-        String message = "✅ " + SYNC_SUCCESS_MARKER + "! (" + timestamp + ")\n"
-                + "🔗 바로가기: " + frontendUrl + "/posts/" + postId;
-        postThreadReply(threadTs, message);
+        StringBuilder message = new StringBuilder()
+                .append("✅ ").append(SYNC_SUCCESS_MARKER).append("! (").append(timestamp).append(")\n")
+                .append("🔗 바로가기: ").append(frontendUrl).append("/posts/").append(postId);
+        if (aiTitle != null && !aiTitle.isBlank()) {
+            message.append("\n📝 AI 제목: ").append(aiTitle);
+        }
+        postThreadReply(threadTs, message.toString());
     }
 
     public void notifySyncFailure(String threadTs) {

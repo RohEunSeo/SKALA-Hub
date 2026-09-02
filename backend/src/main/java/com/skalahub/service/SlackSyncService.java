@@ -57,6 +57,7 @@ public class SlackSyncService {
     private final ReplyRepository replyRepository;
     private final CategoryClassifier categoryClassifier;
     private final PostTitleService postTitleService;
+    private final PostTitleGenerator postTitleGenerator;
     private final SlackBotReplyService slackBotReplyService;
     private final SlackDmNotificationService slackDmNotificationService;
     private final SyncFailureRepository syncFailureRepository;
@@ -81,6 +82,7 @@ public class SlackSyncService {
             ReplyRepository replyRepository,
             CategoryClassifier categoryClassifier,
             PostTitleService postTitleService,
+            PostTitleGenerator postTitleGenerator,
             SlackBotReplyService slackBotReplyService,
             SlackDmNotificationService slackDmNotificationService,
             SyncFailureRepository syncFailureRepository,
@@ -92,6 +94,7 @@ public class SlackSyncService {
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
         this.postTitleService = postTitleService;
+        this.postTitleGenerator = postTitleGenerator;
         this.slackBotReplyService = slackBotReplyService;
         this.slackDmNotificationService = slackDmNotificationService;
         this.syncFailureRepository = syncFailureRepository;
@@ -205,7 +208,7 @@ public class SlackSyncService {
                         post.setPendingNotification(true);
                         postRepository.save(post);
                     } else {
-                        slackBotReplyService.notifySyncSuccess(slackTs, post.getId());
+                        slackBotReplyService.notifySyncSuccess(slackTs, post.getId(), post.getAiTitle());
                         slackDmNotificationService.sendSyncResult(post, postRepository.countByIsDeletedFalse());
                     }
                 }
@@ -340,9 +343,16 @@ public class SlackSyncService {
             post = postRepository.save(post);
         }
 
-        // 게시글 원본은 이미 저장 완료 - AI 제목은 느릴 수 있어(외부 링크 fetch 포함) 백그라운드로 채움
+        // 게시글 원본은 이미 저장 완료. 새 글이면 곧 봇 댓글에 AI 제목을 같이 보여줘야 하므로 카테고리
+        // 분류처럼 동기로 생성해서 기다린다(PostTitleGenerator는 실패해도 예외를 던지지 않음) -
+        // 그 외(기존 글 재분류, 로컬 개발 알림 보류)는 굳이 기다릴 필요 없어 백그라운드로 채움
         if (post.getAiTitle() == null) {
-            postTitleService.generateTitleAsync(post.getId());
+            if (isNew && !slackBotReplyService.isLocalFrontendUrl()) {
+                postTitleGenerator.generateTitle(post);
+                post = postRepository.save(post);
+            } else {
+                postTitleService.generateTitleAsync(post.getId());
+            }
         }
 
         fetchMissingLinkPreviews(post.getContent(), msg.path("attachments"));

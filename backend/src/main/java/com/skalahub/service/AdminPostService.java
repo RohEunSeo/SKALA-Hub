@@ -172,7 +172,7 @@ public class AdminPostService {
         if (slackBotReplyService.isLocalFrontendUrl()) {
             throw new IllegalStateException("아직 FRONTEND_URL이 로컬 주소입니다 - 배포 환경에서 다시 시도해주세요");
         }
-        slackBotReplyService.notifySyncSuccess(post.getSlackTs(), post.getId());
+        slackBotReplyService.notifySyncSuccess(post.getSlackTs(), post.getId(), post.getAiTitle());
         clearPendingNotification(postId);
     }
 
