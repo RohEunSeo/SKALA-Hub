@@ -29,6 +29,18 @@ design/
 # 작업 일지 (로컬 전용, 깃허브에 올리지 않음)
 worklog/
 
+# docs 폴더 (제출물/기획 문서 등 로컬 전용, 깃허브에 올리지 않음)
+# 단, README에서 쓰는 screenshots 6장은 예외로 계속 추적
+docs/
+!docs/screenshots/
+docs/screenshots/*
+!docs/screenshots/admin.png
+!docs/screenshots/feed.png
+!docs/screenshots/home.png
+!docs/screenshots/links.png
+!docs/screenshots/mypage.png
+!docs/screenshots/slackbot.png
+
 # 테스트 파일 (초기 슬랙 API 테스트용 Express 프로토타입)
 test.html
 server.js
