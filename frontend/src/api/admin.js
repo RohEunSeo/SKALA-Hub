@@ -116,3 +116,13 @@ export function fetchCurriculumStatus(postIds) {
   if (!postIds.length) return Promise.resolve({ data: [] })
   return http.get('/api/admin/curriculum/status', { params: { postIds: postIds.join(',') } })
 }
+
+// 구글 계정 연동 관리 - status: all/linked/unlinked
+export function fetchGoogleLinks(status, page, size) {
+  return http.get('/api/admin/google-links', { params: { status, page, size } })
+}
+
+// 관리자가 특정 교육생의 구글 계정 연동을 강제 해제
+export function forceUnlinkGoogle(slackId) {
+  return http.delete(`/api/admin/google-links/${slackId}`)
+}

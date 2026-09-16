@@ -4,10 +4,21 @@ package com.skalahub.repository;
 import com.skalahub.entity.User;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface UserRepository extends JpaRepository<User, String> {
+
+    // 구글 계정 연동 로그인 - google_id로 유저 조회
+    Optional<User> findByGoogleId(String googleId);
+
+    // 관리자 "구글 계정 연동 관리" 화면 상태 필터
+    Page<User> findByGoogleIdIsNotNull(Pageable pageable);
+
+    Page<User> findByGoogleIdIsNull(Pageable pageable);
 
     // 대시보드 신규 가입자 추이 - 날짜별 신규 가입자 수
     @Query(

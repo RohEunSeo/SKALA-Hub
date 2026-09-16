@@ -68,6 +68,7 @@ public class SlackSyncService {
     private final String userToken;
     private final String channelId;
     private final int recentSyncWindowDays;
+    private final boolean syncEnabled;
 
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
@@ -89,7 +90,8 @@ public class SlackSyncService {
             LinkPreviewFetchService linkPreviewFetchService,
             @Value("${slack.user-token}") String userToken,
             @Value("${slack.channel-id}") String channelId,
-            @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
+            @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays,
+            @Value("${slack.sync-enabled:true}") boolean syncEnabled) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
@@ -102,13 +104,19 @@ public class SlackSyncService {
         this.userToken = userToken;
         this.channelId = channelId;
         this.recentSyncWindowDays = recentSyncWindowDays;
+        this.syncEnabled = syncEnabled;
     }
 
     // 채널 전체를 매번 처음부터 재스캔하면 게시글이 쌓일수록 API 호출량/소요시간이 계속 늘어나므로,
     // 짧은 주기(5분)에는 "최근 N일 이내" 글만 훑어서 새 글 감지는 물론 최근 글의 반응/댓글수·수정사항도
-    // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행
+    // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행.
+    // SLACK_SYNC_ENABLED=false로 자동 스케줄러만 끌 수 있음 (교육 종료 후 더 이상 새 글이 없을 때용,
+    // /admin의 수동 동기화 버튼은 incrementalSync()/syncAll()을 그대로 호출하므로 영향받지 않음)
     @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
     public void scheduledSync() {
+        if (!syncEnabled) {
+            return;
+        }
         try {
             incrementalSync();
         } catch (Exception e) {
@@ -118,6 +126,9 @@ public class SlackSyncService {
 
     @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
     public void scheduledFullSync() {
+        if (!syncEnabled) {
+            return;
+        }
         try {
             syncAll();
         } catch (Exception e) {

@@ -9,7 +9,9 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useMyPageStore } from '../stores/mypage'
+import { useToastStore } from '../stores/toast'
 import { removeBookmark } from '../api/bookmarks'
+import { requestGoogleAuthCode } from '../utils/googleAuth'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
 import { CATEGORIES } from '../constants/categories'
@@ -23,8 +25,50 @@ const router = useRouter()
 const authStore = useAuthStore()
 const bookmarksStore = useBookmarksStore()
 const myPageStore = useMyPageStore()
-const { stats, statsError, activeTab, category, tag, posts, page, totalPages, loading, postsError } =
-  storeToRefs(myPageStore)
+const toastStore = useToastStore()
+const {
+  stats,
+  statsError,
+  activeTab,
+  category,
+  tag,
+  posts,
+  page,
+  totalPages,
+  loading,
+  postsError,
+  accountLink,
+} = storeToRefs(myPageStore)
+
+const googleLinkLoading = ref(false)
+
+async function handleLinkGoogle() {
+  if (googleLinkLoading.value) return
+  googleLinkLoading.value = true
+  try {
+    const code = await requestGoogleAuthCode()
+    await myPageStore.linkGoogle(code)
+    toastStore.show('구글 계정이 연동되었습니다.')
+  } catch (e) {
+    if (e.response?.data?.error === 'google_already_linked') {
+      toastStore.show('이미 다른 계정에 연동된 구글 계정입니다.')
+    } else if (e.message !== 'google_popup_failed') {
+      toastStore.show('구글 계정 연동에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    }
+  } finally {
+    googleLinkLoading.value = false
+  }
+}
+
+async function handleUnlinkGoogle() {
+  if (!window.confirm('구글 계정 연동을 해제할까요? 해제 후에는 구글 로그인을 다시 사용할 수 없습니다.')) return
+  try {
+    await myPageStore.unlinkGoogle()
+    toastStore.show('구글 계정 연동이 해제되었습니다.')
+  } catch {
+    toastStore.show('연동 해제에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  }
+}
 
 const categoryNavOpen = ref(false)
 
@@ -101,22 +145,57 @@ onMounted(() => {
     <AuthRequired v-if="!authStore.isAuthenticated" message="마이페이지를 보려면 SKALA 교육생 인증이 필요합니다" />
     <template v-else>
       <div class="profile-header">
-        <img
-          v-if="authStore.user?.profileImg"
-          class="avatar avatar-img"
-          :src="authStore.user.profileImg"
-          :alt="authStore.user.name"
-        />
-        <div v-else class="avatar">{{ authStore.user?.name?.charAt(0) }}</div>
-        <div>
-          <div class="profile-name">{{ authStore.user?.name }}</div>
-          <div class="profile-meta">
-            {{
-              [authStore.user?.cohort, authStore.user?.campus, authStore.user?.classNum]
-                .filter(Boolean)
-                .join(' ')
-            }}
+        <div class="profile-info">
+          <img
+            v-if="authStore.user?.profileImg"
+            class="avatar avatar-img"
+            :src="authStore.user.profileImg"
+            :alt="authStore.user.name"
+          />
+          <div v-else class="avatar">{{ authStore.user?.name?.charAt(0) }}</div>
+          <div>
+            <div class="profile-name">{{ authStore.user?.name }}</div>
+            <div class="profile-meta">
+              {{
+                [authStore.user?.cohort, authStore.user?.campus, authStore.user?.classNum]
+                  .filter(Boolean)
+                  .join(' ')
+              }}
+            </div>
           </div>
+        </div>
+
+        <div class="google-banner" :class="{ 'google-banner-linked': accountLink.googleLinked }">
+          <div class="google-banner-text">
+            <template v-if="accountLink.googleLinked">
+              <div class="google-banner-desc">
+                * {{ accountLink.googleEmail }}로 연동되어 있습니다.
+                <span v-if="authStore.effectiveIsAdmin" class="google-unlink-btn" @click="handleUnlinkGoogle">연동 해제</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="google-banner-desc">
+                * 교육 수료 후 Slack 계정이 비활성화되어 슬랙 로그인이 불가합니다. 구글
+                계정을 연동하면 이후에도 동일 계정으로 접근 가능합니다.
+              </div>
+              <div class="google-banner-warning">
+                ⚠️ 계정이 비활성화되기 전에 반드시 연동해야 수료 후에도 접근할 수 있습니다.
+              </div>
+            </template>
+          </div>
+
+          <button v-if="accountLink.googleLinked" class="google-link-btn google-link-btn-done" disabled>
+            ✅ 연동 완료됨
+          </button>
+          <button v-else class="google-link-btn" :disabled="googleLinkLoading" @click="handleLinkGoogle">
+            <svg class="google-icon" viewBox="0 0 18 18" width="16" height="16" aria-hidden="true">
+              <path fill="#4285F4" d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.8741 2.6836-6.615z" />
+              <path fill="#34A853" d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.8586-3.0477.8586-2.3436 0-4.3282-1.5831-5.0359-3.7104H.9573v2.3318C2.4382 15.9832 5.4818 18 9 18z" />
+              <path fill="#FBBC05" d="M3.9641 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1023-1.17.2822-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.9641 10.71z" />
+              <path fill="#EA4335" d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.9641 7.29C4.6718 5.1627 6.6564 3.5795 9 3.5795z" />
+            </svg>
+            구글 계정 연동하기
+          </button>
         </div>
       </div>
 
@@ -230,14 +309,6 @@ onMounted(() => {
           </div>
         </div>
       </div>
-
-      <section class="section">
-        <div class="section-header">
-          <span class="section-title">🏅 나의 활동 뱃지</span>
-          <span class="wip-badge">🚧 개발 진행중</span>
-        </div>
-        <div class="wip-card">곧 만나요 ✨</div>
-      </section>
     </template>
   </AppLayout>
 </template>
@@ -246,8 +317,109 @@ onMounted(() => {
 .profile-header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  flex-wrap: nowrap;
+  gap: 12px;
   margin-bottom: 32px;
+}
+
+.profile-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.google-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-left: 5px;
+  gap: 14px;
+  background: transparent;
+  padding: 10px 25px;
+  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+}
+
+/* 연동 완료 상태 - 문구가 짧아서 space-between으로 벌리지 않고 버튼 옆에 바짝 붙임 */
+.google-banner-linked {
+  justify-content: flex-end;
+}
+
+/* 연동 완료 상태에서는 문구가 늘어나지 않고 버튼 옆에 바짝 붙어야 하므로 flex-grow를 끔 */
+.google-banner-linked .google-banner-text {
+  flex: none;
+}
+
+.google-banner-text {
+  min-width: 0;
+  margin-bottom: 2px;
+  flex: 1;
+}
+
+.google-banner-desc {
+  font-size: 12.5px;
+  color: #636e72;
+  line-height: 1.5;
+}
+
+.google-banner-warning {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e01e5a;
+}
+
+.google-unlink-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e01e5a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.google-unlink-btn:hover {
+  text-decoration: underline;
+}
+
+.google-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -20px; 
+  gap: 8px;
+  padding: 12px 18px;
+  background: #ffffff;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(26, 26, 46, 0.12);
+}
+
+.google-link-btn:hover {
+  background: #f4f4f4;
+}
+
+.google-link-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.google-link-btn-done {
+  background: #e7f8ee;
+  color: #1a8f4c;
+  opacity: 1;
+}
+
+.google-icon {
+  flex-shrink: 0;
 }
 
 .avatar {
@@ -421,6 +593,16 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .profile-header {
+    flex-wrap: wrap;
+  }
+
+  .google-banner {
+    flex-wrap: wrap;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
   .tab-body {
     flex-direction: column;
     border: none;
@@ -629,42 +811,4 @@ onMounted(() => {
   color: #636e72;
 }
 
-.section {
-  margin-top: 48px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: #1a1a2e;
-}
-
-.wip-badge {
-  font-size: 11px;
-  font-weight: 700;
-  color: #636e72;
-  background: #efefef;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-.wip-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #636e72;
-  font-size: 13.5px;
-  opacity: 0.6;
-}
 </style>

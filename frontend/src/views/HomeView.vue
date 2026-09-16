@@ -11,7 +11,8 @@ import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { useHomeStore } from '../stores/home'
 import { useToastStore } from '../stores/toast'
-import { getSlackLoginUrl } from '../api/auth'
+import { getSlackLoginUrl, loginWithGoogleCode } from '../api/auth'
+import { requestGoogleAuthCode } from '../utils/googleAuth'
 import { updatePostAsAdmin, fetchExcludedFromRanking } from '../api/admin'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
@@ -142,6 +143,26 @@ function handleLogin() {
   window.location.href = getSlackLoginUrl()
 }
 
+// 교육 종료 후 슬랙 로그인이 불가능한 교육생을 위한 대체 로그인 (마이페이지에서 미리 연동해둔 계정만 가능)
+const googleLoginLoading = ref(false)
+async function handleGoogleLogin() {
+  if (googleLoginLoading.value) return
+  googleLoginLoading.value = true
+  try {
+    const code = await requestGoogleAuthCode()
+    const { data } = await loginWithGoogleCode(code)
+    authStore.setAuth(data.token)
+  } catch (e) {
+    if (e.response?.data?.error === 'google_not_linked') {
+      toastStore.show('연동된 구글 계정이 없습니다. Slack으로 먼저 로그인한 뒤 마이페이지에서 연동해주세요.')
+    } else if (e.message !== 'google_popup_failed') {
+      toastStore.show('구글 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    }
+  } finally {
+    googleLoginLoading.value = false
+  }
+}
+
 function categoryCount(value) {
   return summary.value?.categoryCounts?.find((item) => item.category === value)?.count ?? 0
 }
@@ -193,7 +214,10 @@ onUnmounted(() => {
         <span class="login-banner-sub">1. SKALA 워크스페이스에 가입된 계정으로 로그인해주세요.</span>
         <span class="login-banner-sub">2. 워크스페이스 입력 화면이 뜨면 <strong>'theskala'</strong>를 입력해주세요.</span>
       </div>
-      <button class="login-btn" @click="handleLogin">Slack으로 로그인</button>
+      <div class="login-actions">
+        <button class="login-btn" @click="handleLogin">Slack으로 로그인</button>
+        <button class="login-btn-google" @click="handleGoogleLogin">Google로 로그인</button>
+      </div>
     </div>
 
     <div v-if="authStore.isAuthenticated" class="top-bar">
@@ -387,6 +411,28 @@ onUnmounted(() => {
 
 .login-btn:hover {
   background: #6c5ce7;
+}
+
+.login-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.login-btn-google {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  background: #ffffff;
+  color: #4a3f8f;
+  border: 1px solid rgba(74, 63, 143, 0.3);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-btn-google:hover {
+  background: #f1eefc;
 }
 
 .top-bar {

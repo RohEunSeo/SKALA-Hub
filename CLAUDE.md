@@ -28,11 +28,13 @@ CLAUDE_API_KEY=
 JWT_SECRET=
 JWT_EXPIRATION=86400000
 FRONTEND_URL=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 
 
 ## DB 구조 (Supabase, 마이그레이션 SQL은 backend/*.sql)
 
-users → 교육생 계정 (slack_id PK, name, cohort, campus, class_num, role, profile_img)
+users → 교육생 계정 (slack_id PK, name, cohort, campus, class_num, role, profile_img, google_id/google_email - 구글 계정 연동, 교육 종료 후 슬랙 로그인 불가 대비)
 posts → 슬랙 게시글 (slack_ts UK, user_name, is_instructor, content, category, tags[], reaction_count, reply_count, is_deleted, is_pinned, is_excluded_from_ranking)
 replies → 스레드 댓글 (post_id FK → posts)
 bookmarks → 저장하기 (user_id FK → users, post_id FK → posts, UNIQUE 조합)
@@ -81,6 +83,8 @@ chat.postMessage / chat.update / chat.delete → 관리자가 동기화 안내�
 
 게시글 저장/분류/봇 댓글은 전부 스케줄러/수동 방식 (SlackSyncService)
 - 스케줄러: 5분마다 증분 동기화(SLACK_SYNC_INTERVAL_MS), 매일 새벽 4시 전체 재수집
+- SLACK_SYNC_ENABLED=false로 자동 스케줄러만 끌 수 있음 (기본값 true) - 교육 종료 후 채널에 새 글이 더 이상
+  안 올라올 때 사용 예정. /admin의 수동 동기화 버튼들은 이 값과 무관하게 항상 동작함
 - 관리자 수동: /admin에서 가벼운 동기화 / 전체 재수집 / 링크 미리보기 재수집 버튼 3종 직접 실행 가능
 - Slack Events API(실시간 webhook)는 관리자 개인 DM 알림 전용으로만 사용 (SlackEventsController, POST /api/slack/events) -
   새 글이 올라오는 즉시 SLACK_ADMIN_DM_USER_ID로 "새 글 감지" DM 발송, 이후 스케줄러가 실제로 동기화/분류를 마치면
@@ -157,6 +161,13 @@ Slack Rate Limit 분당 50회 → DB 캐싱으로 해결
   → 웹훅 응답 3초 제한 때문에 저장 로직 넣으면 타임아웃 위험
 - 2026-08-20: Render 무료 플랜 유지 결정
   → 트래픽이 낮은 시간대 콜드스타트 감수, 10분 핑으로 해결
+- 2026-09-16: 구글 계정 연동을 slack_id PK 교체 없이 매핑 컬럼(google_id/google_email) 추가로 구현한 이유
+  → bookmarks/notifications/announcement_reads가 slack_id를 진짜 FK로 참조하고 JWT subject·모든 컨트롤러가
+  slackId 기반이라 PK 자체를 바꾸면 범위가 너무 커짐. 구글 로그인 성공 시에도 결과적으로 동일한 slackId JWT를
+  발급해 다른 테이블/컨트롤러는 전혀 손대지 않음
+- 2026-09-16: 구글 연동/로그인을 전체 페이지 리다이렉트가 아닌 팝업(Google Identity Services 코드플로우)으로 구현
+  → 팝업은 인가 코드를 프론트 JS로 직접 돌려주므로, 리다이렉트 왕복 중 Authorization 헤더가 사라지는 문제와
+  이를 해결하기 위한 state JWT 티켓/CSRF 쿠키 장치가 통째로 불필요해짐 (평범한 인증된 fetch 요청으로 처리)
 
 ## 미완성/보류 기능
 - 광주 캠퍼스 채널 연동 (SLACK_GWANGJU_CHANNEL_ID 설정 필요)

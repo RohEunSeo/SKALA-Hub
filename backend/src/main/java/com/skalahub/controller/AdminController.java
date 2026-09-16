@@ -9,6 +9,7 @@ import com.skalahub.dto.BotReplyResponse;
 import com.skalahub.dto.BotReplyUpdateRequest;
 import com.skalahub.dto.CurriculumPostResponse;
 import com.skalahub.dto.CurriculumStatusDto;
+import com.skalahub.dto.GoogleLinkPageResponse;
 import com.skalahub.dto.LinkGroupDto;
 import com.skalahub.dto.PostPageResponse;
 import com.skalahub.dto.PostResponse;
@@ -16,6 +17,7 @@ import com.skalahub.entity.SyncFailure;
 import com.skalahub.service.AdminCurriculumService;
 import com.skalahub.service.AdminLinkService;
 import com.skalahub.service.AdminPostService;
+import com.skalahub.service.GoogleAuthService;
 import com.skalahub.service.LinkService;
 import com.skalahub.service.SlackSyncService;
 import java.security.Principal;
@@ -44,18 +46,21 @@ public class AdminController {
     private final AdminLinkService adminLinkService;
     private final LinkService linkService;
     private final AdminCurriculumService adminCurriculumService;
+    private final GoogleAuthService googleAuthService;
 
     public AdminController(
             SlackSyncService slackSyncService,
             AdminPostService adminPostService,
             AdminLinkService adminLinkService,
             LinkService linkService,
-            AdminCurriculumService adminCurriculumService) {
+            AdminCurriculumService adminCurriculumService,
+            GoogleAuthService googleAuthService) {
         this.slackSyncService = slackSyncService;
         this.adminPostService = adminPostService;
         this.adminLinkService = adminLinkService;
         this.linkService = linkService;
         this.adminCurriculumService = adminCurriculumService;
+        this.googleAuthService = googleAuthService;
     }
 
     // 최근 N일 동기화 (게시글/댓글 수집 + 미분류 게시글 카테고리 분류) - API 호출량이 적어 자주 눌러도 부담 없음
@@ -226,5 +231,21 @@ public class AdminController {
                 .map(Long::valueOf)
                 .toList();
         return adminCurriculumService.getStatusForPostIds(ids);
+    }
+
+    // 구글 계정 연동 관리 - status: all/linked/unlinked
+    @GetMapping("/google-links")
+    public GoogleLinkPageResponse getGoogleLinks(
+            @RequestParam(defaultValue = "all") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return googleAuthService.getLinkStatusPage(status, page, Math.max(1, Math.min(size, 100)));
+    }
+
+    // 관리자가 특정 교육생의 구글 계정 연동을 강제 해제
+    @DeleteMapping("/google-links/{slackId}")
+    public ResponseEntity<Void> forceUnlinkGoogle(@PathVariable String slackId) {
+        googleAuthService.unlinkAccount(slackId);
+        return ResponseEntity.noContent().build();
     }
 }

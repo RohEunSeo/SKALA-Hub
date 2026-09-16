@@ -42,6 +42,9 @@ slack:
   sync-recent-window-days: ${SLACK_SYNC_RECENT_WINDOW_DAYS:7}
   # 채널 전체(옛 글 포함)를 처음부터 다시 훑는 전체 재동기화 주기 - 새벽 4시(한산한 시간)
   full-sync-cron: ${SLACK_FULL_SYNC_CRON:0 0 4 * * *}
+  # false면 자동 스케줄러(증분/전체 재동기화)만 꺼짐 - 교육 종료 후 새 글이 더 이상 없을 때용.
+  # /admin의 수동 동기화 버튼은 이 값과 무관하게 항상 동작함
+  sync-enabled: ${SLACK_SYNC_ENABLED:true}
   workspace-url: ${SLACK_WORKSPACE_URL:https://theskala.slack.com}
 
 # Claude API (게시글 자동 분류)
@@ -53,6 +56,11 @@ claude:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+
+# 구글 계정 연동/로그인 - 팝업 코드플로우(Google Identity Services)라 redirect-uri 불필요
+google:
+  client-id: ${GOOGLE_CLIENT_ID}
+  client-secret: ${GOOGLE_CLIENT_SECRET}
 
 # 프론트엔드 (OAuth 로그인 완료 후 리다이렉트 대상)
 app:

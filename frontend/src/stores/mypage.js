@@ -2,7 +2,14 @@
 // 재조회하지 않도록 스토어에 캐싱
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { fetchMyStats, fetchMyPosts, fetchMyCategoryCounts } from '../api/mypage'
+import {
+  fetchMyStats,
+  fetchMyPosts,
+  fetchMyCategoryCounts,
+  fetchAccountLinkStatus,
+  linkGoogleAccount,
+  unlinkGoogleAccount,
+} from '../api/mypage'
 
 const PAGE_SIZE = 4
 
@@ -26,6 +33,29 @@ export const useMyPageStore = defineStore('mypage', () => {
 
   // 한 번이라도 성공적으로 불러왔는지 - 탭을 벗어났다 돌아왔을 때 재조회를 건너뛰는 기준
   const loaded = ref(false)
+
+  // 계정 설정 - 구글 계정 연동 상태 (교육 종료 후 슬랙 로그인 불가 대비)
+  const accountLink = ref({ googleLinked: false, googleEmail: null })
+
+  async function loadAccountLink() {
+    try {
+      const { data } = await fetchAccountLinkStatus()
+      accountLink.value = data
+    } catch {
+      // 계정 설정은 부가 정보라 실패해도 조용히 무시 (미연동 상태로 표시)
+    }
+  }
+
+  // 구글 계정 연동 - 호출부(팝업)에서 받은 인가 코드를 그대로 전달, 실패 시 에러를 그대로 던져 화면에서 처리
+  async function linkGoogle(code) {
+    const { data } = await linkGoogleAccount(code)
+    accountLink.value = data
+  }
+
+  async function unlinkGoogle() {
+    const { data } = await unlinkGoogleAccount()
+    accountLink.value = data
+  }
 
   async function loadStats() {
     statsLoading.value = true
@@ -84,7 +114,7 @@ export const useMyPageStore = defineStore('mypage', () => {
   // 마이페이지 마운트 시 호출 - 이미 불러온 적 있으면 API 재호출 없이 캐시된 데이터를 그대로 사용
   async function ensureLoaded() {
     if (loaded.value) return
-    await Promise.all([loadStats(), loadPosts(), loadCategoryCounts()])
+    await Promise.all([loadStats(), loadPosts(), loadCategoryCounts(), loadAccountLink()])
     loaded.value = true
   }
 
@@ -140,9 +170,13 @@ export const useMyPageStore = defineStore('mypage', () => {
     categoryCounts,
     tagCounts,
     loaded,
+    accountLink,
     loadStats,
     loadPosts,
     loadCategoryCounts,
+    loadAccountLink,
+    linkGoogle,
+    unlinkGoogle,
     categoryCount,
     tagCount,
     ensureLoaded,

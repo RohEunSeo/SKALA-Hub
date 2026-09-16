@@ -39,6 +39,13 @@ public class User {
     @Column(length = 500)
     private String profileImg;
 
+    // 구글 계정 연동 (교육 종료 후 슬랙 로그인 불가 시 대체 로그인 수단) - 미연동이면 둘 다 null
+    @Column(length = 50, unique = true)
+    private String googleId;
+
+    @Column(length = 255)
+    private String googleEmail;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime lastLogin;
