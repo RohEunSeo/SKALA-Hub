@@ -21,6 +21,7 @@ public record PostResponse(
         Boolean isExcludedFromRanking,
         Boolean isEdited,
         LocalDateTime createdAt,
+        Integer postNumber,
         String slackPermalink,
         List<LinkPreviewDto> attachments,
         List<FileAttachmentDto> files,

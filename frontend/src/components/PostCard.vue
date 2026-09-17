@@ -163,6 +163,12 @@ function handleCommentsClick() {
   }
 }
 
+// 카드 아무 곳이나 눌러도 상세로 이동 - 상세 페이지 자신을 렌더링할 때(linkToDetail=false)는 무시
+function goToDetail() {
+  if (!props.linkToDetail) return
+  router.push({ name: 'post-detail', params: { id: props.post.id } })
+}
+
 onMounted(() => {
   if (!props.linkToDetail) {
     loadReplies()
@@ -214,7 +220,7 @@ async function saveCurriculum({ stage, subCategory }) {
 </script>
 
 <template>
-  <article class="post-card" :class="{ pinned: post.isPinned }">
+  <article class="post-card" :class="{ pinned: post.isPinned, clickable: linkToDetail }" @click="goToDetail">
     <div v-if="post.isPinned" class="pinned-badge">📌 고정</div>
 
     <div class="post-header">
@@ -230,6 +236,7 @@ async function saveCurriculum({ stage, subCategory }) {
           <span v-if="post.isEdited" class="edited-badge">(편집됨)</span>
         </span>
         <span class="header-stats">
+          <span v-if="post.postNumber">📝 {{ post.postNumber }}번째</span>
           <span>👍 {{ post.reactionCount ?? 0 }}</span>
           <span class="comment-link" @click="handleCommentsClick">💬 {{ post.replyCount ?? 0 }}</span>
           <span>🔖 {{ post.bookmarkCount ?? 0 }}</span>
@@ -244,7 +251,7 @@ async function saveCurriculum({ stage, subCategory }) {
 
     <!-- aiTitle이 null이면 아직 생성 전(대기 중 표시), 빈 문자열이면 "만들 재료가 없어 스킵됨"이라
          아무것도 안 보여줌(영원히 "생성 중"으로 남는 걸 방지) -->
-    <div v-if="editingTitle" class="ai-title ai-title-edit">
+    <div v-if="editingTitle" class="ai-title ai-title-edit" @click.stop>
       <input
         v-model="titleInput"
         class="ai-title-input"
@@ -259,11 +266,11 @@ async function saveCurriculum({ stage, subCategory }) {
     </div>
     <div v-else-if="localAiTitle" class="ai-title">
       <span class="ai-title-mark">✨ {{ localAiTitle }}</span>
-      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click="startEditTitle">✏️</span>
+      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click.stop="startEditTitle">✏️</span>
     </div>
     <div v-else-if="localAiTitle === null" class="ai-title ai-title-pending">
       ✨ 제목 생성 중...
-      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click="startEditTitle">✏️</span>
+      <span v-if="canEditTitle" class="ai-title-edit-icon" title="제목 수정" @click.stop="startEditTitle">✏️</span>
     </div>
 
     <!-- eslint-disable-next-line vue/no-v-html -->
@@ -276,7 +283,7 @@ async function saveCurriculum({ stage, subCategory }) {
         :src="proxySrc(file.proxyUrl)"
         :alt="file.name"
         title="클릭하면 크게 볼 수 있습니다"
-        @click="openImage(index)"
+        @click.stop="openImage(index)"
       />
     </div>
 
@@ -321,6 +328,7 @@ async function saveCurriculum({ stage, subCategory }) {
         :href="attachment.titleLink || attachment.fromUrl"
         target="_blank"
         rel="noopener noreferrer"
+        @click.stop
       >
         <img v-if="attachment.imageUrl" :src="attachment.imageUrl" class="link-thumb" alt="" />
         <div class="link-body">
@@ -361,11 +369,11 @@ async function saveCurriculum({ stage, subCategory }) {
         class="action save-action"
         :class="{ disabled: !authStore.isAuthenticated, active: isBookmarked }"
         :title="!authStore.isAuthenticated ? '로그인 후 이용할 수 있어요' : ''"
-        @click="toggleBookmark"
+        @click.stop="toggleBookmark"
       >
         {{ isBookmarked ? '✅ 저장됨' : '🔖 저장하기' }}
       </span>
-      <span class="action" @click="openInSlack">💬 슬랙에서 보기</span>
+      <span class="action" @click.stop="openInSlack">💬 슬랙에서 보기</span>
       <span
         v-if="authStore.effectiveIsAdmin"
         class="action curriculum-action"
@@ -407,6 +415,14 @@ async function saveCurriculum({ stage, subCategory }) {
 
 .post-card.pinned {
   border: 1px solid rgba(108, 92, 231, 0.25);
+}
+
+.post-card.clickable {
+  cursor: pointer;
+}
+
+.post-card.clickable:hover {
+  background: rgba(108, 92, 231, 0.05);
 }
 
 .pinned-badge {

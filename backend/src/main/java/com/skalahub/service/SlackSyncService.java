@@ -213,7 +213,15 @@ public class SlackSyncService {
                 }
                 if (isNew) {
                     newPosts++;
-                    log.info("[동기화완료] slackTs={} postId={} 작성자={} 신규 저장됨", slackTs, post.getId(), post.getUserName());
+                    long totalCount = postRepository.countByIsDeletedFalse();
+                    post.setPostNumber((int) totalCount);
+                    post = postRepository.save(post);
+                    log.info(
+                            "[동기화완료] slackTs={} postId={} postNumber={} 작성자={} 신규 저장됨",
+                            slackTs,
+                            post.getId(),
+                            post.getPostNumber(),
+                            post.getUserName());
                     if (slackBotReplyService.isLocalFrontendUrl()) {
                         // 로컬 환경에서 동기화되면 배포 링크를 만들 수 없으므로 알림을 보류하고 표시만 해둠 -
                         // 관리자 모드 "대기" 목록에서 배포 환경 확인 후 수동으로 전송
@@ -234,7 +242,7 @@ public class SlackSyncService {
                             postRepository.save(post);
                             slackDmNotificationService.sendBotReplyMissingAlert(post);
                         }
-                        slackDmNotificationService.sendSyncResult(post, postRepository.countByIsDeletedFalse());
+                        slackDmNotificationService.sendSyncResult(post, totalCount);
                     }
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {

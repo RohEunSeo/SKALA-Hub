@@ -90,4 +90,7 @@ public class Post {
     private LocalDateTime createdAt;
 
     private LocalDateTime syncedAt;
+
+    // SKALA Hub 기준 몇 번째 글인지(삭제 안 된 글 누적 순번) - 생성 시점에 한 번만 계산해 영구 저장
+    private Integer postNumber;
 }
