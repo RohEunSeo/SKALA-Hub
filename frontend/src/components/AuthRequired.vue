@@ -1,13 +1,40 @@
 <script setup>
 // 로그인이 필요한 화면에서 실제 콘텐츠 대신 보여주는 안내 - 별도 로그인 페이지 없이 슬랙 OAuth로 바로 연결
-import { getSlackLoginUrl } from '../api/auth'
+import { ref } from 'vue'
+import { getSlackLoginUrl, loginWithGoogleCode } from '../api/auth'
+import { requestGoogleAuthCode } from '../utils/googleAuth'
+import { useAuthStore } from '../stores/auth'
+import { useToastStore } from '../stores/toast'
 
 defineProps({
   message: { type: String, default: 'SKALA 판교 캠퍼스 교육생 인증이 필요합니다' },
 })
 
+const authStore = useAuthStore()
+const toastStore = useToastStore()
+const googleLoginLoading = ref(false)
+
 function handleLogin() {
   window.location.href = getSlackLoginUrl()
+}
+
+// 교육 종료 후 슬랙 로그인이 불가능한 교육생을 위한 대체 로그인 (마이페이지에서 미리 연동해둔 계정만 가능)
+async function handleGoogleLogin() {
+  if (googleLoginLoading.value) return
+  googleLoginLoading.value = true
+  try {
+    const code = await requestGoogleAuthCode()
+    const { data } = await loginWithGoogleCode(code)
+    authStore.setAuth(data.token)
+  } catch (e) {
+    if (e.response?.data?.error === 'google_not_linked') {
+      toastStore.show('연동된 구글 계정이 없습니다. Slack으로 먼저 로그인한 뒤 마이페이지에서 연동해주세요.')
+    } else if (e.message !== 'google_popup_failed') {
+      toastStore.show('구글 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    }
+  } finally {
+    googleLoginLoading.value = false
+  }
 }
 </script>
 
@@ -18,6 +45,9 @@ function handleLogin() {
     <div class="auth-sub"><strong>SKALA 워크스페이스에 가입된 계정</strong>으로 로그인 후 이용해주세요.</div>
     <div class="auth-sub auth-sub-small">* 워크스페이스 입력 화면이 뜬다면 <strong>'theskala'</strong>를 입력해주세요.</div>
     <button class="auth-login-btn" @click="handleLogin">Slack으로 로그인</button>
+    <!-- 구글 로그인 테스트 중 - 완료 전까지 비노출 (필요 시 위 버튼 2줄만 되살리면 됨) -->
+    <!-- <button class="auth-google-btn" @click="handleGoogleLogin">Google로 로그인</button>
+    <div class="auth-sub auth-sub-small">* 마이페이지에서 구글 계정을 미리 연동해둔 경우에만 이용할 수 있어요.</div> -->
   </div>
 </template>
 
@@ -75,5 +105,21 @@ function handleLogin() {
 
 .auth-login-btn:hover {
   background: #6c5ce7;
+}
+
+.auth-google-btn {
+  margin-top: 10px;
+  padding: 10px 28px;
+  background: #ffffff;
+  color: #1a1a2e;
+  border: 1px solid rgba(26, 26, 46, 0.16);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-google-btn:hover {
+  background: #f4f4f4;
 }
 </style>

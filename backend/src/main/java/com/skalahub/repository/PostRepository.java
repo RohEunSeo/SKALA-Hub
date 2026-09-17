@@ -18,6 +18,27 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // 로컬 환경(FRONTEND_URL=localhost)에서 동기화되어 슬랙 알림이 보류된 게시글 - 관리자 모드 "대기" 목록
     List<Post> findByPendingNotificationTrue();
 
+    // 봇 댓글(성공/실패 마커)이 하나도 없고 pending 표시도 안 된, 조용히 누락된 게시글 감지용
+    // (SlackSyncService의 봇 댓글 누락 자동 감지 스윕에서 사용)
+    @Query(
+            value = """
+            SELECT * FROM posts p
+            WHERE p.is_deleted = false
+              AND p.pending_notification = false
+              AND p.created_at >= :since
+              AND NOT EXISTS (
+                  SELECT 1 FROM replies r
+                  WHERE r.post_id = p.id
+                    AND (r.content LIKE CONCAT('%', CAST(:successMarker AS varchar), '%')
+                         OR r.content LIKE CONCAT('%', CAST(:failureMarker AS varchar), '%'))
+              )
+            """,
+            nativeQuery = true)
+    List<Post> findMissingBotReplyPosts(
+            @Param("since") LocalDateTime since,
+            @Param("successMarker") String successMarker,
+            @Param("failureMarker") String failureMarker);
+
     // 순위보드에서 제외된 게시글 - 관리자 전용 "제외된 글 보기" 패널, 복원 가능하도록 목록으로 반환
     List<Post> findByIsExcludedFromRankingTrueAndIsDeletedFalseOrderByReactionCountDesc();
 

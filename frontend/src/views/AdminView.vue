@@ -27,6 +27,8 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  fetchGoogleLinks,
+  forceUnlinkGoogle,
 } from '../api/admin'
 import { stripSlackMarkdown, renderSlackText } from '../utils/renderSlackText'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -250,6 +252,70 @@ async function sendPending(reply) {
     botReplyActionError.value = error.response?.data?.error || '전송에 실패했습니다. 잠시 후 다시 시도해주세요.'
   } finally {
     sendingPendingId.value = null
+  }
+}
+
+// 구글 계정 연동 관리 - 교육 종료 후 슬랙 로그인 불가 대비 (마이페이지에서 본인이 연동, 여기서는 현황 조회 + 강제 해제만)
+const GOOGLE_LINKS_PAGE_SIZE = 10
+const googleLinks = ref([])
+const googleLinksPage = ref(0)
+const googleLinksTotalPages = ref(0)
+const googleLinksTotalElements = ref(0)
+const googleLinksStatusFilter = ref('all') // 'all' | 'linked' | 'unlinked'
+const googleLinksLoading = ref(false)
+const googleLinksError = ref('')
+const unlinkingSlackId = ref(null)
+
+async function loadGoogleLinks() {
+  googleLinksLoading.value = true
+  googleLinksError.value = ''
+  try {
+    const { data } = await fetchGoogleLinks(
+      googleLinksStatusFilter.value,
+      googleLinksPage.value,
+      GOOGLE_LINKS_PAGE_SIZE,
+    )
+    googleLinks.value = data?.content ?? []
+    googleLinksTotalPages.value = data?.totalPages ?? 0
+    googleLinksTotalElements.value = data?.totalElements ?? 0
+  } catch {
+    googleLinksError.value = '연동 현황을 불러오지 못했습니다.'
+  } finally {
+    googleLinksLoading.value = false
+  }
+}
+
+function selectGoogleLinksStatusFilter(value) {
+  googleLinksStatusFilter.value = value
+  googleLinksPage.value = 0
+  loadGoogleLinks()
+}
+
+function goToPrevGoogleLinksPage() {
+  if (googleLinksPage.value > 0) {
+    googleLinksPage.value -= 1
+    loadGoogleLinks()
+  }
+}
+
+function goToNextGoogleLinksPage() {
+  if (googleLinksPage.value + 1 < googleLinksTotalPages.value) {
+    googleLinksPage.value += 1
+    loadGoogleLinks()
+  }
+}
+
+async function forceUnlink(row) {
+  if (!window.confirm(`${row.name}님의 구글 계정 연동을 해제할까요?`)) return
+  unlinkingSlackId.value = row.slackId
+  try {
+    await forceUnlinkGoogle(row.slackId)
+    await loadGoogleLinks()
+    toastStore.show('구글 계정 연동을 해제했습니다')
+  } catch {
+    toastStore.show('연동 해제에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    unlinkingSlackId.value = null
   }
 }
 
@@ -709,6 +775,7 @@ onMounted(() => {
   loadBotReplies()
   loadAnnouncements()
   loadAiTitleProgress()
+  loadGoogleLinks()
 })
 </script>
 
@@ -893,6 +960,77 @@ onMounted(() => {
                 class="secondary-btn"
                 :disabled="botReplyPage + 1 >= botReplyTotalPages"
                 @click="goToNextBotReplyPage"
+              >
+                다음
+              </button>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">🔗 구글 계정 연동 관리 ({{ googleLinksTotalElements }}명)</div>
+        <div class="card">
+          <p class="card-desc">
+            교육 종료 후 Slack 로그인이 불가능해질 때를 대비해 교육생이 마이페이지에서 직접 연동합니다.
+            여기서는 현황만 조회하고, 필요 시 강제로 해제할 수 있습니다.
+          </p>
+
+          <div class="category-chips">
+            <span
+              class="chip"
+              :class="{ active: googleLinksStatusFilter === 'all' }"
+              @click="selectGoogleLinksStatusFilter('all')"
+              >전체</span
+            >
+            <span
+              class="chip"
+              :class="{ active: googleLinksStatusFilter === 'linked' }"
+              @click="selectGoogleLinksStatusFilter('linked')"
+              >✅ 연동됨</span
+            >
+            <span
+              class="chip"
+              :class="{ active: googleLinksStatusFilter === 'unlinked' }"
+              @click="selectGoogleLinksStatusFilter('unlinked')"
+              >미연동</span
+            >
+          </div>
+
+          <div v-if="googleLinksLoading" class="status-message">불러오는 중...</div>
+          <div v-else-if="googleLinksError" class="status-message error">{{ googleLinksError }}</div>
+          <div v-else-if="googleLinks.length === 0" class="status-message">해당하는 교육생이 없습니다.</div>
+          <template v-else>
+            <div class="uncategorized-list">
+              <div v-for="row in googleLinks" :key="row.slackId" class="uncategorized-row">
+                <div class="manage-header">
+                  <span class="row-author"
+                    >{{ row.name }} · {{ [row.cohort, row.campus, row.classNum].filter(Boolean).join(' ') }}</span
+                  >
+                  <span v-if="row.googleLinked" class="row-time">✅ {{ row.googleEmail }}</span>
+                  <span v-else class="row-time">미연동</span>
+                </div>
+                <div v-if="row.googleLinked" class="control-row">
+                  <button
+                    class="secondary-btn"
+                    :disabled="unlinkingSlackId === row.slackId"
+                    @click="forceUnlink(row)"
+                  >
+                    {{ unlinkingSlackId === row.slackId ? '해제 중...' : '연동 해제' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="control-row manage-pagination">
+              <button class="secondary-btn" :disabled="googleLinksPage === 0" @click="goToPrevGoogleLinksPage">
+                이전
+              </button>
+              <span>{{ googleLinksPage + 1 }} / {{ Math.max(1, googleLinksTotalPages) }}</span>
+              <button
+                class="secondary-btn"
+                :disabled="googleLinksPage + 1 >= googleLinksTotalPages"
+                @click="goToNextGoogleLinksPage"
               >
                 다음
               </button>

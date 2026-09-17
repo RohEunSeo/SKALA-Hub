@@ -11,6 +11,8 @@ import com.skalahub.repository.ReplyRepository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AdminPostService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminPostService.class);
 
     private final PostRepository postRepository;
     private final ReplyRepository replyRepository;
@@ -172,7 +176,13 @@ public class AdminPostService {
         if (slackBotReplyService.isLocalFrontendUrl()) {
             throw new IllegalStateException("아직 FRONTEND_URL이 로컬 주소입니다 - 배포 환경에서 다시 시도해주세요");
         }
-        slackBotReplyService.notifySyncSuccess(post.getSlackTs(), post.getId(), post.getAiTitle());
+        boolean sent = slackBotReplyService.notifySyncSuccess(
+                post.getSlackTs(), post.getId(), post.getAiTitle(), post.getSyncedAt());
+        if (!sent) {
+            log.warn("[봇댓글] slackTs={} postId={} 관리자 수동 재전송 실패", post.getSlackTs(), postId);
+            throw new IllegalStateException("슬랙 전송에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        }
+        log.info("[봇댓글] slackTs={} postId={} 관리자 수동 재전송 성공", post.getSlackTs(), postId);
         clearPendingNotification(postId);
     }
 

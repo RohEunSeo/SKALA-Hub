@@ -68,6 +68,7 @@ public class SlackSyncService {
     private final String userToken;
     private final String channelId;
     private final int recentSyncWindowDays;
+    private final boolean syncEnabled;
 
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
@@ -89,7 +90,8 @@ public class SlackSyncService {
             LinkPreviewFetchService linkPreviewFetchService,
             @Value("${slack.user-token}") String userToken,
             @Value("${slack.channel-id}") String channelId,
-            @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays) {
+            @Value("${slack.sync-recent-window-days:7}") int recentSyncWindowDays,
+            @Value("${slack.sync-enabled:true}") boolean syncEnabled) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.categoryClassifier = categoryClassifier;
@@ -102,13 +104,19 @@ public class SlackSyncService {
         this.userToken = userToken;
         this.channelId = channelId;
         this.recentSyncWindowDays = recentSyncWindowDays;
+        this.syncEnabled = syncEnabled;
     }
 
     // 채널 전체를 매번 처음부터 재스캔하면 게시글이 쌓일수록 API 호출량/소요시간이 계속 늘어나므로,
     // 짧은 주기(5분)에는 "최근 N일 이내" 글만 훑어서 새 글 감지는 물론 최근 글의 반응/댓글수·수정사항도
-    // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행
+    // 그대로 실시간에 가깝게 반영하고, 그보다 오래된 글까지 훑는 전체 재스캔은 하루 한 번(scheduledFullSync)만 수행.
+    // SLACK_SYNC_ENABLED=false로 자동 스케줄러만 끌 수 있음 (교육 종료 후 더 이상 새 글이 없을 때용,
+    // /admin의 수동 동기화 버튼은 incrementalSync()/syncAll()을 그대로 호출하므로 영향받지 않음)
     @Scheduled(fixedDelayString = "${slack.sync-interval-ms:1800000}")
     public void scheduledSync() {
+        if (!syncEnabled) {
+            return;
+        }
         try {
             incrementalSync();
         } catch (Exception e) {
@@ -118,6 +126,9 @@ public class SlackSyncService {
 
     @Scheduled(cron = "${slack.full-sync-cron:0 0 4 * * *}")
     public void scheduledFullSync() {
+        if (!syncEnabled) {
+            return;
+        }
         try {
             syncAll();
         } catch (Exception e) {
@@ -202,13 +213,27 @@ public class SlackSyncService {
                 }
                 if (isNew) {
                     newPosts++;
+                    log.info("[동기화완료] slackTs={} postId={} 작성자={} 신규 저장됨", slackTs, post.getId(), post.getUserName());
                     if (slackBotReplyService.isLocalFrontendUrl()) {
                         // 로컬 환경에서 동기화되면 배포 링크를 만들 수 없으므로 알림을 보류하고 표시만 해둠 -
                         // 관리자 모드 "대기" 목록에서 배포 환경 확인 후 수동으로 전송
                         post.setPendingNotification(true);
                         postRepository.save(post);
+                        log.info("[봇댓글] slackTs={} postId={} 로컬환경 - pending 처리", slackTs, post.getId());
                     } else {
-                        slackBotReplyService.notifySyncSuccess(slackTs, post.getId(), post.getAiTitle());
+                        boolean sent = slackBotReplyService.notifySyncSuccess(
+                                slackTs, post.getId(), post.getAiTitle(), post.getSyncedAt());
+                        if (sent) {
+                            log.info("[봇댓글] slackTs={} postId={} 전송 성공", slackTs, post.getId());
+                        } else {
+                            log.warn(
+                                    "[봇댓글] slackTs={} postId={} 전송 실패 - pending 전환 + 관리자 DM 발송",
+                                    slackTs,
+                                    post.getId());
+                            post.setPendingNotification(true);
+                            postRepository.save(post);
+                            slackDmNotificationService.sendBotReplyMissingAlert(post);
+                        }
                         slackDmNotificationService.sendSyncResult(post, postRepository.countByIsDeletedFalse());
                     }
                 }
@@ -217,12 +242,38 @@ public class SlackSyncService {
                 }
             }
 
+            checkMissingBotReplies();
+
             long durationMs = System.currentTimeMillis() - start;
             SyncSummary summary = new SyncSummary(messages.size(), newPosts, repliesProcessed, durationMs);
             log.info("슬랙 동기화 완료 (oldest={}): {}", oldest, summary);
             return summary;
         } finally {
             syncing.set(false);
+        }
+    }
+
+    private static final int MISSING_CHECK_WINDOW_MINUTES = 60;
+
+    // 봇 댓글이 조용히 누락된 게시글을 찾아 pending으로 표시 - 기존 관리자 화면 "대기" 목록/"지금 전송"
+    // 버튼을 그대로 타게 되고, 매 동기화(5분)마다 실행되므로 원인 불명의 타이밍 이슈로 알림 블록 자체를
+    // 못 탄 케이스까지 최대 몇 분 안에 잡아낸다. pending_notification=false 조건 덕분에 한 번 잡히면
+    // 다음 스윕부터는 자동으로 제외되어 중복 알림 걱정이 없다
+    private void checkMissingBotReplies() {
+        if (slackBotReplyService.isLocalFrontendUrl()) {
+            return;
+        }
+        LocalDateTime since = LocalDateTime.now().minusMinutes(MISSING_CHECK_WINDOW_MINUTES);
+        List<Post> missing = postRepository.findMissingBotReplyPosts(
+                since, SlackBotReplyService.SYNC_SUCCESS_MARKER, SlackBotReplyService.SYNC_FAILURE_MARKER);
+        for (Post post : missing) {
+            log.warn(
+                    "[봇댓글] slackTs={} postId={} 지연 감지(스윕) - 알림 블록 미실행 추정, pending 전환 + 관리자 DM 발송",
+                    post.getSlackTs(),
+                    post.getId());
+            post.setPendingNotification(true);
+            postRepository.save(post);
+            slackDmNotificationService.sendBotReplyMissingAlert(post);
         }
     }
 

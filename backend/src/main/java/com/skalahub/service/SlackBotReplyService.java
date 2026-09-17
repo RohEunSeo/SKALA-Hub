@@ -51,20 +51,25 @@ public class SlackBotReplyService {
         return frontendUrl.contains("localhost") || frontendUrl.contains("127.0.0.1");
     }
 
-    public void notifySyncSuccess(String threadTs, Long postId, String aiTitle) {
-        String timestamp = formatTimestamp(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
+    // syncedAt: 실제로 이 게시글이 DB에 동기화된 시각(Post.syncedAt) - "지금" 시각이 아니라 이걸 써야
+    // 관리자가 나중에 수동으로 재전송(pending 처리·재시도)해도 댓글에 찍히는 시각이 실제 동기화 시점과 어긋나지 않음
+    // 반환값: 실제로 Slack이 "ok":true를 준 것까지 확인된 성공만 true - 호출부가 실패 시 pending 전환/
+    // 관리자 DM 발송 여부를 판단하는 데 씀
+    public boolean notifySyncSuccess(String threadTs, Long postId, String aiTitle, LocalDateTime syncedAt) {
+        String timestamp = formatTimestamp(syncedAt != null ? syncedAt : LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         StringBuilder message = new StringBuilder()
                 .append("✅ ").append(SYNC_SUCCESS_MARKER).append("! (").append(timestamp).append(")\n")
                 .append("🔗 바로가기: ").append(frontendUrl).append("/posts/").append(postId);
         if (aiTitle != null && !aiTitle.isBlank()) {
             message.append("\n📝 AI 제목: ").append(aiTitle);
         }
-        postThreadReply(threadTs, message.toString());
+        return postThreadReply(threadTs, message.toString());
     }
 
     public void notifySyncFailure(String threadTs) {
         postThreadReply(threadTs, "⚠️ " + SYNC_FAILURE_MARKER + ". 관리자에게 문의해주세요!");
     }
+
 
     // 관리자가 봇 댓글을 직접 지울 때 사용 (AdminController에서 호출) - 실패하면 예외를 그대로 던져서 API 응답에 반영
     public void deleteReply(String ts) {
@@ -105,18 +110,21 @@ public class SlackBotReplyService {
     // 댓글 전송 실패가 동기화 스케줄러 자체를 멈추면 안 되므로 어떤 예외도 밖으로 던지지 않음 (동기화 흐름 전용).
     // 429 레이트리밋은 SlackSyncService.getWithRetry와 같은 방식으로 1회 재시도 - 새벽 전체 재동기화가
     // 한꺼번에 여러 성공 알림을 쏠 때 레이트리밋에 걸려 알림이 조용히 누락되는 걸 방지
-    private void postThreadReply(String threadTs, String text) {
+    private boolean postThreadReply(String threadTs, String text) {
         if (testMode) {
             log.info("[TEST_MODE] 슬랙 댓글 전송 스킵 - threadTs={}, text={}", threadTs, text);
-            return;
+            return true;
         }
         try {
             JsonNode response = postMessageWithRetry(threadTs, text);
-            if (!response.path("ok").asBoolean(false)) {
+            boolean ok = response.path("ok").asBoolean(false);
+            if (!ok) {
                 log.error("슬랙 스레드 댓글 전송 실패 (threadTs={}): {}", threadTs, describeError(response));
             }
+            return ok;
         } catch (Exception e) {
             log.error("슬랙 스레드 댓글 전송 실패 (threadTs={})", threadTs, e);
+            return false;
         }
     }
 
