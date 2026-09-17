@@ -113,6 +113,7 @@ public class SlackEventsController {
         if (userId == null || ts.isBlank()) {
             return;
         }
+        log.info("[새글감지] slackTs={} 작성자={} - 관리자 DM 발송", ts, userId);
         slackDmNotificationService.sendNewPostAlert(userId, event.path("text").asString(""), ts, channelId);
     }
 

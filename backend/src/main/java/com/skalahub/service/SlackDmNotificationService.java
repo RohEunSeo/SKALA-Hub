@@ -78,6 +78,16 @@ public class SlackDmNotificationService {
         sendDm(message);
     }
 
+    // 봇 댓글이 안 달린 게시글을 감지했을 때 관리자에게 즉시 알림 - 원인 불명 타이밍 이슈 대응
+    public void sendBotReplyMissingAlert(Post post) {
+        String message = "🔕 슬랙 봇 댓글이 안 달렸어요!\n"
+                + "작성자: " + post.getUserName() + "\n"
+                + "\"" + truncate(post.getContent() == null ? "" : post.getContent(), 200) + "\"\n"
+                + "🔗 바로가기: " + frontendUrl + "/posts/" + post.getId() + "\n"
+                + "관리자 모드 → 슬랙 봇 댓글 관리 → \"대기\"에서 강제 전송해주세요.";
+        sendDm(message);
+    }
+
     private String truncate(String text, int maxLen) {
         return text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
     }

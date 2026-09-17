@@ -45,8 +45,9 @@ async function handleGoogleLogin() {
     <div class="auth-sub"><strong>SKALA 워크스페이스에 가입된 계정</strong>으로 로그인 후 이용해주세요.</div>
     <div class="auth-sub auth-sub-small">* 워크스페이스 입력 화면이 뜬다면 <strong>'theskala'</strong>를 입력해주세요.</div>
     <button class="auth-login-btn" @click="handleLogin">Slack으로 로그인</button>
-    <button class="auth-google-btn" @click="handleGoogleLogin">Google로 로그인</button>
-    <div class="auth-sub auth-sub-small">* 마이페이지에서 구글 계정을 미리 연동해둔 경우에만 이용할 수 있어요.</div>
+    <!-- 구글 로그인 테스트 중 - 완료 전까지 비노출 (필요 시 위 버튼 2줄만 되살리면 됨) -->
+    <!-- <button class="auth-google-btn" @click="handleGoogleLogin">Google로 로그인</button>
+    <div class="auth-sub auth-sub-small">* 마이페이지에서 구글 계정을 미리 연동해둔 경우에만 이용할 수 있어요.</div> -->
   </div>
 </template>
 

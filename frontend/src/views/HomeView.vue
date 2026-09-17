@@ -216,7 +216,8 @@ onUnmounted(() => {
       </div>
       <div class="login-actions">
         <button class="login-btn" @click="handleLogin">Slack으로 로그인</button>
-        <button class="login-btn-google" @click="handleGoogleLogin">Google로 로그인</button>
+        <!-- 구글 로그인 테스트 중 - 완료 전까지 비노출 (필요 시 아래 버튼 되살리면 됨) -->
+        <!-- <button class="login-btn-google" @click="handleGoogleLogin">Google로 로그인</button> -->
       </div>
     </div>
 
