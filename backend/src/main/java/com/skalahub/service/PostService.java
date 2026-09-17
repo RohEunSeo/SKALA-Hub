@@ -274,6 +274,7 @@ public class PostService {
                 post.getIsExcludedFromRanking(),
                 post.getIsEdited(),
                 post.getCreatedAt(),
+                post.getPostNumber(),
                 buildPermalink(post.getSlackTs()),
                 attachments,
                 parseFiles(post.getFiles()),
