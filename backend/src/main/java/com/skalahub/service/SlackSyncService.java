@@ -244,6 +244,12 @@ public class SlackSyncService {
                         }
                         slackDmNotificationService.sendSyncResult(post, totalCount);
                     }
+                } else if (post.getPostNumber() == null) {
+                    // 과거 동기화 중 번호 부여가 누락된 기존 글 - 봇 댓글 재전송 없이 번호만 조용히 보정
+                    long totalCount = postRepository.countByIsDeletedFalse();
+                    post.setPostNumber((int) totalCount);
+                    postRepository.save(post);
+                    log.info("[번호보정] slackTs={} postId={} postNumber={} 누락된 순번 보정", slackTs, post.getId(), post.getPostNumber());
                 }
                 if (msg.path("reply_count").asInt(0) > 0) {
                     repliesProcessed += syncReplies(post, slackTs, userInfoCache);

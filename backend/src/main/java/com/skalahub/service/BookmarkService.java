@@ -60,7 +60,10 @@ public class BookmarkService {
         post.setBookmarkCount(post.getBookmarkCount() == null ? 1 : post.getBookmarkCount() + 1);
         postRepository.save(post);
 
-        if (post.getUserSlackId() != null && !post.getUserSlackId().equals(slackId)) {
+        // 글쓴이가 실제 로그인 이력이 없는 교수님 등이면 users에 row가 없어 알림 FK 위반이 나므로 존재 확인 후 발송
+        if (post.getUserSlackId() != null
+                && !post.getUserSlackId().equals(slackId)
+                && userRepository.existsById(post.getUserSlackId())) {
             notificationService.notifyBookmarkReceived(post.getUserSlackId(), postId);
         }
     }

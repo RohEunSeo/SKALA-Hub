@@ -919,7 +919,7 @@ onMounted(() => {
                   <span class="row-author">{{ reply.postAuthor }} · {{ reply.postPreview }}</span>
                   <span class="row-time">{{ formatRelativeTime(reply.createdAt) }}</span>
                 </div>
-                <template v-if="editingReplyId === reply.id">
+                <template v-if="reply.id !== null && editingReplyId === reply.id">
                   <textarea v-model="editingContent" class="tag-input reply-edit-textarea" rows="3"></textarea>
                   <div class="control-row">
                     <button class="save-btn" @click="saveEditReply(reply)">저장</button>
