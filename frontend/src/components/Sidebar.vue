@@ -1,9 +1,10 @@
 <script setup>
 // 좌측 네비게이션 사이드바 - 로고/메뉴/카테고리/유저 프로필
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
+import { useMyPageStore } from '../stores/mypage'
 import { CATEGORIES } from '../constants/categories'
 import InquiryModal from './InquiryModal.vue'
 
@@ -13,11 +14,46 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
+const myPageStore = useMyPageStore()
 const showInquiryModal = ref(false)
 
 onMounted(() => {
   postsStore.loadCategoryCounts()
 })
+
+// 마이페이지 바로가기 - 탭 값은 MyPageView의 ?tab= 쿼리/activeTab과 동일
+const MY_TABS = [
+  { tab: 'posts', icon: '📝', label: '내가 올린 글', countKey: 'postCount' },
+  { tab: 'saved', icon: '🔖', label: '저장한 글', countKey: 'savedCount' },
+  { tab: 'reacted', icon: '👍', label: '반응한 글', countKey: 'reactedCount' },
+]
+
+// 로그인된 상태에서만 개수 조회 (로그인 직후에도 반영되도록 immediate watch)
+watch(
+  () => authStore.isAuthenticated,
+  (loggedIn) => {
+    if (loggedIn) myPageStore.ensureStats()
+  },
+  { immediate: true },
+)
+
+function myTabCount(countKey) {
+  return myPageStore.stats?.[countKey]
+}
+
+function isActiveMyTab(tab) {
+  return route.name === 'mypage' && myPageStore.activeTab === tab
+}
+
+function goMyPageTab(tab) {
+  window.scrollTo({ top: 0, behavior: 'auto' })
+  if (route.name === 'mypage') {
+    // 이미 마이페이지면 라우트 변경이 없어 MyPageView가 재마운트되지 않으므로 스토어로 탭만 전환
+    myPageStore.setTab(tab)
+    return
+  }
+  router.push({ name: 'mypage', query: { tab } })
+}
 
 const userInitial = computed(() => authStore.user?.name?.charAt(0) ?? '?')
 const userMeta = computed(() => {
@@ -69,6 +105,20 @@ function handleLogout() {
         <RouterLink to="/mypage" class="nav-item" :class="{ active: route.name === 'mypage' }"
           >👤 마이페이지</RouterLink
         >
+        <template v-if="authStore.isAuthenticated">
+          <div
+            v-for="item in MY_TABS"
+            :key="item.tab"
+            class="category-subitem"
+            :class="{ active: isActiveMyTab(item.tab) }"
+            @click="goMyPageTab(item.tab)"
+          >
+            └ {{ item.icon }} {{ item.label }}
+            <span v-if="myTabCount(item.countKey) != null" class="category-count"
+              >({{ myTabCount(item.countKey) }})</span
+            >
+          </div>
+        </template>
         <RouterLink to="/dashboard" class="nav-item" :class="{ active: route.name === 'dashboard' }"
           >🌱 대시보드</RouterLink
         >
@@ -279,6 +329,11 @@ function handleLogout() {
 
 /* 부모 카테고리 바로 다음에 오는 첫 하위항목만 간격을 더 좁혀서 그 카테고리 소속처럼 붙어보이게 함 */
 .category-item + .category-subitem {
+  padding-top: 1px;
+}
+
+/* 마이페이지 메뉴 바로 다음 첫 하위항목도 카테고리와 동일하게 간격을 좁힘 */
+.nav-item + .category-subitem {
   padding-top: 1px;
 }
 

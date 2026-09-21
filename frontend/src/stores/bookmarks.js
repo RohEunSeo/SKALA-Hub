@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { fetchBookmarks, saveBookmark, removeBookmark } from '../api/bookmarks'
+import { useMyPageStore } from './mypage'
 
 export const useBookmarksStore = defineStore('bookmarks', () => {
   const bookmarkedPostIds = ref([])
@@ -34,6 +35,10 @@ export const useBookmarksStore = defineStore('bookmarks', () => {
         bookmarkedPostIds.value = [...bookmarkedPostIds.value, postId]
         await saveBookmark(postId)
       }
+      // 사이드바 저장한 글 개수를 바로 맞추고, 마이페이지 저장한 글 목록 캐시는 다음 방문 때 다시 불러오게 함
+      const myPageStore = useMyPageStore()
+      myPageStore.adjustSavedCount(isBookmarked ? -1 : 1)
+      myPageStore.invalidateCache()
     } catch (error) {
       bookmarkedPostIds.value = previous
       throw error

@@ -115,9 +115,7 @@ async function unsave(postId) {
     await removeBookmark(postId)
     bookmarksStore.setBookmarks(bookmarksStore.bookmarkedPostIds.filter((id) => id !== postId))
     posts.value = posts.value.filter((post) => post.id !== postId)
-    if (stats.value) {
-      stats.value = { ...stats.value, savedCount: Math.max(0, stats.value.savedCount - 1) }
-    }
+    myPageStore.adjustSavedCount(-1)
   } catch {
     postsError.value = '저장 취소에 실패했습니다. 잠시 후 다시 시도해주세요.'
   }
