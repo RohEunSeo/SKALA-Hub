@@ -108,6 +108,7 @@ chat.postMessage / chat.update / chat.delete → 관리자가 동기화 안내�
 ## 디자인
 `design/`은 gitignore 처리되어 로컬 전용이며 실제 UI보다 뒤처져 있음(참고용 아님).
 새 화면/컴포넌트를 만들 땐 기존 Vue 컴포넌트(특히 AppLayout, Sidebar, PostCard)의 스타일·클래스 패턴을 그대로 따라가는 게 기준.
+맥 Finder 폴더 카드(홈 카테고리 / 커리큘럼)는 components/FolderCard.vue 한 곳에서 관리 (호버 시 문서가 올라오는 효과 포함, 색은 utils/folderColors.js).
 
 
 ## 프로젝트 구조
