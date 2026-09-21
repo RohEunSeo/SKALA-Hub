@@ -1,7 +1,10 @@
 <script setup>
-// 사이트 진입 시 뜨는 일회성 공지 팝업 - 내용은 config/sitePopup.js에서 관리
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+// 로그인한 사용자에게만 뜨는 일회성 공지 팝업 - 내용은 config/sitePopup.js에서 관리
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { SITE_POPUP } from '../config/sitePopup'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
 
 const visible = ref(false)
 const panelRef = ref(null)
@@ -45,10 +48,18 @@ function handleKeydown(event) {
   if (event.key === 'Escape') close()
 }
 
+// 로그인 상태일 때만 노출 - 이미 로그인된 채 접속하면 바로, 비로그인 상태에서 로그인하면 로그인 직후 바로 뜸.
+// 로그아웃하면 열려 있던 팝업도 닫음 ("일주일 동안 보지 않음"을 누른 경우엔 로그인해도 안 뜸)
+watch(
+  () => authStore.isAuthenticated,
+  (loggedIn) => {
+    const active = SITE_POPUP.enabled && Date.now() < new Date(SITE_POPUP.campaignEndsAt).getTime()
+    visible.value = loggedIn && active && !isDismissed()
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
-  if (SITE_POPUP.enabled && Date.now() < new Date(SITE_POPUP.campaignEndsAt).getTime() && !isDismissed()) {
-    visible.value = true
-  }
   document.addEventListener('keydown', handleKeydown)
 })
 
