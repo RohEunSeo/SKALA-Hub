@@ -2,7 +2,8 @@
 // 커리큘럼 탭 상단 - SKALA 4단계 + AX 폴더를 홈 화면 "카테고리별 아카이브"와 동일한
 // 맥 Finder 폴더 카드로 표시. 카드를 클릭하면 해당 폴더로 필터링됨
 import { CURRICULUM_STAGES } from '../constants/curriculum'
-import { folderBodyColor, folderTabColor, folderTextColor } from '../utils/folderColors'
+import FolderCard from './FolderCard.vue'
+import { folderTextColor } from '../utils/folderColors'
 
 const props = defineProps({
   selectedStage: { type: String, required: true },
@@ -16,18 +17,10 @@ const emit = defineEmits(['select'])
   <div class="curriculum-diagram-wrap">
     <div class="curriculum-diagram">
       <!-- folder-slot: 탭 진입 시 좌→우 순차 등장 애니메이션 전용 래퍼.
-           stage-folder(실제 카드)에 직접 애니메이션을 걸면 forwards로 고정된 transform이
+           FolderCard(실제 카드)에 직접 애니메이션을 걸면 forwards로 고정된 transform이
            hover/active의 transform을 계속 덮어써서 먹히지 않으므로 레이어를 분리함 -->
       <div v-for="(stage, index) in CURRICULUM_STAGES" :key="stage.value" class="folder-slot" :style="{ '--index': index }">
-        <div
-          class="stage-folder"
-          :class="{ active: selectedStage === stage.value }"
-          :style="{
-            background: folderBodyColor(stage.color),
-            '--tab-color': folderTabColor(stage.color),
-          }"
-          @click="emit('select', stage.value)"
-        >
+        <FolderCard :color="stage.color" :active="selectedStage === stage.value" @click="emit('select', stage.value)">
           <!-- 선택된 폴더 표시 - 오른쪽 위에 체크 배지가 팝인 -->
           <div
             class="selected-badge"
@@ -46,7 +39,7 @@ const emit = defineEmits(['select'])
               {{ counts[stage.value] ?? 0 }}개
             </div>
           </div>
-        </div>
+        </FolderCard>
       </div>
     </div>
   </div>
@@ -56,10 +49,12 @@ const emit = defineEmits(['select'])
 /* 사이드바 펼침/접힘처럼 뷰포트는 그대로인데 "이 영역"만 좁아지는 경우가 있어서, 뷰포트 기준
    @media 대신 이 래퍼의 실제 렌더링 폭 기준 @container로 반응형을 건다 */
 .curriculum-diagram-wrap {
-  container-type: inline-size;
+  container: curriculum / inline-size;
 }
 
 .curriculum-diagram {
+  /* 개수 텍스트가 폴더 하단에 붙지 않도록 아래 여백을 카드 폭에 비례해 넉넉히 (좁아져도 같이 줄어듦) */
+  --folder-pad-bottom: clamp(10px, 8cqw, 20px);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 18px;
@@ -96,62 +91,16 @@ const emit = defineEmits(['select'])
   }
 }
 
-/* 맥 Finder 폴더 아이콘 느낌 - 둥근 본체(진한 톤) + 왼쪽 위로 삐져나온 탭(연한 톤),
-   테두리선 없이 그림자로만 입체감 (홈 화면 category-card와 동일 스타일) */
-.stage-folder {
-  position: relative;
-  min-width: 0;
-  cursor: pointer;
-  border-radius: 13px;
-  padding: 20px 18px 18px;
-  aspect-ratio: 4 / 3;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 10px 20px rgba(26, 26, 46, 0.15), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-}
-
-.stage-folder:hover {
-  transform: translateY(-6px) scale(1.04);
-  box-shadow: 0 18px 28px rgba(26, 26, 46, 0.22), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
-}
-
-.stage-folder.active {
-  transform: translateY(-4px) scale(1.03);
-  box-shadow: 0 14px 24px rgba(26, 26, 46, 0.2), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
-}
-
-.stage-folder::before {
-  content: '';
-  position: absolute;
-  top: -10px;
-  left: 0;
-  width: 46%;
-  height: 22px;
-  border-radius: 10px 10px 0 0;
-  background: var(--tab-color);
-  transition: transform 0.22s ease;
-  transform-origin: bottom left;
-  z-index: 2;
-}
-
-/* 마우스 올리면 위쪽 탭이 살짝 들려서 폴더가 열리는 듯한 느낌 */
-.stage-folder:hover::before,
-.stage-folder.active::before {
-  transform: translateY(-3px) rotate(-3deg);
-}
-
 /* 선택된 폴더만 - 오른쪽 위 체크 배지가 팝인되며 나타남 */
 .selected-badge {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 22px;
-  height: 22px;
+  top: clamp(6px, 6cqw, 10px);
+  right: clamp(6px, 6cqw, 10px);
+  width: clamp(16px, 13cqw, 22px);
+  height: clamp(16px, 13cqw, 22px);
   border-radius: 50%;
   background: #ffffff;
-  font-size: 12px;
+  font-size: clamp(9px, 7cqw, 12px);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -177,7 +126,7 @@ const emit = defineEmits(['select'])
 }
 
 .stage-icon {
-  font-size: 23px;
+  font-size: clamp(13px, 12cqw, 24px);
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
   transition: transform 0.22s ease;
 }
@@ -192,7 +141,7 @@ const emit = defineEmits(['select'])
   margin-top: 6px;
 }
 
-.stage-folder:hover .stage-icon {
+.folder-slot:hover .stage-icon {
   transform: scale(1.1);
 }
 
@@ -202,7 +151,7 @@ const emit = defineEmits(['select'])
    길이/줄바꿈 여부와 무관하게 5개 카드 높이가 항상 완전히 동일함 */
 .stage-label {
   font-weight: 700;
-  font-size: 14px;
+  font-size: clamp(10.5px, 8.2cqw, 15px);
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -210,8 +159,8 @@ const emit = defineEmits(['select'])
 }
 
 .stage-subtitle {
-  font-size: 12px;
-  margin-top: 3px;
+  font-size: clamp(9.5px, 7cqw, 12.5px);
+  margin-top: 2px;
   opacity: 0.75;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -219,83 +168,25 @@ const emit = defineEmits(['select'])
 }
 
 .stage-count {
-  font-size: 12.5px;
+  font-size: clamp(10px, 7.4cqw, 13px);
   font-weight: 700;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
-/* 이 영역 자체가 좁아질수록(사이드바를 펼쳐서 콘텐츠 폭만 줄어드는 경우 포함) 글씨/여백을
-   단계적으로 줄이고 칸 수를 줄여서 카드가 잘리거나 넘치지 않게 함 - 뷰포트 폭이 아니라
-   .curriculum-diagram-wrap의 실제 렌더링 폭 기준(@container)이라 사이드바 상태와 무관하게 항상
-   정확히 반응함 (aspect-ratio는 항상 4/3 그대로 유지 - 폭에 맞춰 높이만 비례해서 줄어듦) */
-@container (max-width: 760px) {
+/* 이 영역 자체가 좁아질수록(사이드바를 펼쳐서 콘텐츠 폭만 줄어드는 경우 포함) 칸 수를 줄여서 카드가
+   너무 작아지지 않게 함 - 뷰포트 폭이 아니라 .curriculum-diagram-wrap의 실제 렌더링 폭 기준(@container)이라
+   사이드바 상태와 무관하게 항상 정확히 반응함. 카드 안 글씨/아이콘/여백은 FolderCard 폭 기준(cqw)으로
+   알아서 같이 줄어들므로 여기서 따로 크기를 건드리지 않음 */
+@container curriculum (max-width: 760px) {
   .curriculum-diagram {
     grid-template-columns: repeat(3, 1fr);
   }
-
-  .stage-folder {
-    padding: 16px 14px 14px;
-  }
-
-  .stage-icon {
-    font-size: 20px;
-  }
-
-  .stage-label {
-    font-size: 12.5px;
-  }
-
-  .stage-subtitle {
-    font-size: 11px;
-  }
-
-  .stage-count {
-    font-size: 11.5px;
-  }
 }
 
-@container (max-width: 700px) {
-  .stage-label {
-    font-size: 11.5px;
-  }
-
-  .stage-subtitle {
-    font-size: 10.5px;
-  }
-}
-
-@container (max-width: 560px) {
+@container curriculum (max-width: 560px) {
   .curriculum-diagram {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-  }
-
-  .stage-folder {
-    padding: 14px 12px 12px;
-  }
-
-  .stage-icon {
-    font-size: 18px;
-  }
-
-  .stage-label {
-    font-size: 11.5px;
-  }
-
-  .stage-subtitle {
-    font-size: 10px;
-  }
-
-  .stage-count {
-    font-size: 10.5px;
-  }
-
-  .selected-badge {
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
-    top: 8px;
-    right: 8px;
   }
 }
 </style>

@@ -5,8 +5,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { usePostsStore } from '../stores/posts'
 import { useMyPageStore } from '../stores/mypage'
+import { useUiStore } from '../stores/ui'
 import { CATEGORIES } from '../constants/categories'
 import InquiryModal from './InquiryModal.vue'
+import skLogo from '../assets/sk_logo.png'
 
 const emit = defineEmits(['navigate', 'collapse'])
 
@@ -15,6 +17,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
 const myPageStore = useMyPageStore()
+const uiStore = useUiStore()
 const showInquiryModal = ref(false)
 
 onMounted(() => {
@@ -53,6 +56,29 @@ function goMyPageTab(tab) {
     return
   }
   router.push({ name: 'mypage', query: { tab } })
+}
+
+// 피드 하위 메뉴 - FeedView 상단 탭(링크 모음 / SKALA 커리큘럼)으로 바로 진입. 활성 표시는 FeedView가
+// 스토어(uiStore.feedTab)에 동기화해 둔 현재 탭 기준
+const FEED_TABS = [
+  { tab: 'links', icon: '🔗', label: '링크 모음' },
+  { tab: 'curriculum', logo: skLogo, label: 'SKALA 커리큘럼' },
+]
+
+function isActiveFeedTab(tab) {
+  return route.name === 'feed' && uiStore.feedTab === tab
+}
+
+function goFeedTab(tab) {
+  window.scrollTo({ top: 0, behavior: 'auto' })
+  if (route.name === 'feed') {
+    // 이미 피드 화면이면 재마운트되지 않으므로 스토어 값만 바꿔 FeedView가 탭을 전환하게 함
+    uiStore.feedTab = tab
+    return
+  }
+  // 다른 화면에서는 홈의 "링크 모음" 바로가기와 동일하게 링크 탭 상태를 미리 켜고 쿼리로 진입
+  if (tab === 'links') postsStore.setHasLink(true)
+  router.push({ name: 'feed', query: { tab } })
 }
 
 const userInitial = computed(() => authStore.user?.name?.charAt(0) ?? '?')
@@ -102,6 +128,20 @@ function handleLogout() {
       <nav class="nav">
         <RouterLink to="/" class="nav-item" :class="{ active: route.name === 'home' }">🏠 홈</RouterLink>
         <RouterLink to="/feed" class="nav-item" :class="{ active: route.name === 'feed' }">📋 피드</RouterLink>
+        <template v-if="authStore.isAuthenticated">
+          <div
+            v-for="item in FEED_TABS"
+            :key="item.tab"
+            class="category-subitem"
+            :class="{ active: isActiveFeedTab(item.tab) }"
+            @click="goFeedTab(item.tab)"
+          >
+            └
+            <img v-if="item.logo" :src="item.logo" class="subitem-logo" alt="" />
+            <template v-else>{{ item.icon }}</template>
+            {{ item.label }}
+          </div>
+        </template>
         <RouterLink to="/mypage" class="nav-item" :class="{ active: route.name === 'mypage' }"
           >👤 마이페이지</RouterLink
         >
@@ -335,6 +375,14 @@ function handleLogout() {
 /* 마이페이지 메뉴 바로 다음 첫 하위항목도 카테고리와 동일하게 간격을 좁힘 */
 .nav-item + .category-subitem {
   padding-top: 1px;
+}
+
+/* 하위 메뉴 앞 SK 로고 - 12px 글씨의 이모지와 비슷한 크기로 맞춤 */
+.subitem-logo {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  vertical-align: -2px;
 }
 
 .category-count {

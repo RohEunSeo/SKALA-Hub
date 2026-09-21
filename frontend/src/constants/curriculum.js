@@ -23,7 +23,7 @@ export const CURRICULUM_STAGES = [
     shortLabel: '데이터·AIOps',
     subtitle: 'AI의 서비스화',
     icon: '📊',
-    color: '#6FCF97',
+    color: '#2BB3A3',
     subCategories: [
       { value: 'python', label: 'Python' },
       { value: 'analysis', label: '데이터분석·기초통계' },
@@ -68,7 +68,7 @@ export const CURRICULUM_STAGES = [
     subtitle: 'AI 전환·산업 활용 사례',
     icon: '✨',
     iconImage: skLogo,
-    color: '#E8823D',
+    color: '#E4762C',
     subCategories: [],
   },
 ]

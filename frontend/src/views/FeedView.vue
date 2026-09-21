@@ -17,6 +17,7 @@ import CurriculumBoard from '../components/CurriculumBoard.vue'
 import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useAuthStore } from '../stores/auth'
+import { useUiStore } from '../stores/ui'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
 import { fetchCurriculumStatus } from '../api/admin'
@@ -36,6 +37,7 @@ const route = useRoute()
 const postsStore = usePostsStore()
 const bookmarksStore = useBookmarksStore()
 const authStore = useAuthStore()
+const uiStore = useUiStore()
 
 // 상단 탭("게시글"/"🔗 링크 모음") - 뷰 로컬 상태, 카테고리/층/기간 필터는 스토어에서 그대로 공유됨.
 // 링크 모음 카드의 "게시글 보러가기"로 상세 페이지에 갔다가 뒤로가기로 돌아올 때 ?tab=links가 붙어 오면 링크 탭으로 복원
@@ -77,6 +79,15 @@ function selectTab(tab) {
     postsStore.setHasLink(tab === 'links' ? true : null)
   }
 }
+
+// 사이드바 "링크 모음 / SKALA 커리큘럼" 하위 메뉴와 탭 상태 공유 - 탭이 바뀌면 스토어에 반영하고,
+// 사이드바가 (이미 피드 화면인 상태에서) 스토어 값을 바꾸면 그 탭으로 전환. selectTab이 같은 탭이면 바로
+// 반환하므로 서로의 갱신이 무한히 되돌아오지 않음
+watch(activeTab, (tab) => (uiStore.feedTab = tab), { immediate: true })
+watch(
+  () => uiStore.feedTab,
+  (tab) => selectTab(tab),
+)
 
 // 이미 /feed에 있는 상태에서 알림 등을 통해 ?tab=curriculum(또는 links) 딥링크로 다시 들어오는 경우 -
 // 같은 라우트라 컴포넌트가 새로 mount되지 않아 위 activeTab 초기값 로직이 다시 실행되지 않으므로,

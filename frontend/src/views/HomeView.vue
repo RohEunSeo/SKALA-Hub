@@ -16,7 +16,8 @@ import { requestGoogleAuthCode } from '../utils/googleAuth'
 import { updatePostAsAdmin, fetchExcludedFromRanking } from '../api/admin'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { stripSlackMarkdown } from '../utils/renderSlackText'
-import { folderBodyColor, folderTabColor, folderTextColor } from '../utils/folderColors'
+import FolderCard from '../components/FolderCard.vue'
+import { folderTextColor } from '../utils/folderColors'
 import { CATEGORIES } from '../constants/categories'
 
 const AUTO_SLIDE_MS = 4000
@@ -351,11 +352,11 @@ onUnmounted(() => {
         <button class="link-gallery-chip" @click="goToLinkGallery">🔗 링크 모음</button>
       </div>
       <div class="category-grid">
-        <div
+        <FolderCard
           v-for="cat in CATEGORIES"
           :key="cat.value"
           class="category-card"
-          :style="{ background: folderBodyColor(cat.color), '--tab-color': folderTabColor(cat.color) }"
+          :color="cat.color"
           @click="goToCategory(cat.value)"
         >
           <div class="category-icon">{{ cat.icon }}</div>
@@ -363,7 +364,7 @@ onUnmounted(() => {
             <div class="category-label" :style="{ color: folderTextColor(cat.color) }">{{ cat.label }}</div>
             <div class="category-count" :style="{ color: folderTextColor(cat.color) }">글 {{ categoryCount(cat.value) }}개</div>
           </div>
-        </div>
+        </FolderCard>
       </div>
     </section>
   </AppLayout>
@@ -797,47 +798,14 @@ onUnmounted(() => {
   }
 }
 
-/* 맥 Finder 폴더 아이콘 느낌 - 둥근 본체(진한 톤) + 왼쪽 위로 삐져나온 탭(연한 톤), 테두리선 없이 그림자로만 입체감 */
+/* 폴더 모양/호버 효과는 FolderCard가 담당 - 여기서는 탭이 위로 삐져나오는 만큼의 여백만 */
 .category-card {
-  position: relative;
-  min-width: 0;
   margin-top: 14px;
-  cursor: pointer;
-  border-radius: 13px;
-  padding: 20px 18px 18px;
-  aspect-ratio: 4 / 3;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 10px 20px rgba(26, 26, 46, 0.15), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
 
-.category-card:hover {
-  transform: translateY(-6px) scale(1.04);
-  box-shadow: 0 18px 28px rgba(26, 26, 46, 0.22), inset 0 -14px 12px -10px rgba(0, 0, 0, 0.12);
-}
-
-.category-card::before {
-  content: '';
-  position: absolute;
-  top: -10px;
-  left: 0;
-  width: 46%;
-  height: 22px;
-  border-radius: 10px 10px 0 0;
-  background: var(--tab-color);
-  transition: transform 0.22s ease;
-  transform-origin: bottom left;
-}
-
-/* 마우스 올리면 위쪽 탭이 살짝 들려서 폴더가 열리는 듯한 느낌 */
-.category-card:hover::before {
-  transform: translateY(-3px) rotate(-3deg);
-}
-
+/* 아이콘/글씨는 FolderCard 폭 기준(cqw)으로 같이 줄어듦 */
 .category-icon {
-  font-size: 23px;
+  font-size: clamp(14px, 13.5cqw, 27px);
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
   transition: transform 0.22s ease;
 }
@@ -848,11 +816,11 @@ onUnmounted(() => {
 
 .category-label {
   font-weight: 700;
-  font-size: 14px;
+  font-size: clamp(10.5px, 8.2cqw, 15px);
 }
 
 .category-count {
-  font-size: 13.3px;
+  font-size: clamp(10px, 7.6cqw, 14px);
   margin-top: 1px;
   opacity: 0.75;
 }
