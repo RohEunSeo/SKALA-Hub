@@ -173,12 +173,6 @@ function goToCategory(value) {
   router.push({ name: 'feed' })
 }
 
-// "링크 모음" 바로가기 - 이미 FeedView 안에 있는 링크 갤러리 탭으로 바로 진입
-function goToLinkGallery() {
-  postsStore.setHasLink(true)
-  router.push({ name: 'feed', query: { tab: 'links' } })
-}
-
 // "오늘 새 글" 뱃지 클릭 - 카테고리 필터는 초기화하고 기간만 오늘로 설정한 채 피드로 이동
 function goToTodayFeed() {
   postsStore.category = null
@@ -349,7 +343,6 @@ onUnmounted(() => {
     <section class="section">
       <div class="section-header">
         <span class="section-title">카테고리별 아카이브</span>
-        <button class="link-gallery-chip" @click="goToLinkGallery">🔗 링크 모음</button>
       </div>
       <div class="category-grid">
         <FolderCard
@@ -550,21 +543,6 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 800;
   color: #1a1a2e;
-}
-
-.link-gallery-chip {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(74, 63, 143, 0.2);
-  background: #f1eefc;
-  color: #4a3f8f;
-  font-size: 12.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.link-gallery-chip:hover {
-  background: #e3ddf7;
 }
 
 .leaderboard-card {
