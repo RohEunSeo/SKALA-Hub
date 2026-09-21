@@ -23,15 +23,35 @@ const introParts = computed(() => parseRich(SITE_POPUP.intro))
 const warningParts = computed(() => parseRich(SITE_POPUP.warning))
 const surveyNoteParts = computed(() => parseRich(SITE_POPUP.surveyNote))
 
+// 오늘 날짜(로컬 기준, YYYY-MM-DD) - "닫기"를 누른 날은 새로고침/재접속해도 다시 안 뜨고, 다음 날 첫 접속에 다시 뜸
+function todayKey() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+const CLOSED_TODAY_KEY = `${SITE_POPUP.storageKey}:closedOn`
+
 function isDismissed() {
-  const raw = localStorage.getItem(SITE_POPUP.storageKey)
-  if (!raw) return false
-  const dismissedUntil = Number(raw)
-  return !Number.isNaN(dismissedUntil) && Date.now() < dismissedUntil
+  try {
+    // "일주일 동안 보지 않음"
+    const raw = localStorage.getItem(SITE_POPUP.storageKey)
+    const dismissedUntil = raw ? Number(raw) : NaN
+    if (!Number.isNaN(dismissedUntil) && Date.now() < dismissedUntil) return true
+    // "닫기"(✕/ESC 포함)를 오늘 이미 눌렀는지
+    return localStorage.getItem(CLOSED_TODAY_KEY) === todayKey()
+  } catch {
+    // localStorage 접근 불가(프라이빗 모드 등)면 기억할 수 없으므로 그냥 노출
+    return false
+  }
 }
 
 function close() {
   visible.value = false
+  try {
+    localStorage.setItem(CLOSED_TODAY_KEY, todayKey())
+  } catch {
+    // 저장 실패해도 이번 방문에서 닫히는 데는 문제 없음
+  }
 }
 
 function dismissForDays() {
