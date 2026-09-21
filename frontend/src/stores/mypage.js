@@ -12,11 +12,14 @@ import {
 } from '../api/mypage'
 
 const PAGE_SIZE = 4
+// 사이드바 개수 배지용 통계 재조회 기준 - 슬랙 증분 동기화 주기(5분)와 맞춤
+const STATS_TTL_MS = 5 * 60 * 1000
 
 export const useMyPageStore = defineStore('mypage', () => {
   const stats = ref(null)
   const statsLoading = ref(false)
   const statsError = ref('')
+  let statsFetchedAt = 0
 
   const activeTab = ref('posts')
   const category = ref(null)
@@ -58,11 +61,14 @@ export const useMyPageStore = defineStore('mypage', () => {
   }
 
   async function loadStats() {
+    // 사이드바와 마이페이지가 동시에 마운트돼도 통계 요청은 한 번만 보냄
+    if (statsLoading.value) return
     statsLoading.value = true
     statsError.value = ''
     try {
       const { data } = await fetchMyStats()
       stats.value = data
+      statsFetchedAt = Date.now()
     } catch {
       statsError.value = '통계를 불러오지 못했습니다.'
     } finally {
@@ -89,6 +95,18 @@ export const useMyPageStore = defineStore('mypage', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  // 사이드바(내가 올린/저장한/반응한 글 개수)용 - 이미 불러온 통계가 충분히 최신이면 재호출하지 않음
+  async function ensureStats() {
+    if (stats.value && Date.now() - statsFetchedAt < STATS_TTL_MS) return
+    await loadStats()
+  }
+
+  // 저장/저장취소 직후 사이드바 개수를 서버 재조회 없이 바로 맞추기 위함
+  function adjustSavedCount(delta) {
+    if (!stats.value) return
+    stats.value = { ...stats.value, savedCount: Math.max(0, (stats.value.savedCount ?? 0) + delta) }
   }
 
   async function loadCategoryCounts() {
@@ -172,6 +190,8 @@ export const useMyPageStore = defineStore('mypage', () => {
     loaded,
     accountLink,
     loadStats,
+    ensureStats,
+    adjustSavedCount,
     loadPosts,
     loadCategoryCounts,
     loadAccountLink,
