@@ -7,6 +7,11 @@ export const useUiStore = defineStore('ui', () => {
   // 페이지 이동(라우팅) 간에는 유지됨
   const sidebarCollapsed = ref(false)
 
+  // 피드 화면 상단 탭('posts' | 'links' | 'curriculum') - FeedView가 로컬로 들고 있던 값을 사이드바
+  // "링크 모음 / SKALA 커리큘럼" 하위 메뉴와 공유하기 위해 스토어에 동기화 (FeedView가 유일한 갱신 주체,
+  // 사이드바가 피드 화면에서 값을 바꾸면 FeedView가 감시하다가 탭을 전환)
+  const feedTab = ref('posts')
+
   function collapseSidebar() {
     sidebarCollapsed.value = true
   }
@@ -15,5 +20,5 @@ export const useUiStore = defineStore('ui', () => {
     sidebarCollapsed.value = false
   }
 
-  return { sidebarCollapsed, collapseSidebar, expandSidebar }
+  return { sidebarCollapsed, feedTab, collapseSidebar, expandSidebar }
 })
