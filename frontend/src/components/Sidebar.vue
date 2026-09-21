@@ -103,6 +103,55 @@ function selectCategory(value, tagValue = null) {
   }
 }
 
+// 하위 메뉴가 있는 항목(학습 자료/교육생 서비스/기타 카테고리 + 피드/마이페이지 메뉴) 접기/펼치기 - 기본은 전부 펼침.
+// 카테고리는 value를 그대로, 피드/마이페이지는 카테고리 value와 겹치지 않게 'nav:' 접두어 키로 같은 목록에 저장
+// 사용자가 직접 접은 상태는 새로고침해도 유지되도록 localStorage에 저장 (접근 불가 환경이면 기본값 펼침)
+const COLLAPSED_KEY = 'skala_hub_sidebar_collapsed'
+
+function loadCollapsed() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COLLAPSED_KEY))
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const NAV_FEED_KEY = 'nav:feed'
+const NAV_MYPAGE_KEY = 'nav:mypage'
+const collapsedCategories = ref(loadCollapsed())
+
+function isCollapsed(value) {
+  return collapsedCategories.value.includes(value)
+}
+
+function toggleCategory(value) {
+  collapsedCategories.value = isCollapsed(value)
+    ? collapsedCategories.value.filter((v) => v !== value)
+    : [...collapsedCategories.value, value]
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsedCategories.value))
+  } catch {
+    // 저장 실패해도 이번 방문 동안은 정상 동작
+  }
+}
+
+// 접힌 카테고리 안의 하위 태그가 선택돼 있으면 상위 행을 연하게 강조 (선택된 곳이 숨겨져 있음을 알려줌)
+function hasHiddenActiveTag(value) {
+  return isCollapsed(value) && route.name === 'feed' && postsStore.category === value && postsStore.tag != null
+}
+
+// 공지 딥링크 등으로 접힌 카테고리의 태그가 선택되면 자동으로 펼침 (저장된 접힘 상태는 건드리지 않음)
+watch(
+  () => [postsStore.category, postsStore.tag],
+  ([category, tag]) => {
+    if (tag != null && isCollapsed(category)) {
+      collapsedCategories.value = collapsedCategories.value.filter((v) => v !== category)
+    }
+  },
+  { immediate: true },
+)
+
 function handleLogout() {
   authStore.clearAuth()
   router.push({ name: 'home' })
@@ -127,38 +176,76 @@ function handleLogout() {
 
       <nav class="nav">
         <RouterLink to="/" class="nav-item" :class="{ active: route.name === 'home' }">🏠 홈</RouterLink>
-        <RouterLink to="/feed" class="nav-item" :class="{ active: route.name === 'feed' }">📋 피드</RouterLink>
-        <template v-if="authStore.isAuthenticated">
-          <div
-            v-for="item in FEED_TABS"
-            :key="item.tab"
-            class="category-subitem"
-            :class="{ active: isActiveFeedTab(item.tab) }"
-            @click="goFeedTab(item.tab)"
-          >
-            └
-            <img v-if="item.logo" :src="item.logo" class="subitem-logo" alt="" />
-            <template v-else>{{ item.icon }}</template>
-            {{ item.label }}
-          </div>
-        </template>
-        <RouterLink to="/mypage" class="nav-item" :class="{ active: route.name === 'mypage' }"
-          >👤 마이페이지</RouterLink
+        <RouterLink
+          to="/feed"
+          class="nav-item"
+          :class="{ active: route.name === 'feed', 'has-toggle': authStore.isAuthenticated }"
         >
-        <template v-if="authStore.isAuthenticated">
-          <div
-            v-for="item in MY_TABS"
-            :key="item.tab"
-            class="category-subitem"
-            :class="{ active: isActiveMyTab(item.tab) }"
-            @click="goMyPageTab(item.tab)"
+          <span>📋 피드</span>
+          <button
+            v-if="authStore.isAuthenticated"
+            class="category-toggle"
+            :class="{ collapsed: isCollapsed(NAV_FEED_KEY) }"
+            :aria-expanded="!isCollapsed(NAV_FEED_KEY)"
+            :aria-label="`피드 하위 메뉴 ${isCollapsed(NAV_FEED_KEY) ? '펼치기' : '접기'}`"
+            @click.prevent.stop="toggleCategory(NAV_FEED_KEY)"
           >
-            └ {{ item.icon }} {{ item.label }}
-            <span v-if="myTabCount(item.countKey) != null" class="category-count"
-              >({{ myTabCount(item.countKey) }})</span
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M3 4.5 6 7.5 9 4.5" />
+            </svg>
+          </button>
+        </RouterLink>
+        <div v-if="authStore.isAuthenticated" class="category-subs" :class="{ collapsed: isCollapsed(NAV_FEED_KEY) }">
+          <div class="category-subs-inner">
+            <div
+              v-for="item in FEED_TABS"
+              :key="item.tab"
+              class="category-subitem"
+              :class="{ active: isActiveFeedTab(item.tab) }"
+              @click="goFeedTab(item.tab)"
             >
+              └
+              <img v-if="item.logo" :src="item.logo" class="subitem-logo" alt="" />
+              <template v-else>{{ item.icon }}</template>
+              {{ item.label }}
+            </div>
           </div>
-        </template>
+        </div>
+        <RouterLink
+          to="/mypage"
+          class="nav-item"
+          :class="{ active: route.name === 'mypage', 'has-toggle': authStore.isAuthenticated }"
+        >
+          <span>👤 마이페이지</span>
+          <button
+            v-if="authStore.isAuthenticated"
+            class="category-toggle"
+            :class="{ collapsed: isCollapsed(NAV_MYPAGE_KEY) }"
+            :aria-expanded="!isCollapsed(NAV_MYPAGE_KEY)"
+            :aria-label="`마이페이지 하위 메뉴 ${isCollapsed(NAV_MYPAGE_KEY) ? '펼치기' : '접기'}`"
+            @click.prevent.stop="toggleCategory(NAV_MYPAGE_KEY)"
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M3 4.5 6 7.5 9 4.5" />
+            </svg>
+          </button>
+        </RouterLink>
+        <div v-if="authStore.isAuthenticated" class="category-subs" :class="{ collapsed: isCollapsed(NAV_MYPAGE_KEY) }">
+          <div class="category-subs-inner">
+            <div
+              v-for="item in MY_TABS"
+              :key="item.tab"
+              class="category-subitem"
+              :class="{ active: isActiveMyTab(item.tab) }"
+              @click="goMyPageTab(item.tab)"
+            >
+              └ {{ item.icon }} {{ item.label }}
+              <span v-if="myTabCount(item.countKey) != null" class="category-count"
+                >({{ myTabCount(item.countKey) }})</span
+              >
+            </div>
+          </div>
+        </div>
         <RouterLink to="/dashboard" class="nav-item" :class="{ active: route.name === 'dashboard' }"
           >🌱 대시보드</RouterLink
         >
@@ -177,19 +264,39 @@ function handleLogout() {
         <template v-for="cat in CATEGORIES" :key="cat.value">
           <div
             class="category-item"
-            :class="{ active: isActiveCategory(cat.value) }"
+            :class="{ active: isActiveCategory(cat.value), 'has-hidden-active': hasHiddenActiveTag(cat.value) }"
             @click="selectCategory(cat.value)"
           >
-            {{ cat.icon }} {{ cat.label }} <span class="category-count">({{ postsStore.categoryCount(cat.value) }})</span>
+            <span>
+              {{ cat.icon }} {{ cat.label }}
+              <span class="category-count">({{ postsStore.categoryCount(cat.value) }})</span>
+            </span>
+            <!-- 하위 태그가 있는 카테고리만 오른쪽 끝에 접기/펼치기 화살표 (클릭해도 카테고리 필터는 바뀌지 않음) -->
+            <button
+              v-if="cat.tags?.length"
+              class="category-toggle"
+              :class="{ collapsed: isCollapsed(cat.value) }"
+              :aria-expanded="!isCollapsed(cat.value)"
+              :aria-label="`${cat.label} 하위 카테고리 ${isCollapsed(cat.value) ? '펼치기' : '접기'}`"
+              @click.stop="toggleCategory(cat.value)"
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3 4.5 6 7.5 9 4.5" />
+              </svg>
+            </button>
           </div>
-          <div
-            v-for="sub in cat.tags"
-            :key="sub.value"
-            class="category-subitem"
-            :class="{ active: isActiveCategory(cat.value, sub.value) }"
-            @click="selectCategory(cat.value, sub.value)"
-          >
-            └ {{ sub.label }} <span class="category-count">({{ postsStore.tagCount(sub.value) }})</span>
+          <div v-if="cat.tags?.length" class="category-subs" :class="{ collapsed: isCollapsed(cat.value) }">
+            <div class="category-subs-inner">
+              <div
+                v-for="sub in cat.tags"
+                :key="sub.value"
+                class="category-subitem"
+                :class="{ active: isActiveCategory(cat.value, sub.value) }"
+                @click="selectCategory(cat.value, sub.value)"
+              >
+                └ {{ sub.label }} <span class="category-count">({{ postsStore.tagCount(sub.value) }})</span>
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -296,6 +403,14 @@ function handleLogout() {
   margin-bottom: 12px;
 }
 
+/* 접기/펼치기 화살표가 있는 메뉴(피드/마이페이지) - 카테고리 행과 동일하게 라벨 왼쪽, 화살표 오른쪽 끝 */
+.nav-item.has-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
 .nav-item {
   padding: 7px 12px;
   border-radius: 9px;
@@ -354,6 +469,11 @@ function handleLogout() {
 
 .category-item {
   font-weight: 580;
+  /* 라벨은 왼쪽, 접기/펼치기 화살표는 오른쪽 끝 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .category-item:hover:not(.active),
@@ -368,13 +488,83 @@ function handleLogout() {
 }
 
 /* 부모 카테고리 바로 다음에 오는 첫 하위항목만 간격을 더 좁혀서 그 카테고리 소속처럼 붙어보이게 함 */
-.category-item + .category-subitem {
+.category-subs-inner > .category-subitem:first-child {
   padding-top: 1px;
 }
 
-/* 마이페이지 메뉴 바로 다음 첫 하위항목도 카테고리와 동일하게 간격을 좁힘 */
-.nav-item + .category-subitem {
-  padding-top: 1px;
+/* 하위 항목 묶음 - grid 행 높이(1fr → 0fr) 전환으로 높이를 몰라도 부드럽게 접힘 */
+.category-subs {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.category-subs-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.category-subs.collapsed {
+  grid-template-rows: 0fr;
+}
+
+/* 접힌 상태의 하위 항목은 화면 낭독기/탭 이동에서도 빠지도록 전환이 끝난 뒤 숨김 */
+.category-subs.collapsed .category-subs-inner {
+  visibility: hidden;
+  transition: visibility 0s 0.2s;
+}
+
+/* 누르는 영역을 크게 - 행의 위/아래/오른쪽 padding까지 덮도록 음수 margin으로 넓혀서(행 높이 x 오른쪽 34px)
+   화살표가 작아도 잘 눌리게 함. 행 크기와 배치는 그대로 */
+.category-toggle {
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 34px;
+  margin: -7px -12px -7px 0;
+  padding: 0;
+  border: none;
+  border-radius: 0 9px 9px 0;
+  background: transparent;
+  color: #636e72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.category-toggle:hover {
+  background: rgba(26, 26, 46, 0.07);
+}
+
+.category-toggle svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+
+.category-toggle.collapsed svg {
+  transform: rotate(-90deg);
+}
+
+/* 접힌 카테고리 안에 선택된 하위 태그가 있을 때 - active보다 연한 강조 */
+.category-item.has-hidden-active:not(.active) {
+  background: rgba(241, 238, 252, 0.6);
+  color: #4a3f8f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-subs,
+  .category-toggle svg {
+    transition: none;
+  }
 }
 
 /* 하위 메뉴 앞 SK 로고 - 12px 글씨의 이모지와 비슷한 크기로 맞춤 */
