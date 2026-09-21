@@ -1,8 +1,8 @@
 <script setup>
 // 마이페이지 - 프로필/통계/내가 올린 글·저장한 글
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -21,6 +21,7 @@ const FILTER_CATEGORIES = CATEGORIES.map((cat) =>
   cat.value === '학습자료' ? cat : { ...cat, tags: undefined },
 )
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const bookmarksStore = useBookmarksStore()
@@ -134,9 +135,31 @@ function nextPage() {
   myPageStore.nextPage()
 }
 
-onMounted(() => {
+// 저장하기 토스트의 "저장한 글 보기"로 들어왔을 때 - ?tab=saved 로 해당 탭을 열고
+// ?highlight=<postId>로 그 게시글을 스크롤+하이라이트
+const VALID_TABS = ['posts', 'saved', 'reacted']
+const highlightedPostId = ref(null)
+
+onMounted(async () => {
   if (!authStore.isAuthenticated) return
-  myPageStore.ensureLoaded()
+  const queryTab = VALID_TABS.includes(route.query.tab) ? route.query.tab : null
+  if (queryTab && myPageStore.loaded && activeTab.value !== queryTab) {
+    await myPageStore.setTab(queryTab)
+  } else {
+    if (queryTab) activeTab.value = queryTab
+    await myPageStore.ensureLoaded()
+  }
+
+  const highlightId = route.query.highlight ? Number(route.query.highlight) : null
+  if (!highlightId) return
+  highlightedPostId.value = highlightId
+  await nextTick()
+  document
+    .querySelector(`[data-post-id="${highlightId}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  setTimeout(() => {
+    if (highlightedPostId.value === highlightId) highlightedPostId.value = null
+  }, 2500)
 })
 </script>
 
@@ -280,7 +303,14 @@ onMounted(() => {
             </div>
           </div>
           <div v-else class="post-list" :class="{ 'is-loading': loading }">
-            <div v-for="post in posts" :key="post.id" class="post-row" @click="goToPost(post.id)">
+            <div
+              v-for="post in posts"
+              :key="post.id"
+              class="post-row"
+              :class="{ 'post-row-highlighted': highlightedPostId === post.id }"
+              :data-post-id="post.id"
+              @click="goToPost(post.id)"
+            >
               <div class="post-row-header">
                 <div class="post-badges">
                   <span v-if="categoryInfo(post.category)" class="badge category-badge"
@@ -376,7 +406,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: -20px; 
   gap: 8px;
   padding: 12px 18px;
   background: #ffffff;
@@ -694,6 +723,12 @@ onMounted(() => {
 
 .post-row:hover {
   background: #f1eefc;
+}
+
+.post-row-highlighted {
+  background: #f1eefc;
+  box-shadow: inset 0 0 0 2px #4a3f8f;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .post-row-header {

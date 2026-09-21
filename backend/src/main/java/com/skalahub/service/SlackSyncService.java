@@ -269,6 +269,11 @@ public class SlackSyncService {
 
     private static final int MISSING_CHECK_WINDOW_MINUTES = 60;
 
+    // 방금 막 봇 댓글을 단 글은 reply_count가 다음 동기화 때(약 5분 후) 갱신되어야 그 댓글이 replies
+    // 테이블에 반영된다 - 이 유예 없이 같은 실행에서 바로 조회하면 방금 성공한 댓글까지 "누락"으로
+    // 오탐하게 되므로, 최소 한 사이클(sync-interval-ms 기본 5분)은 지난 글만 검사 대상으로 삼는다
+    private static final int MISSING_CHECK_GRACE_MINUTES = 10;
+
     // 봇 댓글이 조용히 누락된 게시글을 찾아 pending으로 표시 - 기존 관리자 화면 "대기" 목록/"지금 전송"
     // 버튼을 그대로 타게 되고, 매 동기화(5분)마다 실행되므로 원인 불명의 타이밍 이슈로 알림 블록 자체를
     // 못 탄 케이스까지 최대 몇 분 안에 잡아낸다. pending_notification=false 조건 덕분에 한 번 잡히면
@@ -278,8 +283,9 @@ public class SlackSyncService {
             return;
         }
         LocalDateTime since = LocalDateTime.now().minusMinutes(MISSING_CHECK_WINDOW_MINUTES);
+        LocalDateTime graceCutoff = LocalDateTime.now().minusMinutes(MISSING_CHECK_GRACE_MINUTES);
         List<Post> missing = postRepository.findMissingBotReplyPosts(
-                since, SlackBotReplyService.SYNC_SUCCESS_MARKER, SlackBotReplyService.SYNC_FAILURE_MARKER);
+                since, graceCutoff, SlackBotReplyService.SYNC_SUCCESS_MARKER, SlackBotReplyService.SYNC_FAILURE_MARKER);
         for (Post post : missing) {
             log.warn(
                     "[봇댓글] slackTs={} postId={} 지연 감지(스윕) - 알림 블록 미실행 추정, pending 전환 + 관리자 DM 발송",

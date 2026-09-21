@@ -19,9 +19,11 @@ public interface ReplyRepository extends JpaRepository<Reply, Long> {
     @Query("SELECT r FROM Reply r JOIN FETCH r.post WHERE r.slackTs = :slackTs")
     Optional<Reply> findBySlackTsWithPost(@Param("slackTs") String slackTs);
 
-    // 관리자 모드 "슬랙 봇 댓글 관리"에서 조회 - 동기화 안내 문구가 포함된 댓글만 골라냄
+    // 관리자 모드 "슬랙 봇 댓글 관리"에서 조회 - 동기화 안내 문구가 포함된 댓글만 골라냄.
+    // JOIN FETCH로 post를 함께 가져와야 서비스단에서 reply.getPost() 호출마다 N+1 지연 로딩이
+    // 발생하지 않음 (findBySlackTsWithPost와 동일한 이유)
     @Query(
-            "SELECT r FROM Reply r "
+            "SELECT r FROM Reply r JOIN FETCH r.post "
                     + "WHERE r.content LIKE CONCAT('%', :successMarker, '%') "
                     + "OR r.content LIKE CONCAT('%', :failureMarker, '%') "
                     + "ORDER BY r.createdAt DESC")

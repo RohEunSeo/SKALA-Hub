@@ -6,7 +6,8 @@ import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useToastStore } from '../stores/toast'
 import { fetchReplies, updatePostAiTitle } from '../api/posts'
-import { addCurriculumPost } from '../api/admin'
+import { addCurriculumPost, updatePostAsAdmin } from '../api/admin'
+import { usePostsStore } from '../stores/posts'
 import { renderSlackText, highlightInHtml } from '../utils/renderSlackText'
 import { formatRelativeTime, formatDateTime } from '../utils/relativeTime'
 import { getFileIcon } from '../utils/fileIcon'
@@ -29,6 +30,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const bookmarksStore = useBookmarksStore()
 const toastStore = useToastStore()
+const postsStore = usePostsStore()
 
 const showComments = ref(!props.linkToDetail)
 const repliesLoaded = ref(false)
@@ -38,7 +40,7 @@ const replies = ref([])
 
 const apiBase = import.meta.env.VITE_API_BASE_URL
 
-const categoryInfo = computed(() => CATEGORIES.find((cat) => cat.value === props.post.category))
+const categoryInfo = computed(() => CATEGORIES.find((cat) => cat.value === localCategory.value))
 const renderedContent = computed(() =>
   highlightInHtml(renderSlackText(props.post.content), props.highlightKeyword),
 )
@@ -93,6 +95,84 @@ async function saveTitle() {
     toastStore.show('제목 수정에 실패했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     savingTitle.value = false
+  }
+}
+
+// 카테고리/태그 인라인 수정 - 관리자 전용 (카테고리 분류는 CLAUDE.md상 관리자 기능이라 작성자 본인 예외 없음)
+const canEditCategory = computed(() => authStore.effectiveIsAdmin)
+const localCategory = ref(props.post.category)
+const localTags = ref([...(props.post.tags ?? [])])
+watch(
+  () => props.post.category,
+  (val) => {
+    localCategory.value = val
+  },
+)
+watch(
+  () => props.post.tags,
+  (val) => {
+    localTags.value = [...(val ?? [])]
+  },
+)
+
+const editingCategory = ref(false)
+const categoryDraft = ref('')
+const tagsDraft = ref([])
+const tagInputText = ref('')
+const savingCategory = ref(false)
+
+// AdminView.vue의 카테고리별 태그 옵션 로직과 동일 (categories.js가 원본)
+function categoryTagOptions(categoryValue) {
+  const cat = CATEGORIES.find((c) => c.value === categoryValue)
+  return [...(cat?.tags ?? []), ...(cat?.adminOnlyTags ?? [])]
+}
+
+function startEditCategory() {
+  categoryDraft.value = localCategory.value || ''
+  tagsDraft.value = [...localTags.value]
+  tagInputText.value = ''
+  editingCategory.value = true
+}
+
+function cancelEditCategory() {
+  editingCategory.value = false
+}
+
+function onCategoryDraftChange() {
+  // 카테고리를 바꾸면 태그는 새 카테고리 기준으로 초기화
+  tagsDraft.value = []
+}
+
+function addCustomTag() {
+  const value = tagInputText.value.trim()
+  if (!value) return
+  if (!tagsDraft.value.includes(value)) {
+    tagsDraft.value.push(value)
+  }
+  tagInputText.value = ''
+}
+
+function removeTag(tagValue) {
+  tagsDraft.value = tagsDraft.value.filter((tag) => tag !== tagValue)
+}
+
+async function saveCategory() {
+  if (savingCategory.value) return
+  savingCategory.value = true
+  try {
+    const { data } = await updatePostAsAdmin(props.post.id, {
+      category: categoryDraft.value || null,
+      tags: tagsDraft.value,
+    })
+    localCategory.value = data.category
+    localTags.value = data.tags ?? []
+    editingCategory.value = false
+    toastStore.show('카테고리를 수정했습니다')
+    postsStore.refreshCategoryCounts()
+  } catch {
+    toastStore.show('카테고리 수정에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    savingCategory.value = false
   }
 }
 
@@ -183,7 +263,8 @@ async function toggleBookmark() {
     if (!wasBookmarked) {
       toastStore.show('저장되었습니다', {
         actionLabel: '저장한 글 보기',
-        onAction: () => router.push('/mypage'),
+        onAction: () =>
+          router.push({ name: 'mypage', query: { tab: 'saved', highlight: props.post.id } }),
       })
     }
   } catch {
@@ -244,9 +325,42 @@ async function saveCurriculum({ stage, subCategory }) {
       </div>
     </div>
 
-    <div class="badges">
-      <span v-if="categoryInfo" class="badge category-badge">{{ categoryInfo.icon }} {{ categoryInfo.shortLabel }}</span>
-      <span v-for="postTag in post.tags" :key="postTag" class="badge tag-badge">🏷️ {{ postTag }}</span>
+    <div class="badges" @click.stop>
+      <template v-if="!editingCategory">
+        <span v-if="categoryInfo" class="badge category-badge">{{ categoryInfo.icon }} {{ categoryInfo.shortLabel }}</span>
+        <span v-for="postTag in localTags" :key="postTag" class="badge tag-badge">🏷️ {{ postTag }}</span>
+        <span v-if="canEditCategory" class="ai-title-edit-icon" title="카테고리 수정" @click="startEditCategory">✏️</span>
+      </template>
+      <div v-else class="category-edit">
+        <div class="control-row">
+          <select v-model="categoryDraft" class="category-select" @change="onCategoryDraftChange">
+            <option value="">미분류</option>
+            <option v-for="cat in CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+          </select>
+          <span class="ai-title-btn" :class="{ disabled: savingCategory }" @click="saveCategory">저장</span>
+          <span class="ai-title-btn" @click="cancelEditCategory">취소</span>
+        </div>
+        <div class="control-row tag-row">
+          <div v-if="categoryTagOptions(categoryDraft).length" class="tag-checkboxes">
+            <label v-for="tagOption in categoryTagOptions(categoryDraft)" :key="tagOption.value">
+              <input type="checkbox" :value="tagOption.value" v-model="tagsDraft" />
+              {{ tagOption.label }}
+            </label>
+          </div>
+          <span v-for="tagValue in tagsDraft" :key="tagValue" class="tag-chip">
+            {{ tagValue }}
+            <span class="tag-chip-remove" @click="removeTag(tagValue)">×</span>
+          </span>
+          <input
+            v-model="tagInputText"
+            class="tag-input"
+            type="text"
+            placeholder="태그 추가 후 Enter"
+            @keyup.enter="addCustomTag"
+          />
+          <button class="tag-add-btn" type="button" @click="addCustomTag">+ 추가</button>
+        </div>
+      </div>
     </div>
 
     <!-- aiTitle이 null이면 아직 생성 전(대기 중 표시), 빈 문자열이면 "만들 재료가 없어 스킵됨"이라
@@ -534,6 +648,93 @@ async function saveCurriculum({ stage, subCategory }) {
 .tag-badge {
   background: #f4f4f4;
   color: #636e72;
+}
+
+.category-edit {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  font-size: 12.5px;
+  font-family: inherit;
+  background: #ffffff;
+  color: #1a1a2e;
+}
+
+.tag-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #636e72;
+}
+
+.tag-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: #636e72;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tag-chip-remove {
+  cursor: pointer;
+  color: #8890a3;
+  font-weight: 700;
+}
+
+.tag-chip-remove:hover {
+  color: #e0607d;
+}
+
+.tag-input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 26, 46, 0.1);
+  font-size: 12.5px;
+  font-family: inherit;
+  width: 140px;
+}
+
+.tag-add-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tag-add-btn:hover {
+  background: #e3ddf7;
 }
 
 .ai-title {
