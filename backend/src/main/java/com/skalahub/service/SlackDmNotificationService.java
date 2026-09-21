@@ -63,7 +63,12 @@ public class SlackDmNotificationService {
             String tagPart = (tags == null || tags.isEmpty()) ? "" : " " + tags;
             statusLine = "✅ 동기화 및 분류 완료 - 카테고리: " + category + tagPart;
         }
+        // 스레드 봇 댓글과 동일하게 AI 제목도 같이 표시 - 새 글은 동기화 중에 제목을 먼저 만든 뒤 이 알림이
+        // 나가므로 보통 채워져 있음(생성 실패/재료 없음이면 "생성 안 됨")
+        String aiTitle = post.getAiTitle();
+        String titleLine = (aiTitle == null || aiTitle.isBlank()) ? "(생성 안 됨)" : aiTitle;
         String message = statusLine + "\n"
+                + "📝 AI 제목: " + titleLine + "\n"
                 + "전체 " + totalPostCount + "번째 글\n"
                 + "🔗 바로가기: " + frontendUrl + "/posts/" + post.getId();
         sendDm(message);
