@@ -6,6 +6,10 @@ import HomeView from '../views/HomeView.vue'
 // 각 화면 컴포넌트 내부에서 authStore.isAuthenticated를 보고 AuthRequired를 보여준다
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  // 뒤로가기(popstate)로 돌아왔을 때는 떠나기 직전 스크롤 위치로, 그 외(새 페이지 이동)는 맨 위로
+  scrollBehavior(to, from, savedPosition) {
+    return savedPosition || { top: 0 }
+  },
   routes: [
     { path: '/', name: 'home', component: HomeView },
     { path: '/feed', name: 'feed', component: () => import('../views/FeedView.vue') },

@@ -53,13 +53,24 @@ const backLabel = computed(() => {
   if (route.query.from === 'dashboard') return '← 대시보드로 돌아가기'
   return '← 피드로 돌아가기'
 })
+
+// 히스토리가 있으면 실제로 뒤로 가서(router.back) 떠나기 직전 스크롤 위치가 router의
+// scrollBehavior(savedPosition)로 복원되게 함 - router.push는 새 엔트리라 복원 대상이 없어 항상 맨 위로 감.
+// 새로고침 등으로 진입 히스토리가 없을 때만 backTarget으로 대체 이동
+function goBack() {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push(backTarget.value)
+  }
+}
 </script>
 
 <template>
   <AppLayout>
     <AuthRequired v-if="!authStore.isAuthenticated" message="게시글을 보려면 SKALA 교육생 인증이 필요합니다" />
     <template v-else>
-      <span class="back-link" @click="router.push(backTarget)">{{ backLabel }}</span>
+      <span class="back-link" @click="goBack">{{ backLabel }}</span>
 
       <div v-if="loading" class="status-message">불러오는 중...</div>
       <div v-else-if="notFound" class="status-message">게시글을 찾을 수 없습니다.</div>
