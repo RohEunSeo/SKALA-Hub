@@ -428,6 +428,14 @@ public class PostService {
 
     private LinkPreviewDto resolveBaseLink(String url, String label, LinkPreviewDto rich, LinkPreview override) {
         if (rich != null) {
+            // 슬랙 자체 언퍼널 당시엔 이미지가 없었지만(예: og:image가 나중에 추가된 경우) 이후
+            // link_previews 자동 캐시가 이미지를 확보했다면 그걸로 보완 - 안 그러면 같은 URL을 공유하는
+            // 게시글끼리 이미지 유무가 갈려서, 링크 모음 카드가 필터(대표 게시글이 바뀜)에 따라
+            // 썸네일이 있다 없다 하는 문제가 생김
+            if (rich.imageUrl() == null && override != null && override.getImageUrl() != null) {
+                return new LinkPreviewDto(
+                        rich.title(), rich.titleLink(), rich.text(), override.getImageUrl(), rich.fromUrl(), rich.serviceName());
+            }
             return rich;
         }
         if (override != null && !Boolean.TRUE.equals(override.getFetchFailed()) && override.getTitle() != null) {
