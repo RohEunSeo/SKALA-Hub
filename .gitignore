@@ -46,3 +46,7 @@ test.html
 server.js
 /package.json
 /package-lock.json
+# Understand Anything 임시 파일 (그래프 결과물 .ua/*.json은 커밋)
+.ua/intermediate/
+.ua/tmp/
+.ua/.trash-*/
