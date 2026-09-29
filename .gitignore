@@ -46,3 +46,15 @@ test.html
 server.js
 /package.json
 /package-lock.json
+# Understand Anything 임시 파일 (그래프 결과물 .ua/*.json은 커밋)
+.ua/intermediate/
+.ua/tmp/
+.ua/.trash-*/
+
+# 데모 영상 (녹화 원본/렌더 결과/로그인 세션은 로컬 전용)
+video/node_modules/
+video/raw/
+video/out/
+video/auth.json
+video/public/clips/
+video/public/timeline.json
