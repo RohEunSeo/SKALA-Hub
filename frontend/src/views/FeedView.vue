@@ -380,7 +380,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
             <img :src="skLogo" class="feed-tab-logo" alt="" /> SKALA 커리큘럼
           </div>
           <div
-            v-if="chatStore.aiPicks.length || foldersStore.folders.length"
+            v-if="authStore.effectiveIsAdmin && (chatStore.aiPicks.length || foldersStore.folders.length)"
             class="feed-tab feed-tab-ai"
             :class="{ active: activeTab === 'ai' }"
             @click="selectTab('ai')"

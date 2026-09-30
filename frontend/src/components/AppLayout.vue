@@ -19,7 +19,7 @@ const sidebarOpen = ref(false)
 // 데스크톱~태블릿 폭에서 사용자가 수동으로 사이드바를 접어 본문 폭을 넓힐 때 쓰는 상태 - 페이지 이동 간에도
 // 유지되어야 해서 스토어에 둠 (모바일 드로어용 sidebarOpen과는 별개 - 768px 미만에서는 CSS가 이 상태를 무시함)
 const uiStore = useUiStore()
-// AI 챗봇은 로그인한 사용자에게만 노출 - 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
+// AI 챗봇은 아직 관리자에게만 노출(작업 중 기능) - 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
 const chatStore = useChatStore()
 const authStore = useAuthStore()
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
@@ -37,7 +37,7 @@ function closeSidebar() {
 <template>
   <div
     class="app-layout"
-    :class="{ 'chat-open': authStore.isAuthenticated && chatStore.isOpen, 'chat-resizing': chatStore.dragging }"
+    :class="{ 'chat-open': authStore.effectiveIsAdmin && chatStore.isOpen, 'chat-resizing': chatStore.dragging }"
     :style="{ '--chat-w': `${chatStore.width}px` }"
   >
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
@@ -58,7 +58,7 @@ function closeSidebar() {
         <slot />
       </div>
     </main>
-    <template v-if="authStore.isAuthenticated">
+    <template v-if="authStore.effectiveIsAdmin">
       <ChatLauncher />
       <ChatPanel />
     </template>
