@@ -18,6 +18,10 @@ import { usePostsStore } from '../stores/posts'
 import { useBookmarksStore } from '../stores/bookmarks'
 import { useAuthStore } from '../stores/auth'
 import { useUiStore } from '../stores/ui'
+import { useChatStore } from '../stores/chat'
+import { useFoldersStore } from '../stores/folders'
+import { fetchPost } from '../api/posts'
+import AiFolderBar from '../components/AiFolderBar.vue'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
 import { fetchCurriculumStatus } from '../api/admin'
@@ -38,11 +42,19 @@ const postsStore = usePostsStore()
 const bookmarksStore = useBookmarksStore()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
+const chatStore = useChatStore()
+const foldersStore = useFoldersStore()
 
 // 상단 탭("게시글"/"🔗 링크 모음") - 뷰 로컬 상태, 카테고리/층/기간 필터는 스토어에서 그대로 공유됨.
 // 링크 모음 카드의 "게시글 보러가기"로 상세 페이지에 갔다가 뒤로가기로 돌아올 때 ?tab=links가 붙어 오면 링크 탭으로 복원
 const activeTab = ref(
-  route.query.tab === 'links' ? 'links' : route.query.tab === 'curriculum' ? 'curriculum' : 'posts',
+  route.query.tab === 'links'
+    ? 'links'
+    : route.query.tab === 'curriculum'
+      ? 'curriculum'
+      : route.query.tab === 'ai' && (chatStore.aiPicks.length || foldersStore.folders.length)
+        ? 'ai'
+        : 'posts',
 )
 
 // 공지 등에서 카테고리/태그까지 지정한 딥링크로 들어올 수 있게 함
@@ -75,7 +87,7 @@ function selectTab(tab) {
     postsStore.setShowHiddenLinks(false)
   }
   // 커리큘럼 탭은 게시글/링크 탭과 완전히 독립된 화면이라 postsStore.hasLink(게시글↔링크 전환용)를 건드리지 않음
-  if (tab !== 'curriculum') {
+  if (tab === 'posts' || tab === 'links') {
     postsStore.setHasLink(tab === 'links' ? true : null)
   }
 }
@@ -100,6 +112,55 @@ watch(
     }
   },
 )
+
+// 챗봇이 게시글을 추천하면 "AI 추천" 탭으로 자동 전환 (원본 피드/필터는 그대로 - 게시글 탭을 누르면 복귀)
+watch(
+  () => chatStore.pickSeq,
+  () => chatStore.aiPicks.length && selectTab('ai'),
+)
+
+// AI 추천 탭 안의 상위 카테고리 필터 (추천된 글끼리만 거름 - 피드 스토어 필터와 무관)
+const aiCategory = ref(null)
+// 폴더를 열면 그 폴더에 담은 글(id로 조회, 한 번 받은 글은 캐시), 아니면 챗봇이 방금 추천한 글
+const folderPostCache = new Map()
+const folderPosts = ref([])
+async function loadFolderPosts() {
+  const id = foldersStore.selected
+  if (!id) return
+  const ids = foldersStore.idsOf(id)
+  const posts = await Promise.all(
+    ids.map(async (pid) => {
+      if (!folderPostCache.has(pid)) {
+        try { folderPostCache.set(pid, (await fetchPost(pid)).data) } catch { return null }
+      }
+      return folderPostCache.get(pid)
+    }),
+  )
+  if (foldersStore.selected === id) folderPosts.value = posts.filter(Boolean)
+}
+watch(() => [foldersStore.selected, foldersStore.map], loadFolderPosts, { deep: true, immediate: true })
+
+const aiBase = computed(() => (foldersStore.selected ? folderPosts.value : chatStore.aiPicks))
+const aiCounts = computed(() => {
+  const counts = { all: aiBase.value.length }
+  aiBase.value.forEach((p) => (counts[p.category] = (counts[p.category] ?? 0) + 1))
+  return counts
+})
+const aiVisible = computed(() =>
+  aiCategory.value ? aiBase.value.filter((p) => p.category === aiCategory.value) : aiBase.value,
+)
+const selectedFolder = computed(() => foldersStore.byId(foldersStore.selected))
+watch(() => chatStore.pickSeq, () => {
+  aiCategory.value = null
+  foldersStore.selected = null // 새 추천이 오면 전체 추천으로
+})
+watch(() => foldersStore.selected, () => (aiCategory.value = null))
+
+// 탭 옆 ×: 추천을 비우고 게시글 탭으로 복귀
+function closeAiTab() {
+  chatStore.clearPicks()
+  selectTab('posts')
+}
 
 // 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
 const showHidden = computed(() => activeTab.value === 'links' && postsStore.showHiddenLinks)
@@ -318,9 +379,21 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           <div class="feed-tab" :class="{ active: activeTab === 'curriculum' }" @click="selectTab('curriculum')">
             <img :src="skLogo" class="feed-tab-logo" alt="" /> SKALA 커리큘럼
           </div>
+          <div
+            v-if="chatStore.aiPicks.length || foldersStore.folders.length"
+            class="feed-tab feed-tab-ai"
+            :class="{ active: activeTab === 'ai' }"
+            @click="selectTab('ai')"
+          >
+            ✨ AI 추천 <span v-if="chatStore.aiPicks.length" class="ai-count">{{ chatStore.aiPicks.length }}</span>
+            <button v-if="chatStore.aiPicks.length" class="ai-close" aria-label="AI 추천 닫기" @click.stop="closeAiTab">×</button>
+          </div>
         </div>
 
-        <template v-if="activeTab !== 'curriculum'">
+        <AiFolderBar v-if="activeTab === 'ai'" />
+        <CategoryFilter v-if="activeTab === 'ai'" :counts="aiCounts" :selected="aiCategory" @select="aiCategory = $event" />
+
+        <template v-if="activeTab !== 'curriculum' && activeTab !== 'ai'">
           <CategoryFilter v-if="!showHidden" />
 
           <div v-if="!showHidden && (hasSubcategoryFilter || showCampusFilter || showDateFilter)" class="filter-combined-row">
@@ -366,6 +439,22 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
       </div>
 
       <CurriculumBoard v-if="activeTab === 'curriculum'" />
+
+      <!-- AI 추천 탭: 챗봇이 고른 글만 차례로 나타남 -->
+      <div v-else-if="activeTab === 'ai'" class="ai-picks">
+        <div class="ai-picks-banner">
+          <template v-if="selectedFolder">'{{ selectedFolder.name }}' 폴더 · 글 {{ aiVisible.length }}개</template>
+          <template v-else>AI가 고른 글 {{ aiVisible.length }}개 · 전체 글은 <b>게시글</b> 탭에서 볼 수 있어요</template>
+        </div>
+        <div v-if="aiVisible.length === 0" class="status-message">
+          {{ selectedFolder ? '이 폴더에는 아직 담긴 글이 없어요.' : aiBase.length ? '이 카테고리에는 글이 없어요.' : '아직 추천받은 글이 없어요. 챗봇에게 물어보세요.' }}
+        </div>
+        <div class="post-list">
+          <div v-for="(post, i) in aiVisible" :key="post.id" class="ai-pick" :style="{ '--i': i }">
+            <PostCard :post="post" :curriculum-status="curriculumStatusMap[post.id] ?? null" />
+          </div>
+        </div>
+      </div>
 
       <template v-else>
         <div v-if="showHidden" class="hidden-links-banner">
@@ -484,7 +573,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 .scroll-top-btn {
   position: fixed;
   right: 20px;
-  bottom: 24px;
+  bottom: 92px; /* 우하단 AI 챗봇 런처(bottom 24px, 높이 50px) 위로 띄움 */
   z-index: 50;
   display: flex;
   flex-direction: column;
@@ -538,6 +627,64 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 .feed-tab.active {
   color: #4a3f8f;
   border-bottom-color: #4a3f8f;
+}
+
+/* AI 추천 탭 - 보라 포인트 + 개수 배지 + 닫기(×) */
+.feed-tab-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6c5ce7;
+}
+
+.ai-count {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #6c5ce7;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-close {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: #9aa3a7;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ai-close:hover {
+  color: #1a1a2e;
+}
+
+.ai-picks-banner {
+  margin: 8px 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-size: 13px;
+  animation: pick-in 0.4s ease-out both;
+}
+
+/* 추천 글이 위에서 차례로 나타나고, 등장 직후 보라 테두리가 한 번 반짝 */
+.ai-pick {
+  border-radius: 16px;
+  animation: pick-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) calc(var(--i) * 160ms + 150ms) both,
+    pick-glow 1.4s ease-out calc(var(--i) * 160ms + 500ms) both;
+}
+
+@keyframes pick-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pick-glow {
+  0% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(108, 92, 231, 0); }
 }
 
 .feed-tab-logo {
