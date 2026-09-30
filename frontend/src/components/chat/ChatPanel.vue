@@ -1,0 +1,1343 @@
+<script setup>
+// AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 저장 제안 / 👍👎 피드백 / 남은 횟수.
+// 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useChatStore } from '../../stores/chat'
+import { useAuthStore } from '../../stores/auth'
+import { usePostsStore } from '../../stores/posts'
+import { useMyPageStore } from '../../stores/mypage'
+import { useUiStore } from '../../stores/ui'
+import { CATEGORIES } from '../../constants/categories'
+import { folderTextColor } from '../../utils/folderColors'
+import skalaIcon from '../../assets/skala_icon.png'
+import SproutLoader from './SproutLoader.vue'
+import PaperFlipLoader from './PaperFlipLoader.vue'
+import SaveLoader from './SaveLoader.vue'
+import FolderIcon from '../FolderIcon.vue'
+import { FOLDER_COLORS, useFoldersStore } from '../../stores/folders'
+
+const chatStore = useChatStore()
+const authStore = useAuthStore()
+const postsStore = usePostsStore()
+const myPageStore = useMyPageStore()
+const uiStore = useUiStore()
+const router = useRouter()
+const route = useRoute()
+
+const input = ref('')
+const bodyEl = ref(null)
+
+// 지금 보고 있는 피드 카테고리 - "공유 중" 표시 + 서버로 넘겨 검색 범위 힌트로 사용
+const context = computed(() => {
+  const cat = CATEGORIES.find((c) => c.value === postsStore.category)
+  return cat ? `${cat.label} 피드` : '전체 피드'
+})
+
+const userName = computed(() => authStore.user?.name ?? '')
+const isEmpty = computed(() => chatStore.messages.length === 0)
+// 답변이 아직 비어 있는 마지막 AI 메시지에만 로더를 보여줌
+const lastId = computed(() => chatStore.messages[chatStore.messages.length - 1]?.id)
+
+// ⋮ 메뉴 - 대화 종료하기 + 이전 대화 목록 (기본 3개, 더보기로 전체)
+const menuOpen = ref(false)
+const showAllHistory = ref(false)
+const shownHistory = computed(() => (showAllHistory.value ? chatStore.history : chatStore.history.slice(0, 3)))
+
+function menuAction(fn) {
+  fn()
+  menuOpen.value = false
+  showAllHistory.value = false
+}
+
+// 왼쪽 가장자리 드래그로 패널 폭 조절 (포인터 캡처로 마우스가 벗어나도 계속 추적)
+function startResize(e) {
+  chatStore.dragging = true
+  e.currentTarget.setPointerCapture(e.pointerId)
+}
+function onResize(e) {
+  if (chatStore.dragging) chatStore.setWidth(window.innerWidth - e.clientX)
+}
+function endResize() {
+  chatStore.dragging = false
+}
+
+// 저장 완료 후 본문 이동 - 폴더에 담았으면 피드의 AI 추천 탭 그 폴더, 아니면 마이페이지 저장한 글 (챗봇 패널은 열린 채 유지)
+function goSaved(proposal) {
+  if (proposal?.folderId) {
+    useFoldersStore().selected = proposal.folderId
+    return goPicks()
+  }
+  if (route.path === '/mypage') myPageStore.setTab('saved')
+  else router.push('/mypage?tab=saved')
+}
+
+// 추천 결과를 피드의 "AI 추천" 탭에서 보기
+function goPicks() {
+  if (route.path === '/feed') uiStore.feedTab = 'ai'
+  else router.push('/feed?tab=ai')
+}
+
+// 추천 글의 카테고리 → 이모지/색 (categories.js가 원본)
+const catOf = (v) => CATEGORIES.find((c) => c.value === v || c.label === v) ?? { icon: '📄', label: v, color: '#6c5ce7' }
+
+// 페이지 이동으로 패널이 다시 만들어질 때 카드 등장 모션이 반복되지 않게, 떠날 때 본 것으로 표시
+onBeforeUnmount(() => chatStore.messages.forEach((m) => (m.seen = true)))
+
+// 저장 중 폴더 로더 색 - 선택한 폴더의 색 (스토어에 색이 없어도 폴더 이름으로 찾음), 폴더 없이 저장이면 기본 보라
+const foldersStore = useFoldersStore()
+const savingColor = (proposal) =>
+  proposal.folderColor ?? foldersStore.folders.find((f) => f.name === proposal.folder)?.color ?? undefined
+
+// 새 폴더 만들기 카드 - 이름/색 입력 (카드가 뜰 때마다 초기화)
+const folderName = ref('')
+const folderColor = ref(FOLDER_COLORS[0])
+watch(
+  () => chatStore.pending,
+  (p) => {
+    if (p?.form) {
+      folderName.value = ''
+      folderColor.value = p.defaultColor
+    }
+  },
+)
+function submitFolder() {
+  if (folderName.value.trim()) chatStore.submitForm({ name: folderName.value, color: folderColor.value })
+}
+
+// '직접 입력' 선택 - 카드를 닫고 입력창으로 포커스
+const inputEl = ref(null)
+function pickOther() {
+  chatStore.dismiss()
+  inputEl.value?.focus()
+}
+
+// 답변 복사 - 잠깐 ✓로 바뀜
+const copiedId = ref(null)
+async function copyAnswer(msg) {
+  try {
+    await navigator.clipboard.writeText(msg.text)
+    copiedId.value = msg.id
+    setTimeout(() => (copiedId.value = null), 1500)
+  } catch { /* 클립보드 권한이 없으면 무시 */ }
+}
+
+const REASONS = ['관련 없는 글이에요', '내용이 틀려요', '너무 길어요']
+
+function send(text = input.value) {
+  if (!text.trim()) return
+  input.value = ''
+  chatStore.ask(text, context.value)
+}
+
+function onKeydown(e) {
+  // 한글 조합 중 Enter는 무시 (마지막 글자가 두 번 전송되는 문제 방지)
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    send()
+  }
+}
+
+// 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤
+watch(
+  () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status],
+  async () => {
+    await nextTick()
+    if (bodyEl.value) bodyEl.value.scrollTop = bodyEl.value.scrollHeight
+  },
+  { deep: true },
+)
+</script>
+
+<template>
+  <aside class="chat-panel" :class="{ open: chatStore.isOpen }" :style="{ '--chat-w': `${chatStore.width}px` }" aria-label="AI 도우미" :aria-hidden="!chatStore.isOpen">
+    <!-- 왼쪽 가장자리: 드래그로 폭 조절 + 가운데 » 버튼으로 접기 -->
+    <div class="cp-resize" :class="{ dragging: chatStore.dragging }" @pointerdown="startResize" @pointermove="onResize" @pointerup="endResize" @pointercancel="endResize"></div>
+    <button class="cp-fold" aria-label="챗봇 접기" @click="chatStore.close">»</button>
+
+    <header class="cp-head">
+      <!-- 헤더 왼쪽 표식 (제목 글자는 없음) -->
+      <button class="cp-sprout" aria-label="처음 화면으로" title="처음 화면으로" @click="chatStore.endConversation">🌱</button>
+      <div class="cp-actions">
+        <button class="cp-more" aria-label="메뉴" aria-haspopup="menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4.5" r="2.4" /><circle cx="12" cy="12" r="2.4" /><circle cx="12" cy="19.5" r="2.4" /></svg>
+        </button>
+        <button class="cp-close" aria-label="닫기" @click="chatStore.close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" /></svg>
+        </button>
+      </div>
+
+      <!-- 바깥 클릭하면 메뉴 닫힘 -->
+      <div v-if="menuOpen" class="cp-backdrop" @click="menuOpen = false"></div>
+      <div v-if="menuOpen" class="cp-menu" role="menu">
+        <button class="cm-item" role="menuitem" :disabled="isEmpty || !!chatStore.status" @click="menuAction(chatStore.endConversation)">
+          💬 대화 종료하기
+        </button>
+        <div class="cm-sep"></div>
+        <div class="cm-label">이전 대화</div>
+        <p v-if="!chatStore.history.length" class="cm-empty">아직 이전 대화가 없어요</p>
+        <button
+          v-for="h in shownHistory"
+          :key="h.id"
+          class="cm-item cm-history"
+          role="menuitem"
+          :disabled="!!chatStore.status"
+          @click="menuAction(() => chatStore.openConversation(h.id))"
+        >
+          <span class="cm-bars">≡</span><span class="cm-title">{{ h.title }}</span>
+        </button>
+        <button v-if="!showAllHistory && chatStore.history.length > 3" class="cm-item cm-more" @click="showAllHistory = true">
+          ⋯ 이전 대화 더보기 ({{ chatStore.history.length - 3 }})
+        </button>
+      </div>
+    </header>
+
+    <div ref="bodyEl" class="cp-body">
+      <!-- 첫 인사: LLM 없이 DB 집계로 만든 문구 + 추천 칩 (횟수 차감 없음) -->
+      <div v-if="isEmpty" class="cp-empty">
+        <div class="cp-hero">
+<!-- 허브: 폴더를 중심으로 점들이 천천히 도는 궤도 (스포크형 허브 느낌) + 문서를 한 장씩 천천히 넘김 -->
+          <div class="cp-hub" aria-hidden="true">
+            <span class="hub-ring"></span>
+            <span class="hub-orbit"><i></i><i></i><i></i></span>
+            <PaperFlipLoader :width="52" :duration="5.4" />
+          </div>
+          <h2>{{ userName ? `${userName}님, ` : '' }}무엇이 궁금하세요?</h2>
+          <p v-if="chatStore.greeting" class="cp-greeting">{{ chatStore.greeting.text }}</p>
+        </div>
+        <div v-if="chatStore.greeting" class="cp-chips">
+          <button v-for="chip in chatStore.greeting.chips" :key="chip" class="cp-chip" @click="send(chip)">{{ chip }}</button>
+        </div>
+      </div>
+
+      <template v-for="msg in chatStore.messages" :key="msg.id">
+        <div v-if="msg.role === 'user'" class="bubble user">{{ msg.text }}</div>
+
+        <div v-else class="ai-block">
+          <!-- 진행 표시: 폴더 모션 + 한 줄 문구가 단계마다 바뀌고 경과 시간(초) 표시 (저장 중과 동일한 디자인) -->
+          <div v-if="!msg.text && chatStore.status && msg.id === lastId" class="bubble ai loading">
+            <!-- 단계마다 다른 모션: 의도 분석=레이더, 검색=폴더에서 문서, 고민=새싹, 답변 정리=글줄 -->
+            <span class="lo-icon">
+              <PaperFlipLoader v-if="chatStore.status.tool === 'search_posts'" :width="52" :duration="3.6" />
+              <SproutLoader v-else-if="chatStore.status.tool === 'think'" :size="34" />
+              <span v-else-if="chatStore.status.tool === 'compose'" class="lo-lines"><i></i><i></i><i></i></span>
+              <span v-else class="lo-radar"><i></i><i></i></span>
+            </span>
+            <span class="dots"><i></i><i></i><i></i></span>
+            <span :key="chatStore.status.text" class="swap"><span class="think">{{ chatStore.status.text }}</span></span>
+            <span class="secs">{{ chatStore.elapsed }}초</span>
+          </div>
+
+          <div v-if="msg.text" class="answer" :class="{ error: msg.error }">{{ msg.text }}</div>
+
+          <!-- 출처 카드: 답변의 근거가 된 글 -->
+          <!-- 키워드 집계 결과: 누르면 그 키워드로 바로 검색 -->
+          <div v-if="msg.keywords" class="kw-row">
+            <button v-for="k in msg.keywords" :key="k.word" class="kw" @click="send(`'${k.word}' 관련 글 모아줘`)">
+              # {{ k.word }}<span>{{ k.count }}</span>
+            </button>
+          </div>
+
+          <!-- 추천 글: 폴더 입구(위쪽 띠) 뒤에서 카드가 차례로 미끄러져 나옴 -->
+          <div v-if="msg.sources" class="results">
+            <article
+              v-for="(p, i) in msg.sources"
+              :key="p.id"
+              class="source-card"
+              :class="{ saved: p.saved, enter: !msg.seen }"
+              :style="{ '--delay': `${350 + i * 260}ms`, '--dy': `${(msg.sources.length - i) * 96}px` }"
+            >
+              <div class="sc-main">
+                <strong>{{ p.title }}</strong>
+                <div class="sc-meta">
+                  <span class="sc-chip" :style="{ background: `color-mix(in srgb, ${catOf(p.category).color} 16%, #fff)`, color: folderTextColor(catOf(p.category).color) }">{{ catOf(p.category).icon }} {{ catOf(p.category).label }}</span>
+                  <span class="sc-react">반응 {{ p.reactions }}</span>
+                </div>
+              </div>
+              <button class="sc-save" :class="{ saved: p.saved }" @click="p.saved = !p.saved">
+                <svg v-if="p.saved" class="sc-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
+                {{ p.saved ? '저장됨' : '저장' }}
+              </button>
+            </article>
+            <!-- 왼쪽 아래 작은 폴더 - 카드가 여기서 위로 펼쳐져 나옴 / 오른쪽은 피드 AI 추천 탭 링크 -->
+            <div class="results-foot">
+              <div class="results-folder" aria-hidden="true">
+                <PaperFlipLoader :width="54" still />
+              </div>
+              <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goPicks">피드에서 AI 추천 탭 보기 →</button>
+            </div>
+          </div>
+
+          <!-- 저장 제안: AI는 제안만 하고, 실제 저장은 사용자가 버튼을 눌러야 함 -->
+          <template v-if="msg.proposal">
+            <div v-if="msg.proposal.state === 'saving'" class="bubble ai loading">
+              <span class="lo-icon"><SaveLoader :width="52" :color="savingColor(msg.proposal)" /></span>
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="think">{{ msg.proposal.folder ? `'${msg.proposal.folder}' 폴더에 ` : '' }}저장하는 중</span>
+            </div>
+            <div v-else-if="msg.proposal.state === 'saved'" class="answer saved-note">
+              {{ msg.proposal.folder ? `'${msg.proposal.folder}' 폴더에 ` : '' }}{{ msg.proposal.postIds.length }}개 저장했어요. {{ msg.proposal.folderId ? '피드의 AI 추천 탭에서 폴더별로 볼 수 있어요.' : '마이페이지 → 저장한 글에서 확인할 수 있어요.' }}
+              <button class="goto-saved" @click="goSaved(msg.proposal)">{{ msg.proposal.folderId ? '폴더 보러가기 →' : '저장한 글 보러가기 →' }}</button>
+            </div>
+            <div v-else-if="msg.proposal.state === 'declined'" class="answer">알겠어요. 저장하지 않을게요.</div>
+          </template>
+
+          <!-- 답변 아래 아이콘 행: 좋아요/별로예요(추천 결과만) + 복사. 👎면 이유 칩 -->
+          <div v-if="msg.text && !msg.error && !(chatStore.status && msg.id === lastId)" class="actions">
+            <template v-if="msg.sources">
+              <button class="act" :class="{ on: msg.feedback?.value === 'up' }" aria-label="좋아요" @click="chatStore.setFeedback(msg, 'up')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /></svg>
+              </button>
+              <button class="act" :class="{ on: msg.feedback?.value === 'down' }" aria-label="별로예요" @click="chatStore.setFeedback(msg, 'down')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V2M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" /></svg>
+              </button>
+            </template>
+            <button class="act" aria-label="답변 복사" @click="copyAnswer(msg)">
+              <svg v-if="copiedId === msg.id" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+            </button>
+          </div>
+          <div v-if="msg.feedback?.value === 'down' && !msg.feedback.reason" class="feedback">
+            <span>어떤 점이 아쉬웠나요?</span>
+            <button v-for="r in REASONS" :key="r" @click="chatStore.setFeedback(msg, 'down', r)">{{ r }}</button>
+          </div>
+          <span v-else-if="msg.feedback?.reason" class="thanks">의견 감사합니다.</span>
+        </div>
+      </template>
+    </div>
+
+    <footer class="cp-foot">
+      <!-- AI가 사용자에게 되묻는 카드 (저장 여부, 모호한 질문의 선택지) - 입력창 바로 위 -->
+      <div v-if="chatStore.pending" class="cp-ask" role="group" :aria-label="chatStore.pending.question">
+        <div class="ask-head">
+          <span class="ask-q">{{ chatStore.pending.question }}</span>
+          <button class="ask-skip" @click="chatStore.dismiss">건너뛰기</button>
+        </div>
+        <div v-if="chatStore.pending.form" class="ask-form">
+          <input v-model="folderName" maxlength="20" placeholder="예: SQLD 자료" aria-label="폴더 이름" @keydown.enter="submitFolder" />
+          <div class="swatches">
+            <button
+              v-for="c in FOLDER_COLORS"
+              :key="c"
+              class="swatch"
+              :class="{ on: folderColor === c }"
+              :style="{ background: c }"
+              :aria-label="`폴더 색 ${c}`"
+              @click="folderColor = c"
+            ></button>
+          </div>
+          <button class="ask-submit" :disabled="!folderName.trim()" @click="submitFolder">만들고 저장하기</button>
+        </div>
+        <button v-for="(o, i) in chatStore.pending.options" :key="o.value" class="ask-opt" @click="chatStore.answer(o)">
+          <FolderIcon v-if="o.color" class="ask-folder" :color="o.color" :size="22" />
+          <span v-else class="ask-n">{{ o.plus ? '＋' : i + 1 }}</span>{{ o.label }}
+        </button>
+        <button v-if="chatStore.pending.allowOther" class="ask-opt" @click="pickOther">
+          <span class="ask-n">✎</span>직접 입력할게요
+        </button>
+      </div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/10회 남음</div>
+      <div class="cp-input">
+        <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />"{{ context }}" 탭 공유 중</div>
+        <textarea
+          ref="inputEl"
+          v-model="input"
+          rows="3"
+          maxlength="500"
+          :placeholder="chatStore.remaining > 0 ? '관심 있는 주제를 입력하세요...' : '오늘 횟수를 모두 사용했어요'"
+          :disabled="chatStore.remaining <= 0"
+          aria-label="질문 입력"
+          @keydown="onKeydown"
+        ></textarea>
+        <button class="cp-send" :disabled="!input.trim() || !!chatStore.status || chatStore.remaining <= 0" aria-label="보내기" @click="send()">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+        </button>
+      </div>
+    </footer>
+  </aside>
+</template>
+
+<style scoped>
+.chat-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  width: var(--chat-w, 420px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #ffffff 0%, #f1eefc 55%, #e2dcf7 100%);
+  border-left: 1px solid rgba(74, 63, 143, 0.12);
+  box-shadow: -8px 0 24px rgba(26, 26, 46, 0.08);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1), visibility 0s linear 0.32s;
+}
+
+.chat-panel.open {
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.cp-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.cp-sprout {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.cp-sprout:hover {
+  transform: scale(1.15) rotate(-6deg);
+}
+
+.cp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-more {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #2d2d44;
+  cursor: pointer;
+}
+
+.cp-more:hover {
+  background: rgba(74, 63, 143, 0.08);
+}
+
+.cp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+.cp-menu {
+  position: absolute;
+  top: 54px;
+  left: 18px;
+  right: 18px;
+  z-index: 2;
+  padding: 8px 0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px rgba(26, 26, 46, 0.18);
+  animation: fade-up 0.18s ease-out both;
+}
+
+.cm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  border: 0;
+  background: transparent;
+  color: #1a1a2e;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cm-item:hover:not(:disabled) {
+  background: #f4f2fc;
+}
+
+.cm-item:disabled {
+  color: #b2b7ba;
+  cursor: default;
+}
+
+.cm-sep {
+  height: 1px;
+  margin: 6px 0;
+  background: #ececf3;
+}
+
+.cm-label {
+  padding: 6px 20px 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #636e72;
+}
+
+.cm-empty {
+  margin: 0;
+  padding: 8px 20px 10px;
+  font-size: 13px;
+  color: #b2b7ba;
+}
+
+.cm-bars {
+  color: #b2b7ba;
+}
+
+.cm-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-more {
+  color: #636e72;
+}
+
+.cp-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(74, 63, 143, 0.15);
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  color: #2d2d44;
+  cursor: pointer;
+}
+
+.cp-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cp-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.cp-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.cp-hub {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin-bottom: 6px;
+}
+
+.hub-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed #cfc9f3;
+  border-radius: 50%;
+}
+
+.hub-orbit {
+  position: absolute;
+  inset: 0;
+  animation: hub-spin 16s linear infinite;
+}
+
+.hub-orbit i {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px;
+  border-radius: 50%;
+  background: #6c5ce7;
+  box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.15);
+}
+
+/* 3개 점을 궤도(반지름 64px) 위에 120도 간격으로 배치 */
+.hub-orbit i:nth-child(1) { left: 50%; top: 0; }
+.hub-orbit i:nth-child(2) { left: 93.3%; top: 75%; background: #8b7ee8; }
+.hub-orbit i:nth-child(3) { left: 6.7%; top: 75%; background: #b2a9e3; }
+
+@keyframes hub-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cp-empty h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #1a1a2e;
+}
+
+.cp-greeting {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #636e72;
+  max-width: 100%;
+  white-space: pre-line; /* 문구 안의 줄바꿈(\n)을 그대로 두 줄로 표시 */
+}
+
+.cp-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* 글자 길이만큼만 박스가 생김 */
+  gap: 10px;
+  padding: 0 0 18px;
+}
+
+.cp-chip {
+  padding: 13px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  max-width: 100%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(26, 26, 46, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cp-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(74, 63, 143, 0.15);
+}
+
+.bubble {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: #4a3f8f;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+  animation: fade-up 0.25s ease-out both;
+}
+
+.bubble.ai {
+  background: #ffffff;
+  color: #1a1a2e;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(26, 26, 46, 0.06);
+  width: fit-content;
+}
+
+.bubble.ai.error {
+  background: #fdeef1;
+  color: #b3163f;
+}
+
+.bubble.loading,
+.bubble.ai.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0; /* 말풍선 배경 없이 글자만 */
+  background: none;
+  box-shadow: none;
+  color: #636e72;
+}
+
+.ai-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fade-up 0.25s ease-out both;
+}
+
+/* 추천 글 카드 - 위쪽 폴더 띠 뒤에서 카드가 하나씩 나오는 모션 */
+.kw-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kw {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid #e6e2f6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.kw span {
+  color: #9aa3a7;
+  font-size: 12px;
+}
+
+.kw:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(74, 63, 143, 0.15);
+}
+
+.results {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 2px 10px;
+  padding-top: 10px;
+  overflow: hidden; /* 아래로 내려간 카드가 폴더 밖으로 보이지 않게 */
+}
+
+.results-folder {
+  position: relative;
+  z-index: 2; /* 카드보다 앞 */
+  width: 54px;
+  flex: none;
+}
+
+.results-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.goto-saved {
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #4a3f8f;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.results-foot .goto-saved {
+  margin-top: 0;
+}
+
+.source-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e6e2f6;
+  box-shadow: 0 1px 3px rgba(26, 26, 46, 0.05);
+  position: relative;
+  transform-origin: 6% 100%; /* 왼쪽 아래 폴더에서 펼쳐지는 느낌 */
+}
+
+/* 등장 모션은 처음 나타날 때(.enter)만 */
+.source-card.enter {
+  animation: card-out 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) var(--delay, 0s) both;
+}
+
+.source-card:last-of-type {
+  border-bottom-left-radius: 4px; /* 맨 아래 카드만 말풍선처럼 - 꼬리가 폴더를 가리킴 */
+}
+
+.source-card:last-of-type::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border: inherit;
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+
+.source-card.saved {
+  border-color: #cfc9f3;
+  background: #faf9ff;
+}
+
+.source-card.enter.saved {
+  animation: filed 0.4s ease-out 0s;
+}
+
+.sc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sc-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ece9fb;
+  color: #4a3f8f;
+  font-size: 12px;
+}
+
+.sc-react {
+  font-size: 12px;
+  color: #636e72;
+}
+
+.sc-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid #cfc9f3;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sc-save:hover {
+  background: #f4f2fc;
+}
+
+.sc-save.saved {
+  border-color: transparent;
+  background: #ece9fb;
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sc-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: draw 0.35s 0.1s ease-out forwards;
+}
+
+.saved-note {
+  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.answer {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #1a1a2e;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.answer.error {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fdeef1;
+  color: #b3163f;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -6px;
+}
+
+.act {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #636e72;
+  cursor: pointer;
+}
+
+.act svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.act:hover {
+  background: rgba(74, 63, 143, 0.1);
+  color: #4a3f8f;
+}
+
+.act.on {
+  color: #4a3f8f;
+}
+
+.act.on svg {
+  fill: currentColor;
+}
+
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #636e72;
+}
+
+.feedback button {
+  border: 1px solid #d9d4f0;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.feedback button:hover {
+  border-color: #6c5ce7;
+}
+
+.thanks {
+  color: #4a3f8f;
+}
+
+.cp-foot {
+  padding: 0 14px 14px;
+}
+
+.cp-usage {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a3f8f;
+  padding: 8px 0;
+}
+
+.cp-input {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 14px;
+  border-radius: 26px;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(74, 63, 143, 0.12);
+}
+
+.cp-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.cp-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.cp-input textarea {
+  border: 0;
+  outline: 0;
+  resize: none;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 66px;
+  padding: 4px 48px 4px 0;
+  background: transparent;
+  color: #1a1a2e;
+}
+
+.cp-send {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: #4a3f8f;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.cp-send:disabled {
+  background: #b2a9e3;
+  cursor: default;
+}
+
+/* 사용자에게 되묻는 카드 - 입력창 위 */
+.cp-ask {
+  margin-bottom: 10px;
+  padding: 14px 14px 8px;
+  border-radius: 22px;
+  background: #ffffff;
+  border: 1px solid #cfc9f3;
+  box-shadow: 0 4px 14px rgba(74, 63, 143, 0.12);
+  animation: fade-up 0.25s ease-out both;
+}
+
+.ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 6px 8px;
+}
+
+.ask-q {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.ask-skip {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #636e72;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ask-skip:hover {
+  color: #4a3f8f;
+}
+
+.ask-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 8px;
+  border: 0;
+  border-top: 1px solid #f0edfa;
+  background: transparent;
+  color: #1a1a2e;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ask-opt:hover {
+  background: #f4f2fc;
+}
+
+.ask-folder {
+  margin: 0 0 0 0;
+}
+
+.ask-form {
+  display: grid;
+  gap: 10px;
+  padding: 4px 6px 12px;
+}
+
+.ask-form input {
+  padding: 11px 14px;
+  border: 1px solid #d9d4f0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.ask-form input:focus {
+  border-color: #6c5ce7;
+}
+
+.swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch.on {
+  border-color: #4a3f8f;
+}
+
+.ask-submit {
+  padding: 11px;
+  border: 0;
+  border-radius: 999px;
+  background: #4a3f8f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ask-submit:disabled {
+  background: #b2a9e3;
+  cursor: default;
+}
+
+.ask-n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #ece9fb;
+  color: #4a3f8f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 진행 문구 - 글자 위로 빛이 지나가고, 단계가 바뀔 때 부드럽게 교체 */
+.think {
+  font-size: 17px;
+  background: linear-gradient(90deg, #8b7ee8 0%, #4a3f8f 35%, #cfc9f3 50%, #4a3f8f 65%, #8b7ee8 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 3s linear infinite;
+}
+
+.lo-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 42px;
+}
+
+/* 의도 분석: 퍼져 나가는 레이더 */
+.lo-radar {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #6c5ce7;
+}
+
+.lo-radar i {
+  position: absolute;
+  inset: -1px;
+  border: 2px solid #8b7ee8;
+  border-radius: 50%;
+  animation: radar 2.2s ease-out infinite;
+}
+
+.lo-radar i:nth-child(2) { animation-delay: 1.1s; }
+
+@keyframes radar {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(3.2); opacity: 0; }
+}
+
+/* 답변 정리: 글줄이 차례로 채워짐 */
+.lo-lines {
+  display: grid;
+  gap: 5px;
+  width: 30px;
+}
+
+.lo-lines i {
+  height: 4px;
+  border-radius: 99px;
+  background: #b2a9e3;
+  transform-origin: left;
+  animation: write 2s ease-in-out infinite;
+}
+
+.lo-lines i:nth-child(2) { width: 80%; animation-delay: 0.3s; }
+.lo-lines i:nth-child(3) { width: 55%; animation-delay: 0.6s; }
+
+@keyframes write {
+  0% { transform: scaleX(0); }
+  50%, 100% { transform: scaleX(1); }
+}
+
+.dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6c5ce7;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+.dots i:nth-child(2) { animation-delay: 0.18s; }
+.dots i:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+.secs {
+  font-size: 14px;
+  color: #9aa3a7;
+  font-variant-numeric: tabular-nums;
+}
+
+.swap {
+  display: inline-block;
+  animation: swap-in 0.35s ease-out both;
+}
+
+@keyframes swap-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes shimmer {
+  from { background-position: 250% 0; }
+  to { background-position: -150% 0; }
+}
+
+/* 왼쪽 가장자리 폭 조절 손잡이 + 접기(») 버튼 */
+.cp-resize {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.cp-resize::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.cp-resize:hover::after,
+.cp-resize.dragging::after {
+  background: #8b7ee8;
+}
+
+.cp-fold {
+  position: absolute;
+  left: -15px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  width: 30px;
+  height: 56px;
+  border: 1px solid rgba(74, 63, 143, 0.15);
+  border-radius: 15px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(74, 63, 143, 0.18);
+}
+
+.cp-fold:hover {
+  background: #f1eefc;
+}
+
+@keyframes card-out {
+  from { opacity: 0; transform: translateY(var(--dy, 96px)) scale(0.2); }
+  35% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes filed {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.965); }
+  100% { transform: scale(1); }
+}
+
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes twinkle {
+  0%, 100% { transform: scale(1) rotate(0); opacity: 1; }
+  50% { transform: scale(1.12) rotate(8deg); opacity: 0.85; }
+}
+
+/* 모바일은 피드를 밀지 않고 화면 전체를 덮음 */
+@media (max-width: 900px) {
+  .cp-resize, .cp-fold { display: none; }
+
+  .chat-panel {
+    width: 100%;
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel { transition: none; }
+  .sc-check path { stroke-dashoffset: 0; }
+  .lo-radar i, .lo-lines i, .dots i, .think, .hub-orbit, .ai-block, .source-card, .sc-save, .sc-check path, .saved-note, .bubble.user { animation: none; }
+}
+</style>

@@ -2,7 +2,11 @@
 // 공통 레이아웃 - 사이드바 + 중앙 정렬된 본문 (넓은 화면에서 좌우 여백 균형, 모바일에서 사이드바는 드로어로 전환)
 import { ref, computed } from 'vue'
 import Sidebar from './Sidebar.vue'
+import ChatLauncher from './chat/ChatLauncher.vue'
+import ChatPanel from './chat/ChatPanel.vue'
 import { useUiStore } from '../stores/ui'
+import { useChatStore } from '../stores/chat'
+import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({
   // 기본 1040 - HomeView/AdminView와 동일한 폭. 다르게 하고 싶은 화면만 개별로 max-width를 넘기면 됨
@@ -15,6 +19,9 @@ const sidebarOpen = ref(false)
 // 데스크톱~태블릿 폭에서 사용자가 수동으로 사이드바를 접어 본문 폭을 넓힐 때 쓰는 상태 - 페이지 이동 간에도
 // 유지되어야 해서 스토어에 둠 (모바일 드로어용 sidebarOpen과는 별개 - 768px 미만에서는 CSS가 이 상태를 무시함)
 const uiStore = useUiStore()
+// AI 챗봇은 로그인한 사용자에게만 노출 - 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
+const chatStore = useChatStore()
+const authStore = useAuthStore()
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
 const mainStyle = computed(() => ({ paddingTop: `${props.paddingTop}px` }))
 
@@ -28,7 +35,11 @@ function closeSidebar() {
 </script>
 
 <template>
-  <div class="app-layout">
+  <div
+    class="app-layout"
+    :class="{ 'chat-open': authStore.isAuthenticated && chatStore.isOpen, 'chat-resizing': chatStore.dragging }"
+    :style="{ '--chat-w': `${chatStore.width}px` }"
+  >
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
     <div class="sidebar-wrap" :class="{ open: sidebarOpen, collapsed: uiStore.sidebarCollapsed }">
       <Sidebar @navigate="closeSidebar" @collapse="uiStore.collapseSidebar" />
@@ -47,6 +58,10 @@ function closeSidebar() {
         <slot />
       </div>
     </main>
+    <template v-if="authStore.isAuthenticated">
+      <ChatLauncher />
+      <ChatPanel />
+    </template>
   </div>
 </template>
 
@@ -114,6 +129,18 @@ function closeSidebar() {
   justify-content: center;
   /* padding-top은 :style="mainStyle"로 페이지별(paddingTop prop)로 넘어옴 */
   padding: 0 48px 72px;
+  transition: margin-right 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* 챗봇 패널(폭 --chat-w, 드래그로 조절)이 열리면 본문이 그만큼 왼쪽으로 밀림 - 모바일(900px 이하)은 패널이 전체를 덮으므로 제외 */
+@media (min-width: 901px) {
+  .chat-open .app-main {
+    margin-right: var(--chat-w);
+  }
+
+  .chat-resizing .app-main {
+    transition: none; /* 드래그 중엔 즉시 따라오게 */
+  }
 }
 
 .app-main-inner {

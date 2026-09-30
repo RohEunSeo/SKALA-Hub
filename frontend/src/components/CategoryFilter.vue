@@ -1,16 +1,27 @@
 <script setup>
 // 카테고리별 필터링 칩
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { usePostsStore } from '../stores/posts'
 import { CATEGORIES } from '../constants/categories'
 
+// counts를 주면 스토어 대신 넘겨받은 목록 기준으로 동작 (AI 추천 탭용 - { all, [카테고리 value]: 개수 }, 상위 카테고리는 항상 전부 표시)
+const props = defineProps({ counts: { type: Object, default: null }, selected: { type: String, default: null } })
+const emit = defineEmits(['select'])
 const postsStore = usePostsStore()
+const local = computed(() => !!props.counts)
+const isActive = (value) => (local.value ? (props.selected ?? null) === value : (postsStore.category ?? null) === value)
+const countOf = (value) => {
+  if (local.value) return props.counts[value ?? 'all'] ?? 0
+  if (value === null) return postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount
+  return postsStore.hasLink ? postsStore.linkCategoryCount(value) : postsStore.categoryCount(value)
+}
 
 onMounted(() => {
-  postsStore.loadCategoryCounts()
+  if (!local.value) postsStore.loadCategoryCounts()
 })
 
 function select(value) {
+  if (local.value) return emit('select', value)
   postsStore.setCategory(value, null)
   window.scrollTo({ top: 0, behavior: 'auto' })
 }
@@ -18,21 +29,11 @@ function select(value) {
 
 <template>
   <nav class="category-filter">
-    <div class="chip" :class="{ active: !postsStore.category }" @click="select(null)">
-      <span class="label">전체</span
-      ><span class="count">({{ postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount }})</span>
+    <div class="chip" :class="{ active: isActive(null) }" @click="select(null)">
+      <span class="label">전체</span><span class="count">({{ countOf(null) }})</span>
     </div>
-    <div
-      v-for="cat in CATEGORIES"
-      :key="cat.value"
-      class="chip"
-      :class="{ active: postsStore.category === cat.value }"
-      @click="select(cat.value)"
-    >
-      <span class="label">{{ cat.shortLabel }}</span
-      ><span class="count"
-        >({{ postsStore.hasLink ? postsStore.linkCategoryCount(cat.value) : postsStore.categoryCount(cat.value) }})</span
-      >
+    <div v-for="cat in CATEGORIES" :key="cat.value" class="chip" :class="{ active: isActive(cat.value) }" @click="select(cat.value)">
+      <span class="label">{{ cat.shortLabel }}</span><span class="count">({{ countOf(cat.value) }})</span>
     </div>
   </nav>
 </template>
