@@ -51,6 +51,13 @@ server.js
 .ua/tmp/
 .ua/.trash-*/
 
+# 수업 교재/실습 코드 (저작권 자료, 로컬 전용 - 절대 푸시 금지)
+rag-pipeline/
+*.pdf
+ai/data/
+# 에디터 작업공간 설정 - 수업 교재 폴더의 로컬 경로가 들어 있다
+ai/app/skala-hub.code-workspace
+
 # 데모 영상 (녹화 원본/렌더 결과/로그인 세션은 로컬 전용)
 video/node_modules/
 video/raw/
@@ -58,3 +65,10 @@ video/out/
 video/auth.json
 video/public/clips/
 video/public/timeline.json
+
+# Python (ai/ RAG 서버)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
