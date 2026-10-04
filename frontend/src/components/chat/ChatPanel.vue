@@ -1,5 +1,7 @@
 <script setup>
-// AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 저장 제안 / 👍👎 피드백 / 남은 횟수.
+// AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 👍👎 피드백 / 남은 횟수.
+// 1차 베타(판교 5반)에서는 저장·폴더 기능이 꺼져 있다 - 서버가 save_proposal을 보내지 않으므로
+// 관련 블록(저장 제안/공유 드라이브)은 그려지지 않는다. 출처 카드의 저장 버튼은 제거했다.
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -72,10 +74,16 @@ function goSaved(proposal) {
   else router.push('/mypage?tab=saved')
 }
 
-// 추천 결과를 피드의 "AI 추천" 탭에서 보기
+// 폴더에 담긴 글 보기 - 추천 결과 자체는 게시글 탭에서 이미 하이라이트돼 있다
 function goPicks() {
-  if (route.path === '/feed') uiStore.feedTab = 'ai'
-  else router.push('/feed?tab=ai')
+  if (route.path === '/feed') uiStore.feedTab = 'posts'
+  else router.push('/feed')
+}
+
+// 추천된 글이 하이라이트된 게시글 목록으로 이동
+function goFeed() {
+  if (route.path !== '/feed') router.push('/feed')
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // 추천 글의 카테고리 → 이모지/색 (categories.js가 원본)
@@ -127,7 +135,9 @@ const REASONS = ['관련 없는 글이에요', '내용이 틀려요', '너무 �
 function send(text = input.value) {
   if (!text.trim()) return
   input.value = ''
-  chatStore.ask(text, context.value)
+  // 라벨(표시용)과 카테고리 값(검색 범위 제한용)을 함께 넘긴다.
+  // 전체 피드에서 물으면 전체에서, 카테고리 피드에서 물으면 그 안에서만 찾는다.
+  chatStore.ask(text, context.value, postsStore.category)
 }
 
 function onKeydown(e) {
@@ -233,7 +243,7 @@ watch(
           <!-- 출처 카드: 답변의 근거가 된 글 -->
           <!-- 키워드 집계 결과: 누르면 그 키워드로 바로 검색 -->
           <div v-if="msg.keywords" class="kw-row">
-            <button v-for="k in msg.keywords" :key="k.word" class="kw" @click="send(`'${k.word}' 관련 글 모아줘`)">
+            <button v-for="k in msg.keywords" :key="k.word" class="kw" @click="send(`'${k.word}' 관련 글 추천해줘`)">
               # {{ k.word }}<span>{{ k.count }}</span>
             </button>
           </div>
@@ -254,17 +264,13 @@ watch(
                   <span class="sc-react">반응 {{ p.reactions }}</span>
                 </div>
               </div>
-              <button class="sc-save" :class="{ saved: p.saved }" @click="p.saved = !p.saved">
-                <svg v-if="p.saved" class="sc-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
-                {{ p.saved ? '저장됨' : '저장' }}
-              </button>
             </article>
             <!-- 왼쪽 아래 작은 폴더 - 카드가 여기서 위로 펼쳐져 나옴 / 오른쪽은 피드 AI 추천 탭 링크 -->
             <div class="results-foot">
               <div class="results-folder" aria-hidden="true">
                 <PaperFlipLoader :width="54" still />
               </div>
-              <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goPicks">피드에서 AI 추천 탭 보기 →</button>
+              <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goFeed">피드에서 보기</button>
             </div>
           </div>
 
@@ -280,6 +286,20 @@ watch(
               <button class="goto-saved" @click="goSaved(msg.proposal)">{{ msg.proposal.folderId ? '폴더 보러가기 →' : '저장한 글 보러가기 →' }}</button>
             </div>
             <div v-else-if="msg.proposal.state === 'declined'" class="answer">알겠어요. 저장하지 않을게요.</div>
+          </template>
+
+          <!-- 공유 드라이브 push: 저장 후 폴더를 공유 레포로 올릴지 제안 (사용자가 네를 눌러야 실행) -->
+          <template v-if="msg.push">
+            <div v-if="msg.push.state === 'pushing'" class="bubble ai loading">
+              <span class="lo-icon"><SaveLoader :width="52" :color="msg.push.color" /></span>
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="think">'{{ msg.push.folder }}' 공유 드라이브에 push하는 중</span>
+            </div>
+            <div v-else-if="msg.push.state === 'pushed'" class="answer saved-note">
+              '{{ msg.push.folder }}' 폴더를 공유 드라이브에 push했어요. 다른 교육생이 star하고 clone할 수 있어요.
+              <button class="goto-saved" @click="router.push(`/community/drive/${encodeURIComponent(msg.push.owner)}/${encodeURIComponent(msg.push.folder)}`)">레포 보러가기 →</button>
+            </div>
+            <div v-else-if="msg.push.state === 'declined'" class="answer">알겠어요. 나중에 레포 화면에서 push할 수도 있어요.</div>
           </template>
 
           <!-- 답변 아래 아이콘 행: 좋아요/별로예요(추천 결과만) + 복사. 👎면 이유 칩 -->
@@ -336,7 +356,7 @@ watch(
           <span class="ask-n">✎</span>직접 입력할게요
         </button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/10회 남음</div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
       <div class="cp-input">
         <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />"{{ context }}" 탭 공유 중</div>
         <textarea
