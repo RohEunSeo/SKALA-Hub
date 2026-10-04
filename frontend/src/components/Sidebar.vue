@@ -246,6 +246,13 @@ function handleLogout() {
             </div>
           </div>
         </div>
+        <RouterLink
+          v-if="authStore.effectiveIsAdmin"
+          to="/community/drive"
+          class="nav-item"
+          :class="{ active: String(route.name).startsWith('community') }"
+          >🤝 커뮤니티</RouterLink
+        >
         <RouterLink to="/dashboard" class="nav-item" :class="{ active: route.name === 'dashboard' }"
           >🌱 대시보드</RouterLink
         >

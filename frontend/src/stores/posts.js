@@ -1,7 +1,11 @@
 // 게시글 목록 및 필터 상태 관리
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchPosts as fetchPostsApi, fetchLinkGroups as fetchLinkGroupsApi } from '../api/posts'
+import {
+  fetchPosts as fetchPostsApi,
+  fetchPost as fetchPostApi,
+  fetchLinkGroups as fetchLinkGroupsApi,
+} from '../api/posts'
 import { fetchHomeSummary } from '../api/home'
 import { fetchHiddenLinks as fetchHiddenLinksApi } from '../api/admin'
 
@@ -69,6 +73,9 @@ export const usePostsStore = defineStore('posts', () => {
   const categoryCounts = ref([])
   const tagCounts = ref([])
   const totalPostCount = ref(0)
+  // 지금 걸린 필터(카테고리·태그·층·기간) 기준 전체 개수.
+  // 화면에 불러온 개수(posts.length)와 다르다 - 20개씩 나눠 받기 때문.
+  const filteredCount = ref(0)
   // 링크 모음 탭용 카테고리 칩 개수 - 게시글 수가 아니라 attachments 배열 원소 총합(카테고리 칩과 동일한 캐싱 주기로 관리)
   const linkCategoryCounts = ref([])
   const linkTagCounts = ref([])
@@ -77,6 +84,78 @@ export const usePostsStore = defineStore('posts', () => {
 
   const hasMore = computed(() => page.value + 1 < totalPages.value)
   const linkHasMore = computed(() => linkPage.value + 1 < linkTotalPages.value)
+
+  // 챗봇이 추천한 게시글 id - 피드에서 맨 위로 올리고 테두리로 표시한다.
+  // posts 배열 자체는 건드리지 않는다. 서버가 준 순서를 그대로 두고 표시용 순서만
+  // displayPosts에서 따로 계산해야 더보기/필터 로직이 깨지지 않는다.
+  const pickedIds = ref([])
+  // 어떤 질문으로 추천됐는지 - 피드 상단 칩에 보여줘서 지금 상태를 알 수 있게 한다
+  const pickQuery = ref('')
+  // 선택한 폴더에 담긴 글 id - null이면 폴더 필터 없음.
+  // 폴더는 카테고리/기간과 같은 층위의 필터라 모든 탭에서 함께 적용된다.
+  const folderPostIds = ref(null)
+
+  const displayPosts = computed(() => {
+    let list = posts.value
+    if (folderPostIds.value) {
+      const allow = new Set(folderPostIds.value)
+      list = list.filter((post) => allow.has(post.id))
+    } else if (!pickedIds.value.length) {
+      // 좁혀 보는 상태가 아니면 원래 피드 그대로여야 한다.
+      // 폴더/추천 때문에 끼워넣었던 글(_extra)을 빼지 않으면 해제 후에도 맨 앞에 남는다.
+      list = list.filter((post) => !post._extra)
+    }
+    if (!pickedIds.value.length) return list
+
+    const order = new Map(pickedIds.value.map((id, i) => [id, i]))
+    const picked = []
+    const rest = []
+    for (const post of list) {
+      ;(order.has(post.id) ? picked : rest).push(post)
+    }
+    // 추천 순서(관련도 순)를 유지한다. 피드 기본 정렬(최신순)과 섞지 않는다.
+    picked.sort((a, b) => order.get(a.id) - order.get(b.id))
+    return [...picked, ...rest]
+  })
+
+  // 목록에 아직 없는 글을 id로 받아와 앞에 붙인다. 추천 글이 50번째라 "더보기"를
+  // 누르지 않아 posts에 없거나, 폴더에 담긴 글이 현재 페이지 밖일 때 쓴다.
+  // 추천받은 글이 지금 피드 목록에 없으면 하나씩 받아 앞에 붙인다.
+  // 이름 주의: 아래쪽의 ensureLoaded()(피드 최초 로드)와 **다른 함수**다.
+  // 예전에 둘 다 ensureLoaded 라서 나중 것이 앞 것을 덮어썼고,
+  // 추천 글이 안 불려와 하이라이트가 1개만 되던 버그가 있었다.
+  async function loadMissingPosts(ids) {
+    const have = new Set(posts.value.map((p) => p.id))
+    const missing = ids.filter((id) => !have.has(id))
+    if (!missing.length) return
+    const results = await Promise.all(
+      missing.map((id) => fetchPostApi(id).then(({ data }) => data).catch(() => null)),
+    )
+    // _extra: 폴더·추천 때문에 따로 받아온 글. 필터를 풀면 목록에서 빠져야 한다.
+    const extras = results.filter(Boolean).map((p) => ({ ...p, _extra: true }))
+    posts.value = [...extras, ...posts.value]
+  }
+
+  async function setPicks(ids, query = '') {
+    await loadMissingPosts(ids)
+    pickedIds.value = ids
+    pickQuery.value = query
+  }
+
+  function clearPicks() {
+    pickedIds.value = []
+    pickQuery.value = ''
+  }
+
+  // ids가 null이면 폴더 필터 해제
+  async function setFolderFilter(ids) {
+    if (!ids) {
+      folderPostIds.value = null
+      return
+    }
+    await loadMissingPosts(ids)
+    folderPostIds.value = ids
+  }
 
   // 월별(yyyy-MM) 필터가 아직 오지 않은 미래 달을 가리키는지 - 게시글이 없는 이유를 화면에 다르게 안내하는 데 사용
   const isFutureMonth = computed(() => {
@@ -129,8 +208,13 @@ export const usePostsStore = defineStore('posts', () => {
     return linkTagCounts.value?.find((item) => item.category === value)?.count ?? 0
   }
 
-  // 현재 활성 탭(게시글/링크 모음)에 맞는 목록을 처음부터 다시 조회 - 필터 변경 setter들이 공용으로 사용
+  // 현재 활성 탭(게시글/링크 모음)에 맞는 목록을 처음부터 다시 조회 - 필터 변경 setter들이 공용으로 사용.
+  // 필터가 바뀌면 이전 추천은 더 이상 지금 보는 목록과 맞지 않으므로 함께 해제한다.
   function refetchCurrent() {
+    // 보는 범위를 바꾸면 좁혀둔 것들(챗봇 추천 / 내 폴더)은 함께 푼다.
+    // 폴더 필터가 남아 있으면 "전체"를 눌러도 몇 개만 보여서 꼬인 것처럼 느껴진다.
+    clearPicks()
+    folderPostIds.value = null
     return hasLink.value === true ? fetchLinkGroups(true) : fetchPosts(true)
   }
 
@@ -197,6 +281,7 @@ export const usePostsStore = defineStore('posts', () => {
       posts.value = reset ? content : [...posts.value, ...content]
       page.value = data?.page ?? 0
       totalPages.value = data?.totalPages ?? 0
+      filteredCount.value = data?.totalElements ?? content.length
       lastSyncedAt.value = data?.lastSyncedAt ?? null
       if (reset) {
         resetToken.value += 1
@@ -295,6 +380,13 @@ export const usePostsStore = defineStore('posts', () => {
 
   return {
     posts,
+    displayPosts,
+    pickedIds,
+    pickQuery,
+    setPicks,
+    clearPicks,
+    folderPostIds,
+    setFolderFilter,
     category,
     tag,
     keyword,
@@ -326,6 +418,7 @@ export const usePostsStore = defineStore('posts', () => {
     categoryCounts,
     tagCounts,
     totalPostCount,
+    filteredCount,
     linkCategoryCounts,
     linkTagCounts,
     totalLinkCount,

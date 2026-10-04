@@ -10,6 +10,7 @@ import SortFilter from '../components/SortFilter.vue'
 import CampusFilter from '../components/CampusFilter.vue'
 import DateFilter from '../components/DateFilter.vue'
 import PostCard from '../components/PostCard.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LinkGalleryCard from '../components/LinkGalleryCard.vue'
 import LinkCardSkeleton from '../components/LinkCardSkeleton.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -20,7 +21,6 @@ import { useAuthStore } from '../stores/auth'
 import { useUiStore } from '../stores/ui'
 import { useChatStore } from '../stores/chat'
 import { useFoldersStore } from '../stores/folders'
-import { fetchPost } from '../api/posts'
 import AiFolderBar from '../components/AiFolderBar.vue'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { CATEGORIES } from '../constants/categories'
@@ -52,9 +52,7 @@ const activeTab = ref(
     ? 'links'
     : route.query.tab === 'curriculum'
       ? 'curriculum'
-      : route.query.tab === 'ai' && (chatStore.aiPicks.length || foldersStore.folders.length)
-        ? 'ai'
-        : 'posts',
+      : 'posts',
 )
 
 // 공지 등에서 카테고리/태그까지 지정한 딥링크로 들어올 수 있게 함
@@ -113,54 +111,84 @@ watch(
   },
 )
 
-// 챗봇이 게시글을 추천하면 "AI 추천" 탭으로 자동 전환 (원본 피드/필터는 그대로 - 게시글 탭을 누르면 복귀)
+// 챗봇이 게시글을 추천하면 보고 있던 피드에서 그 글들이 맨 위로 올라온다.
+// 별도 탭으로 보내면 피드를 떠나야 해서 맥락이 끊기므로 같은 목록 안에서 처리한다.
 watch(
   () => chatStore.pickSeq,
-  () => chatStore.aiPicks.length && selectTab('ai'),
+  async () => {
+    if (!postsStore.pickedIds.length) return
+    selectTab('posts')
+    // 추천 글이 노출 범위 안에 들어오도록 보장한 뒤 목록 맨 위로
+    if (visibleCount.value < postsStore.pickedIds.length) revealMore()
+    await nextTick()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  },
 )
 
-// AI 추천 탭 안의 상위 카테고리 필터 (추천된 글끼리만 거름 - 피드 스토어 필터와 무관)
-const aiCategory = ref(null)
-// 폴더를 열면 그 폴더에 담은 글(id로 조회, 한 번 받은 글은 캐시), 아니면 챗봇이 방금 추천한 글
-const folderPostCache = new Map()
-const folderPosts = ref([])
-async function loadFolderPosts() {
-  const id = foldersStore.selected
-  if (!id) return
-  const ids = foldersStore.idsOf(id)
-  const posts = await Promise.all(
-    ids.map(async (pid) => {
-      if (!folderPostCache.has(pid)) {
-        try { folderPostCache.set(pid, (await fetchPost(pid)).data) } catch { return null }
-      }
-      return folderPostCache.get(pid)
-    }),
-  )
-  if (foldersStore.selected === id) folderPosts.value = posts.filter(Boolean)
-}
-watch(() => [foldersStore.selected, foldersStore.map], loadFolderPosts, { deep: true, immediate: true })
-
-const aiBase = computed(() => (foldersStore.selected ? folderPosts.value : chatStore.aiPicks))
-const aiCounts = computed(() => {
-  const counts = { all: aiBase.value.length }
-  aiBase.value.forEach((p) => (counts[p.category] = (counts[p.category] ?? 0) + 1))
-  return counts
-})
-const aiVisible = computed(() =>
-  aiCategory.value ? aiBase.value.filter((p) => p.category === aiCategory.value) : aiBase.value,
+// 폴더를 고르면 그 폴더에 담긴 글만 보여준다. 담긴 글이 현재 페이지 밖에 있을 수 있어서
+// 스토어가 id로 마저 받아온 뒤 필터를 적용한다.
+watch(
+  () => [foldersStore.selected, foldersStore.map],
+  () => {
+    const id = foldersStore.selected
+    postsStore.setFolderFilter(id ? foldersStore.idsOf(id) : null)
+  },
+  { deep: true, immediate: true },
 )
-const selectedFolder = computed(() => foldersStore.byId(foldersStore.selected))
-watch(() => chatStore.pickSeq, () => {
-  aiCategory.value = null
-  foldersStore.selected = null // 새 추천이 오면 전체 추천으로
-})
-watch(() => foldersStore.selected, () => (aiCategory.value = null))
 
-// 탭 옆 ×: 추천을 비우고 게시글 탭으로 복귀
-function closeAiTab() {
-  chatStore.clearPicks()
-  selectTab('posts')
+// 폴더와 카테고리는 서로 배타적으로 둔다.
+// 둘이 동시에 걸리면 "전체"인데 몇 개만 보이는 상태가 되어 뭘 보고 있는지 알 수 없다.
+// (폴더 안에서 다시 카테고리로 거르는 쓰임새는 드물고, 헷갈리는 비용이 더 크다)
+watch(
+  () => postsStore.category,
+  () => { foldersStore.selected = null },   // 카테고리를 고르면 폴더 선택 해제
+)
+
+
+// 피드 스캔 모션 - "게시글 검색 중" 단계에서 시작해 추천 글이 실제로 도착할 때까지 돈다.
+// status.tool만 보면 '답변 정리하는 중'으로 넘어가는 순간 꺼져서, 정작 글이 올라오기 직전에
+// 모션이 사라지는 어색한 구간이 생긴다.
+const isScanning = ref(false)
+let scanTimer = null
+
+watch(
+  () => chatStore.status?.tool,
+  (tool, prev) => {
+    if (tool === 'search_posts') {
+      clearTimeout(scanTimer)
+      isScanning.value = true
+      return
+    }
+    // 검색 단계를 지나 대기 상태(null)가 됐는데도 결과가 안 오면(결과 없음·거절 등)
+    // 무한히 돌지 않도록 잠깐 기다렸다 멈춘다
+    if (isScanning.value && tool == null && prev != null) {
+      clearTimeout(scanTimer)
+      scanTimer = setTimeout(() => (isScanning.value = false), 2500)
+    }
+  },
+)
+
+// 추천 글이 도착하면 그 순간 멈춘다 - 모션이 끝나는 지점과 글이 올라오는 지점이 맞물린다
+watch(
+  () => chatStore.pickSeq,
+  () => {
+    clearTimeout(scanTimer)
+    isScanning.value = false
+  },
+)
+
+onUnmounted(() => clearTimeout(scanTimer))
+
+// 추천 해제는 목록 순서가 통째로 바뀌는 동작이라 확인을 받는다
+const clearAsk = ref(false)
+
+function confirmClear() {
+  postsStore.clearPicks()
+  clearAsk.value = false
 }
+
+// 새 추천이 오면 폴더 필터는 풀어준다 - 추천 글이 그 폴더에 없으면 보이지 않기 때문
+watch(() => chatStore.pickSeq, () => (foldersStore.selected = null))
 
 // 링크 탭에서 관리자가 "숨김" 정렬 옵션을 켠 상태 - 이때는 카테고리/유형/기간 필터 대신 숨긴 링크 갤러리만 보여줌
 const showHidden = computed(() => activeTab.value === 'links' && postsStore.showHiddenLinks)
@@ -190,7 +218,10 @@ const showDateFilter = computed(() => !postsStore.category || DATE_CATEGORIES.in
 // 이미지 여러 장 붙은 긴 글 20개는 실제 스크롤 길이가 몇 배씩 차이 나서, 개수 기준으로는 매번 더보기까지의
 // 스크롤량이 들쑥날쑥해짐. 게시글마다 대략적인 세로 길이를 추정해 누적하고, 예산을 넘으면 그 지점에서 끊는다.
 const visibleCount = ref(0)
-const WEIGHT_BUDGET = 90
+// 평균 길이(약 600자) 글은 가중치 20 안팎, 이미지가 붙은 긴 글은 90을 넘는다.
+// 예산을 90으로 두면 긴 글 하나에 다 소진돼 두세 개만 보고 "더보기"에 막힌다.
+// 평범한 글 기준 10개 안팎이 이어지도록 잡은 값.
+const WEIGHT_BUDGET = 260
 
 function estimateWeight(post) {
   const textWeight = (post.content?.length ?? 0) / 40
@@ -200,19 +231,90 @@ function estimateWeight(post) {
   return 6 + textWeight + imageCount * 12 + otherFileCount * 3 + attachmentCount * 8
 }
 
-// 이미 불러온 게시글 중 예산이 남아있는 만큼만 추가로 노출 (API 재조회 없이 로컬에서 처리)
+// 이미 불러온 게시글 중 예산이 남아있는 만큼만 추가로 노출 (API 재조회 없이 로컬에서 처리).
+// 추천된 글이 맨 앞에 와 있으므로 displayPosts 기준으로 센다 - posts 기준으로 세면
+// 추천 글이 노출 범위 밖으로 밀려 "위로 올라왔는데 안 보이는" 상태가 된다.
 function revealMore() {
   let budget = WEIGHT_BUDGET
-  while (visibleCount.value < postsStore.posts.length) {
-    const next = postsStore.posts[visibleCount.value]
+  while (visibleCount.value < postsStore.displayPosts.length) {
+    const next = postsStore.displayPosts[visibleCount.value]
     visibleCount.value += 1
     budget -= estimateWeight(next)
     if (budget <= 0) break
   }
 }
 
-const visiblePosts = computed(() => postsStore.posts.slice(0, visibleCount.value))
-const canShowMore = computed(() => visibleCount.value < postsStore.posts.length || postsStore.hasMore)
+// 지금 보고 있는 범위를 한 줄로 만든다.
+// 칩을 안 보이게 두면 "어떤 필터가 걸렸는지"를 세 줄을 훑어야 알 수 있다.
+const DATE_LABELS = { today: '오늘', week: '이번 주', month: '이번 달' }
+
+// 칩 앞에 붙는 대표 아이콘. 카테고리마다 정해둔 것을 그대로 쓴다
+// (사이드바·카테고리 칩과 같은 기호라 눈에 익다). 전체일 땐 폴더.
+const scopeIcon = computed(() => {
+  const cat = CATEGORIES.find((c) => c.value === postsStore.category)
+  return cat?.icon ?? '📁'
+})
+
+const scopeLabel = computed(() => {
+  const parts = []
+
+  const cat = CATEGORIES.find((c) => c.value === postsStore.category)
+  parts.push(cat ? cat.shortLabel ?? cat.label : '전체 카테고리')
+
+  // 하위 태그도 층·기간과 같은 규칙: 줄이 화면에 있으면 "전체"도 적는다.
+  // 하나만 빼면 "교육생 서비스 61개"처럼 뭘 고른 상태인지 알 수 없다.
+  if (hasSubcategoryFilter.value) {
+    const sub = activeCategoryTags.value.find((t) => t.value === postsStore.tag)
+    parts.push(sub ? sub.label : '전체 유형')
+  }
+
+  // 층·기간은 카테고리에 따라 화면에 아예 없을 수 있다.
+  // 없는 필터를 칩에 쓰면 "4층을 고를 수도 없는데 전체 층이라고 적혀 있는" 상태가 된다.
+  if (showCampusFilter.value) parts.push(postsStore.campus ?? '전체 층')
+  if (showDateFilter.value) {
+    const d = postsStore.date
+    // 월별은 '2026-09' 형태로 들어온다
+    parts.push(d ? (DATE_LABELS[d] ?? `${Number(d.slice(5))}월`) : '전체 기간')
+  }
+
+  return parts.join(' · ')
+})
+
+// 지금 보고 있는 개수. 탭마다 세는 대상이 다르다.
+// - 게시글: 서버가 필터 기준으로 센 값(totalElements). 20개씩 나눠 받으므로 화면 개수로는 알 수 없다
+// - 링크  : 서버는 전체를 주고 카테고리/유형은 화면에서 거른다(linkGroups) → 화면 개수가 곧 정답
+// - 커리큘럼: 단계별 목록을 통째로 받는다
+const scopeCount = computed(() => {
+  if (activeTab.value === 'links') return postsStore.linkGroups.length
+  return postsStore.filteredCount || postsStore.displayPosts.length
+})
+
+// 지금 열어 둔 폴더 (없으면 null)
+const selectedFolder = computed(() => foldersStore.byId(foldersStore.selected))
+
+// 폴더나 챗봇 추천으로 좁혀진 상태 - 목록이 짧아 끊어 볼 이유가 없다
+const isNarrowed = computed(
+  () => !!postsStore.folderPostIds || postsStore.pickedIds.length > 0,
+)
+
+const visiblePosts = computed(() =>
+  isNarrowed.value
+    ? postsStore.displayPosts
+    : postsStore.displayPosts.slice(0, visibleCount.value),
+)
+const canShowMore = computed(() =>
+  isNarrowed.value
+    ? false   // 좁혀진 목록은 전부 보여주므로 더보기가 필요 없다
+    : visibleCount.value < postsStore.displayPosts.length || postsStore.hasMore,
+)
+// 좁혀 보기를 풀면 노출 범위를 처음부터 다시 센다.
+// 안 그러면 폴더 글 몇 개만 세어둔 상태가 남아 전체로 돌아와도 그만큼만 보인다.
+watch(isNarrowed, (now, before) => {
+  if (before && !now) {
+    visibleCount.value = 0
+    revealMore()
+  }
+})
 
 // 관리자가 게시글 탭을 볼 때만 - 지금 보이는 게시글들이 이미 SKALA 커리큘럼에 등록됐는지 배치 조회해서
 // PostCard의 📚 퀵애드 아이콘 상태(추가/등록됨)에 반영. 일반 유저·다른 탭에서는 호출하지 않음
@@ -379,22 +481,11 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           <div class="feed-tab" :class="{ active: activeTab === 'curriculum' }" @click="selectTab('curriculum')">
             <img :src="skLogo" class="feed-tab-logo" alt="" /> SKALA 커리큘럼
           </div>
-          <div
-            v-if="chatStore.aiPicks.length || foldersStore.folders.length"
-            class="feed-tab feed-tab-ai"
-            :class="{ active: activeTab === 'ai' }"
-            @click="selectTab('ai')"
-          >
-            ✨ AI 추천 <span v-if="chatStore.aiPicks.length" class="ai-count">{{ chatStore.aiPicks.length }}</span>
-            <button v-if="chatStore.aiPicks.length" class="ai-close" aria-label="AI 추천 닫기" @click.stop="closeAiTab">×</button>
-          </div>
         </div>
 
-        <AiFolderBar v-if="activeTab === 'ai'" />
-        <CategoryFilter v-if="activeTab === 'ai'" :counts="aiCounts" :selected="aiCategory" @select="aiCategory = $event" />
-
-        <template v-if="activeTab !== 'curriculum' && activeTab !== 'ai'">
+        <template v-if="activeTab !== 'curriculum'">
           <CategoryFilter v-if="!showHidden" />
+
 
           <div v-if="!showHidden && (hasSubcategoryFilter || showCampusFilter || showDateFilter)" class="filter-combined-row">
             <div v-if="hasSubcategoryFilter" class="edu-category-filter">
@@ -424,37 +515,56 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
             </div>
 
             <div v-if="showCampusFilter || showDateFilter" class="filter-row">
-              <CampusFilter v-if="showCampusFilter" />
-              <DateFilter v-if="showDateFilter" />
+              <!-- 폴더를 보는 중엔 이 필터들도 실제로 안 쓰인다. 카테고리와 똑같이 흐리게 둔다. -->
+              <div class="sub-filters" :class="{ dimmed: !!foldersStore.selected }">
+                <CampusFilter v-if="showCampusFilter" />
+                <DateFilter v-if="showDateFilter" />
+              </div>
             </div>
           </div>
 
+          <!-- 폴더는 탭이 아니라 카테고리와 같은 층위의 필터 - 어느 탭에서든 범위를 좁힌다 -->
+          <AiFolderBar v-if="authStore.effectiveIsAdmin && !showHidden" />
+
+          <!-- 동기화 시각과 정렬은 목록에 바로 붙는 정보라 필터들 아래, 게시글 바로 위에 둔다 -->
+          <!-- 추천 칩 · 동기화 시각 · 정렬을 한 줄에 둔다. 추천 칩은 왼쪽에서 늘어나고
+               동기화와 정렬은 오른쪽에 붙는다. -->
           <div class="sync-sort-row">
-            <span v-if="postsStore.lastSyncedAt" class="last-sync">
-              🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
-            </span>
-            <SortFilter />
+            <Transition name="pickchip">
+              <div v-if="postsStore.pickedIds.length" class="pick-chip">
+                <span class="pick-chip-text">
+                  <template v-if="postsStore.pickQuery">'{{ postsStore.pickQuery }}'</template>
+                  <template v-else>챗봇 추천</template>
+                  관련 {{ postsStore.pickedIds.length }}개 보는 중
+                </span>
+                <button class="pick-chip-clear" @click="clearAsk = true">해제 ✕</button>
+              </div>
+              <!-- 폴더로 좁혀진 상태도 같은 자리에 같은 모양으로 보여준다.
+                   표시가 없으면 "전체인데 몇 개만 보인다"로 느껴진다. -->
+              <div v-else-if="selectedFolder" class="pick-chip folder-chip">
+                <span class="folder-dot" :style="{ background: selectedFolder.color }"></span>
+                <span class="pick-chip-text">
+                  '{{ selectedFolder.name }}' {{ postsStore.displayPosts.length }}개 보는 중
+                </span>
+                <button class="pick-chip-clear" @click="foldersStore.selected = null">해제 ✕</button>
+              </div>
+              <!-- 좁혀 보는 중이 아닐 때도 지금 범위를 항상 알려준다 (해제할 게 없어 버튼은 없음) -->
+              <div v-else class="pick-chip">
+                <span class="pick-chip-text">{{ scopeIcon }} {{ scopeLabel }} {{ scopeCount }}개 보는 중 👀</span>
+              </div>
+            </Transition>
+
+            <div class="sync-sort-right">
+              <span v-if="postsStore.lastSyncedAt" class="last-sync">
+                🕐 마지막 동기화: {{ formatRelativeTime(postsStore.lastSyncedAt) }}
+              </span>
+              <SortFilter />
+            </div>
           </div>
         </template>
       </div>
 
       <CurriculumBoard v-if="activeTab === 'curriculum'" />
-
-      <!-- AI 추천 탭: 챗봇이 고른 글만 차례로 나타남 -->
-      <div v-else-if="activeTab === 'ai'" class="ai-picks">
-        <div class="ai-picks-banner">
-          <template v-if="selectedFolder">'{{ selectedFolder.name }}' 폴더 · 글 {{ aiVisible.length }}개</template>
-          <template v-else>AI가 고른 글 {{ aiVisible.length }}개 · 전체 글은 <b>게시글</b> 탭에서 볼 수 있어요</template>
-        </div>
-        <div v-if="aiVisible.length === 0" class="status-message">
-          {{ selectedFolder ? '이 폴더에는 아직 담긴 글이 없어요.' : aiBase.length ? '이 카테고리에는 글이 없어요.' : '아직 추천받은 글이 없어요. 챗봇에게 물어보세요.' }}
-        </div>
-        <div class="post-list">
-          <div v-for="(post, i) in aiVisible" :key="post.id" class="ai-pick" :style="{ '--i': i }">
-            <PostCard :post="post" :curriculum-status="curriculumStatusMap[post.id] ?? null" />
-          </div>
-        </div>
-      </div>
 
       <template v-else>
         <div v-if="showHidden" class="hidden-links-banner">
@@ -496,14 +606,29 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
             <div v-if="postsStore.linkHasMore" ref="scrollSentinel" class="scroll-sentinel" aria-hidden="true"></div>
           </div>
         </div>
-        <div v-else class="post-list">
-          <PostCard
-            v-for="post in visiblePosts"
-            :key="post.id"
-            :post="post"
-            :highlight-keyword="postsStore.keyword"
-            :curriculum-status="curriculumStatusMap[post.id] ?? null"
-          />
+        <div v-else class="feed-stage" :class="{ scanning: isScanning }">
+          <!-- 챗봇이 글을 찾는 동안 목록 위를 보라색 줄이 훑는다.
+               챗봇 패널의 PaperFlipLoader가 쓰는 스캔 줄과 같은 표현이라
+               "오른쪽에서 하는 일이 왼쪽에 미치고 있다"가 설명 없이 읽힌다. -->
+          <div v-if="isScanning" class="scan-line" aria-hidden="true"></div>
+          <div v-if="isScanning" class="scan-label">
+            <span class="scan-dot" aria-hidden="true"></span>
+            게시글 {{ postsStore.posts.length }}개 살펴보는 중
+          </div>
+
+          <!-- TransitionGroup은 목록 순서가 바뀔 때 각 카드가 실제로 미끄러져 이동한다(FLIP).
+               추천 글이 아래에서 위로 올라오는 과정이 보여야 "정리됐다"는 느낌이 난다. -->
+          <TransitionGroup tag="div" name="feed" class="post-list">
+            <PostCard
+              v-for="(post, i) in visiblePosts"
+              :key="post.id"
+              :style="{ '--scan-i': i }"
+              :post="post"
+              :highlight-keyword="postsStore.keyword"
+              :curriculum-status="curriculumStatusMap[post.id] ?? null"
+              :picked="postsStore.pickedIds.includes(post.id)"
+            />
+          </TransitionGroup>
         </div>
 
         <template v-if="showHidden">
@@ -545,27 +670,28 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
         <span class="scroll-top-label">맨 위로</span>
       </button>
     </template>
+
+    <ConfirmDialog
+      :open="clearAsk"
+      :danger="false"
+      title="추천을 해제할까요?"
+      message="맨 위에 올려둔 추천 글이 원래 자리로 돌아가고, 피드가 기존 정렬 순서로 다시 정렬됩니다."
+      confirm-label="해제"
+      cancel-label="그대로 두기"
+      @confirm="confirmClear"
+      @cancel="clearAsk = false"
+    />
   </AppLayout>
 </template>
 
 <style scoped>
-/* 데스크톱은 화면이 넉넉해서 탭/카테고리/필터를 화면 상단에 계속 붙여둠(position:sticky) - 스크롤을
-   내린 상태에서도 필터를 바로 누를 수 있어 편리하고, 화면이 넓어 콘텐츠를 가리는 문제도 없다 */
+/* 탭+카테고리+층/기간+내 폴더까지 쌓이면 이 블록이 화면 높이의 상당 부분을 차지한다.
+   상단에 고정(sticky)해두면 스크롤할 때마다 게시글을 가려버리므로 고정하지 않는다.
+   페이지 맨 위에서만 보이다가 다른 콘텐츠처럼 함께 흘러가고, 필터를 다시 만지고 싶으면
+   우측 하단 "맨 위로" 버튼으로 돌아온다. */
 .feed-sticky-filters {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   background: #fafafa;
   padding-top: 4px;
-}
-
-/* 모바일은 이 블록이 화면의 상당 부분을 차지해서, sticky로 고정해두면 스크롤할 때마다 게시글/링크를
-   가려버림. 그래서 모바일에서는 고정을 아예 풀고 페이지 맨 위에서만 보이다가 스크롤하면 다른 콘텐츠처럼
-   함께 흘러가 버리게 두고, 다시 필터를 만지고 싶으면 우측 하단 "맨 위로" 버튼으로 여기까지 올라오게 함 */
-@media (max-width: 768px) {
-  .feed-sticky-filters {
-    position: static;
-  }
 }
 
 /* 스크롤을 많이 내렸을 때만 뜨는 "맨 위로" 버튼 - 누르면 헤더가 있는 맨 위까지 부드럽게 스크롤.
@@ -668,6 +794,18 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   color: #4a3f8f;
   font-size: 13px;
   animation: pick-in 0.4s ease-out both;
+}
+
+/* 챗봇 추천으로 목록 순서가 바뀔 때 카드가 제자리를 찾아 미끄러진다.
+   기존 UI가 쓰는 감속 커브(0.22,1,0.36,1)를 그대로 써서 이질감을 줄였다. */
+.feed-move {
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-move {
+    transition: none;
+  }
 }
 
 /* 추천 글이 위에서 차례로 나타나고, 등장 직후 보라 테두리가 한 번 반짝 */
@@ -893,6 +1031,173 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   }
 }
 
+/* 챗봇이 글을 찾는 동안의 피드 상태 ------------------------------------ */
+.feed-stage {
+  position: relative;
+}
+
+/* 검색 중에는 목록을 흐리게 깔아두고 스캔 줄만 또렷하게 둔다 */
+.feed-stage.scanning .post-list {
+  opacity: 0.45;
+  transition: opacity 0.25s ease;
+}
+
+.scan-line {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  height: 2px;
+  z-index: 4;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #6c5ce7 18%, #6c5ce7 82%, transparent);
+  box-shadow: 0 0 14px rgba(108, 92, 231, 0.75);
+  animation: scan-sweep 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes scan-sweep {
+  0% { top: 0; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* 스캔 중 - 카드가 위에서부터 차례로 잠깐 밝아지며 "훑고 지나가는" 느낌을 만든다.
+   스캔 줄 하나만으로는 장식처럼 보여서, 카드가 반응해야 읽히는 대상이라는 게 전달된다. */
+.feed-stage.scanning .post-list > * {
+  animation: scan-touch 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--scan-i, 0) * 90ms);
+}
+
+@keyframes scan-touch {
+  0%, 100% { opacity: 0.4; transform: none; }
+  18% { opacity: 1; transform: translateX(3px); }
+  36% { opacity: 0.55; transform: none; }
+}
+
+/* 몇 개를 보고 있는지 숫자로 알려준다 - 막연한 로딩이 아니라 작업 중임이 분명해진다 */
+.scan-label {
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(74, 63, 143, 0.94);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(74, 63, 143, 0.3);
+}
+
+.scan-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation: scan-blink 1s ease-in-out infinite;
+}
+
+@keyframes scan-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-stage.scanning .post-list > *,
+  .scan-dot {
+    animation: none;
+  }
+}
+
+/* 추천 상태 칩 - 지금 무엇을 보고 있고 어떻게 끄는지 알려준다 */
+.pick-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border: 1px solid rgba(108, 92, 231, 0.28);
+  border-radius: 10px;
+  background: #f1eefc;
+}
+
+.sub-filters {
+  display: contents;   /* 감싸기만 하고 기존 가로 배치를 그대로 둔다 */
+}
+
+.sub-filters.dimmed :deep(.chip),
+.sub-filters.dimmed :deep(button) {
+  opacity: 0.42;
+}
+
+.sub-filters.dimmed:hover :deep(.chip),
+.sub-filters.dimmed:hover :deep(button) {
+  opacity: 1;
+}
+
+.folder-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.pick-chip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4a3f8f;
+  word-break: keep-all;
+}
+
+.pick-chip-clear {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(74, 63, 143, 0.3);
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pick-chip-clear:hover {
+  background: rgba(74, 63, 143, 0.07);
+}
+
+.pickchip-enter-active,
+.pickchip-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.pickchip-enter-from,
+.pickchip-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-line {
+    animation: none;
+    top: 0;
+  }
+
+  .feed-stage.scanning .post-list,
+  .pickchip-enter-active,
+  .pickchip-leave-active {
+    transition: none;
+  }
+}
+
 .sync-sort-row {
   display: flex;
   align-items: center;
@@ -901,15 +1206,29 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   margin-bottom: 20px;
 }
 
-.sync-sort-row :deep(.sort-dropdown-wrapper) {
+/* 추천 칩이 있으면 그 칩이 왼쪽을 차지하고 동기화·정렬이 오른쪽으로 밀린다.
+   칩이 없을 때는 동기화가 왼쪽 끝을 맡는다. */
+/* 남는 가로 공간을 칩이 채워서 동기화 버튼 바로 왼쪽까지 이어진다 */
+.sync-sort-row .pick-chip {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 동기화 시각과 정렬은 한 덩어리로 묶어 항상 오른쪽 끝에 붙여둔다 */
+.sync-sort-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-left: auto;
 }
 
 .last-sync {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
   background: #ffffff;
   border-radius: 10px;
-  padding: 9px 16px;
+  padding: 0 16px;
   font-size: 13px;
   color: #636e72;
   box-shadow: 0 2px 8px rgba(26, 26, 46, 0.05);

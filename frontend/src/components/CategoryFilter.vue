@@ -2,14 +2,26 @@
 // 카테고리별 필터링 칩
 import { computed, onMounted } from 'vue'
 import { usePostsStore } from '../stores/posts'
+import { useFoldersStore } from '../stores/folders'
 import { CATEGORIES } from '../constants/categories'
 
 // counts를 주면 스토어 대신 넘겨받은 목록 기준으로 동작 (AI 추천 탭용 - { all, [카테고리 value]: 개수 }, 상위 카테고리는 항상 전부 표시)
 const props = defineProps({ counts: { type: Object, default: null }, selected: { type: String, default: null } })
 const emit = defineEmits(['select'])
 const postsStore = usePostsStore()
+const foldersStore = useFoldersStore()
 const local = computed(() => !!props.counts)
-const isActive = (value) => (local.value ? (props.selected ?? null) === value : (postsStore.category ?? null) === value)
+
+// 내 폴더를 열어 둔 동안은 카테고리가 실제로 적용되지 않는다.
+// 그런데도 "전체"가 켜져 보이면 화면이 거짓말을 하게 되므로, 그동안은 아무것도 켜지 않고 흐리게 둔다.
+// (칩을 누르면 폴더가 풀리고 그 카테고리로 넘어간다 - FeedView의 category watch)
+const dimmed = computed(() => !local.value && !!foldersStore.selected)
+
+const isActive = (value) => {
+  if (local.value) return (props.selected ?? null) === value
+  if (dimmed.value) return false
+  return (postsStore.category ?? null) === value
+}
 const countOf = (value) => {
   if (local.value) return props.counts[value ?? 'all'] ?? 0
   if (value === null) return postsStore.hasLink ? postsStore.totalLinkCount : postsStore.totalPostCount
@@ -28,7 +40,7 @@ function select(value) {
 </script>
 
 <template>
-  <nav class="category-filter">
+  <nav class="category-filter" :class="{ dimmed }">
     <div class="chip" :class="{ active: isActive(null) }" @click="select(null)">
       <span class="label">전체</span><span class="count">({{ countOf(null) }})</span>
     </div>
@@ -55,6 +67,14 @@ function select(value) {
   background: #ffffff;
   border: 1px solid rgba(26, 26, 46, 0.1);
   cursor: pointer;
+}
+
+.category-filter.dimmed .chip {
+  opacity: 0.42;   /* 폴더를 보는 중 - 지금은 안 쓰이는 필터라는 표시 */
+}
+
+.category-filter.dimmed .chip:hover {
+  opacity: 1;      /* 누르면 폴더가 풀리고 이 카테고리로 간다는 힌트 */
 }
 
 .chip.active {
@@ -90,7 +110,15 @@ function select(value) {
     background: transparent;
   }
 
-  .chip.active {
+  .category-filter.dimmed .chip {
+  opacity: 0.42;   /* 폴더를 보는 중 - 지금은 안 쓰이는 필터라는 표시 */
+}
+
+.category-filter.dimmed .chip:hover {
+  opacity: 1;      /* 누르면 폴더가 풀리고 이 카테고리로 간다는 힌트 */
+}
+
+.chip.active {
     background: #4a3f8f;
     color: #ffffff;
     border-color: transparent;
