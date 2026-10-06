@@ -142,7 +142,9 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // category: 지금 보고 있는 피드의 카테고리(null이면 전체) - 검색 범위를 그 안으로 제한한다
-  async function ask(question, context, category = null) {
+  // limit: "더 찾아볼까요?"를 수락했을 때만 채워진다 (서버가 offer로 알려준 값)
+  // postId: 상세 페이지에서 물을 때만. 있으면 서버가 검색을 건너뛰고 그 글만 다룬다
+  async function ask(question, context, category = null, limit = null, postId = null) {
     const q = question.trim()
     if (!q || status.value) return
     if (remaining.value <= 0) return askLimit()
@@ -162,7 +164,7 @@ export const useChatStore = defineStore('chat', () => {
     const typer = createTyper(current)
 
     try {
-      for await (const ev of streamChat({ question: q, context, category })) {
+      for await (const ev of streamChat({ question: q, context, category, limit, postId })) {
         if (ev.type === 'status') status.value = { tool: ev.tool, text: ev.text } // 한 줄의 문구가 단계마다 바뀜
         else if (ev.type === 'token') {
           status.value = null // 글자가 나오기 시작하면 로더는 사라짐
@@ -170,8 +172,18 @@ export const useChatStore = defineStore('chat', () => {
         } else if (ev.type === 'sources') await applySources(current, ev.posts, category, q)
         else if (ev.type === 'keywords') current.keywords = ev.items
         else if (ev.type === 'offer') {
-          // "추천해 드릴까요?" → 네를 눌러야 그때 검색 모드로 넘어감
-          askUser(ev.question, [{ label: '네, 추천해 주세요', value: 'yes' }, { label: '아니요', value: 'no' }], (o) => o.value === 'yes' && ask(ev.query, context, category))
+          // "추천해 드릴까요?" → 네를 눌러야 그때 검색 모드로 넘어감.
+          // scope === 'all' 이면 탭 안에 답이 없어서 전체로 넓히는 경우다.
+          const toAll = ev.scope === 'all'
+          const more = ev.scope === 'more'
+          const yes = toAll ? '네, 전체에서 찾아주세요' : more ? '네, 더 보여주세요' : '네, 추천해 주세요'
+          askUser(ev.question, [{ label: yes, value: 'yes' }, { label: '아니요', value: 'no' }], (o) => {
+            if (o.value !== 'yes') return
+            // 검색만 넓히면 피드는 그대로 학습자료 탭이라, 추천받은 글이 화면에 안 보인다.
+            // 탭도 같이 전체로 돌린다 (사이드바 선택 표시도 이 값을 본다).
+            if (toAll) usePostsStore().setCategory(null)
+            ask(ev.query, toAll ? '전체 피드' : context, toAll ? null : category, ev.limit ?? null)
+          })
         }
         else if (ev.type === 'save_proposal') {
           current.proposal = { folders: ev.folders, postIds: ev.postIds, state: 'pending' }

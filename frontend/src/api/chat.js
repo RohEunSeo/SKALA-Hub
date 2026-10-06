@@ -25,13 +25,25 @@ function authHeaders() {
  * 실패하면(서버 꺼짐·네트워크) allowed:false - 눌러도 안 되는 버튼은 안 보이는 게 낫다.
  */
 export async function fetchAccess() {
-  if (!AI_BASE_URL) return { allowed: false, limit: 0, remaining: 0 }
+  const 닫힘 = { allowed: false, limit: 0, remaining: 0 }
+  if (!AI_BASE_URL) {
+    console.warn('[chat] VITE_AI_API_BASE_URL이 없어 챗봇을 숨깁니다.')
+    return 닫힘
+  }
   try {
     const res = await fetch(`${AI_BASE_URL}/api/chat/access`, { headers: authHeaders() })
-    if (!res.ok) return { allowed: false, limit: 0, remaining: 0 }
+    if (!res.ok) {
+      console.warn(`[chat] 접근 확인 실패(HTTP ${res.status}) - 챗봇을 숨깁니다.`)
+      return 닫힘
+    }
     return await res.json()
   } catch {
-    return { allowed: false, limit: 0, remaining: 0 }
+    // 서버가 안 떠 있을 때 버튼이 소리 없이 사라지면 원인을 찾을 수 없다.
+    console.warn(
+      `[chat] AI 서버(${AI_BASE_URL})에 연결하지 못해 챗봇을 숨깁니다.\n` +
+      '  개발 중이라면:  cd ai && uv run uvicorn main:app --reload --port 8000',
+    )
+    return 닫힘
   }
 }
 
@@ -56,14 +68,27 @@ export async function sendFeedback(logId, value, reason = null) {
 }
 
 // 첫 인사 - LLM을 쓰지 않아 비용 0, 한도 차감 없음.
-// 칩 3개는 각각 서버의 검색/키워드/트렌드 경로를 타도록 고른 문구다.
+//
+// 칩은 **지금 실제로 잘 되는 것만** 올린다.
+// 예전엔 3개 중 2개가 키워드/트렌드 경로여서 "아직 준비 중이에요"가 나왔다.
+// 사용자가 처음 누르는 버튼이 그러면 첫인상이 거기서 끝난다.
+//
+// 고르는 기준: **검색창으로는 못 찾는 질문**만 올린다.
+// "SQLD 자료 추천해줘"는 검색창에 SQLD만 쳐도 나오고, "인기 글"은 홈 순위보드에 이미 있다.
+// 그런 걸 칩으로 두면 "검색창 있는데 왜 챗봇?"이라는 질문에 답하지 못한다.
+//
+// 아래 셋은 전부 검색창(ILIKE) 결과가 **0건**인데 챗봇은 찾아낸다(실측):
+//   맥북 처음 세팅할 때…  → +0.46 맥북 생산성 앱 추천
+//   혼자 공부하기 힘든데…  → +0.43 가상 스터디룸 / Study Hub
+//   점심 뭐 먹을지 고민이야 → +0.37 판교 맛집 리스트
+// 말하듯이 물어도 된다는 것도 같이 보여준다.
 export async function fetchGreeting() {
   return {
     text: 'SKALA Hub에 올라온 글을 찾아서 요약해 드려요.\n어떤 정보를 찾고 계신가요?',
     chips: [
-      '이번 달 인기 게시글 추천해줘',
-      '요즘 게시글에 가장 많이 올라오는 키워드 알려줘',
-      '요즘 뜨는 주제의 글 모아줘',
+      '맥북 처음 세팅할 때 뭐 깔아야 해?',
+      '혼자 공부하기 힘든데 어떡하지?',
+      '점심 뭐 먹을지 고민이야',
     ],
   }
 }
@@ -105,7 +130,7 @@ async function* parseSSE(response) {
 }
 
 /** 질문 1건 처리 - 서버가 보내는 이벤트를 그대로 흘려보낸다. */
-export async function* streamChat({ question, context, category }) {
+export async function* streamChat({ question, context, category, limit, postId }) {
   if (!AI_BASE_URL) {
     yield { type: 'error', message: 'AI 서버 주소가 설정되지 않았어요. (VITE_AI_API_BASE_URL)' }
     return
@@ -116,7 +141,10 @@ export async function* streamChat({ question, context, category }) {
     response = await fetch(`${AI_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ question, context, category }),
+      // limit은 "더 찾아볼까요?"를 수락했을 때만 실린다.
+      // 값은 서버가 offer로 알려준 것을 그대로 돌려보내는 것 - 화면이 정하지 않는다.
+      // postId: 상세 페이지에서 물으면 "지금 이 글"을 알려준다 (요약·비슷한 글에 쓰임)
+      body: JSON.stringify({ question, context, category, limit, post_id: postId }),
     })
   } catch {
     // 서버가 꺼져 있거나 네트워크가 끊긴 경우
