@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # --- 인증 (Step 7~) ---
     jwt_secret: str = ""
     frontend_url: str = "http://localhost:5173"
+    # CORS 허용 출처. 비우면 frontend_url 하나만 허용한다.
+    # frontend_url에 콤마를 넣어 해결하지 않는 이유: 그 키는 Spring과 공유하고
+    # Spring은 List.of(frontendUrl)로 단일 값만 받아서 콤마가 들어가면 깨진다.
+    cors_origins: str = ""
 
     # --- 챗봇 운영 (1차 베타) ---
     chat_daily_limit: int = 10  # 하루 LLM 호출 수. 비용이 나가면 이 값만 줄인다
@@ -76,6 +80,14 @@ class Settings(BaseSettings):
         """실행 위치와 무관하게 항상 ai/data/faiss_index 를 가리킨다."""
         path = Path(self.faiss_index_path)
         return path if path.is_absolute() else AI_DIR / path
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        """CORS 허용 목록. cors_origins가 비면 frontend_url을 쓴다. 로컬은 항상 허용."""
+        given = [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
+        if not given:
+            given = [self.frontend_url.rstrip("/")]
+        return list(dict.fromkeys(given + ["http://localhost:5173"]))
 
     @property
     def allowed_classes(self) -> set[str]:

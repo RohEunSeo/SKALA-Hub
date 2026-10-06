@@ -19,7 +19,7 @@ app = FastAPI(title="SKALA Hub AI", docs_url="/docs")
 # Authorization 헤더를 실어 보내야 해서 allow_headers에 포함된다.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:5173"],
+    allow_origins=settings.cors_allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
