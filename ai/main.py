@@ -28,6 +28,22 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/api")
 
 
+@app.on_event("startup")
+def warn_bad_models() -> None:
+    """설정한 모델 이름이 틀렸으면 뜰 때 바로 알린다.
+
+    오타는 404를 내는데 404는 폴백이 받아주지 않아서, 조용히 두면
+    "왜 챗봇이 전부 에러지?"를 한참 헤매게 된다.
+    """
+    from app.core.generator import check_models
+
+    bad = check_models()
+    if bad:
+        logging.getLogger("startup").error(
+            "⚠️ .env의 모델 이름이 잘못됐습니다: %s — 챗봇이 404로 멈춥니다", ", ".join(bad)
+        )
+
+
 @app.get("/health")
 def health() -> dict:
     """Render 헬스체크 + 콜드스타트 깨우기용. 인덱스가 있는지도 같이 알려준다."""

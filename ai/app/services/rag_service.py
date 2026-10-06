@@ -9,7 +9,7 @@ from typing import AsyncIterator
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 
-from app.core.generator import PROMPT, format_docs, get_llm
+from app.core.generator import PROMPT, SUMMARY_PROMPT, format_docs, get_llm
 from app.core.retriever import asearch_with_scores, search_with_scores
 
 DEFAULT_K = 5  # 몇 개를 근거로 줄지. 늘리면 비용↑ + 중간 글을 놓치기 쉬움 (S5에서 스윕)
@@ -58,13 +58,33 @@ async def search(question: str, k: int = DEFAULT_K, category: str | None = None)
     return docs
 
 
-async def stream_answer(question: str, docs: list[Document]) -> AsyncIterator[str]:
+async def stream_answer(
+    question: str, docs: list[Document], tracker=None
+) -> AsyncIterator[str]:
     """답변을 조각조각 흘려보낸다.
 
     answer()처럼 통째로 기다리면 2초간 화면이 멈춘다.
     화면은 조각을 이어붙이므로(current.text += ev.text) **차이분만** 넘긴다.
+
+    tracker: generator.ModelTracker. 폴백이 걸렸을 때 **실제로 응답한 모델**을 받아온다.
     """
     chain = PROMPT | get_llm() | StrOutputParser()
-    async for piece in chain.astream({"context": format_docs(docs), "question": question}):
+    config = {"callbacks": [tracker]} if tracker else {}
+    async for piece in chain.astream(
+        {"context": format_docs(docs), "question": question}, config=config
+    ):
+        if piece:
+            yield piece
+
+
+async def stream_summary(content: str, tracker=None) -> AsyncIterator[str]:
+    """글 하나를 요약해 흘려보낸다. **검색을 거치지 않는다.**
+
+    검색 경로(stream_answer)와 나란히 두는 이유 - 둘 다 "LLM을 부르는 곳"이라
+    모델 교체나 폴백이 한 군데서 끝나야 한다(get_llm 하나만 본다).
+    """
+    chain = SUMMARY_PROMPT | get_llm() | StrOutputParser()
+    config = {"callbacks": [tracker]} if tracker else {}
+    async for piece in chain.astream({"content": content}, config=config):
         if piece:
             yield piece

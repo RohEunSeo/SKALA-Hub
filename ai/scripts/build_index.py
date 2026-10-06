@@ -40,8 +40,18 @@ def main() -> None:
 
     print(f"\n숫자로 바꾸는 중… (1~2분)")
     started = time.time()
-    build_index(chunks)
+    saved = build_index(chunks)
     took = time.time() - started
+
+    if settings.vector_store == "pgvector":
+        # 넣은 뒤 실제로 몇 행이 들어갔는지 DB에 되물어 확인한다.
+        # "넣었다고 했는데 0행"이면 바로 알아야 한다
+        from app.db import fetch_all
+        n = fetch_all("select count(*) as n from post_chunks")[0]["n"]
+        print(f"\n완료 ({took:.0f}초) → Supabase post_chunks 테이블")
+        print(f"  저장 요청 {saved}행 / 실제 {n}행 {'✅' if n == saved else '⚠️ 다릅니다'}")
+        print("\n다음: .env 의 VECTOR_STORE=pgvector 로 바꾸고 검색을 비교해 보세요")
+        return
 
     files = sorted(settings.faiss_dir.glob("*"))
     total = sum(f.stat().st_size for f in files)

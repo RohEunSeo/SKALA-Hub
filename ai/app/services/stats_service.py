@@ -73,3 +73,20 @@ def _to_source(row: dict) -> dict:
         "category": row.get("category") or "",
         "reactions": row.get("reaction_count") or 0,
     }
+
+
+ONE_POST_SQL = """
+SELECT id, ai_title, content, category, reaction_count, slack_ts
+FROM posts
+WHERE id = %(id)s AND is_deleted = false
+"""
+
+
+def get_post(post_id: int) -> dict | None:
+    """글 하나를 **원본 그대로** 가져온다.
+
+    검색 경로는 조각(600자)만 LLM에 주지만 여기는 원본 전체를 준다.
+    글 하나를 요약하는 데 조각만 보면 뒷부분을 놓친다 (가장 긴 글이 2,927자).
+    """
+    rows = fetch_all(ONE_POST_SQL, {"id": post_id})
+    return rows[0] if rows else None

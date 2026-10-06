@@ -13,6 +13,7 @@ from langchain_core.vectorstores import VectorStore
 from langchain_openai import OpenAIEmbeddings
 
 from app.config import settings
+from app.db import fetch_all, get_connection
 
 
 def get_embeddings() -> OpenAIEmbeddings:
@@ -34,17 +35,126 @@ def _unsupported(name: str) -> VectorStore:
     )
 
 
-def build_index(chunks: list[Document]) -> VectorStore:
-    """조각들을 숫자로 바꿔 인덱스를 만들고 저장한다. 비용이 드는 건 여기뿐이다."""
+def build_index(chunks: list[Document]) -> int:
+    """조각들을 숫자로 바꿔 저장한다. 비용이 드는 건 여기뿐이다. 반환: 저장한 조각 수."""
+    if settings.vector_store == "pgvector":
+        return _pg_build(chunks)
     if settings.vector_store != "faiss":
-        return _unsupported(settings.vector_store)
+        _unsupported(settings.vector_store)
 
     from langchain_community.vectorstores import FAISS
 
     store = FAISS.from_documents(chunks, get_embeddings())
     settings.faiss_dir.parent.mkdir(parents=True, exist_ok=True)
     store.save_local(str(settings.faiss_dir))
-    return store
+    return len(chunks)
+
+
+# --- pgvector ---------------------------------------------------------------
+# 테이블은 backend/post_chunks.sql 이 만든다.
+# LangChain의 PGVector 클래스를 쓰지 않는 이유 둘:
+#  1) 그 클래스는 metadata를 JSONB 덩어리로 넣는데, 우리는 category를 **컬럼**으로 둬야
+#     "필터 + 유사도"를 한 쿼리에서 빠르게 할 수 있다. 그게 pgvector를 쓰는 이유 자체다
+#  2) 나중에 Spring 동기화가 새 글의 임베딩을 직접 채울 계획인데,
+#     LangChain이 테이블 모양을 정해버리면 끼어들기 어렵다
+# 호출부는 search_with_scores()만 보므로 안을 갈아끼워도 다른 파일은 바뀌지 않는다.
+
+_INSERT_SQL = """
+INSERT INTO post_chunks (post_id, chunk_index, chunk_total, content, embedding)
+VALUES (%(post_id)s, %(chunk_index)s, %(chunk_total)s, %(content)s, %(embedding)s)
+ON CONFLICT (post_id, chunk_index) DO UPDATE SET
+    content = EXCLUDED.content, embedding = EXCLUDED.embedding, indexed_at = now()
+"""
+
+# 분류·태그·반응수는 **여기서 그때그때 읽는다**(복사해두지 않는다).
+# 관리자가 /admin에서 분류를 고쳐도 자동 반영되고, is_deleted로 지운 글은 저절로 빠진다.
+# 커리큘럼 라벨도 loader와 같은 조건(is_excluded=false)으로 붙인다.
+#
+# <=> 는 코사인 거리다 (0이면 같은 방향, 1이면 무관, 2면 정반대).
+# FAISS의 L2 거리와 눈금이 다르다 - 그래서 로그에 index_version을 같이 남긴다.
+_SEARCH_SQL = """
+SELECT c.post_id, c.chunk_index, c.chunk_total, c.content,
+       p.category, p.tags, p.ai_title, p.slack_ts,
+       p.reaction_count, p.created_at AS post_created_at,
+       cur.stage, cur.sub_category,
+       c.embedding <=> %(q)s::vector AS distance
+FROM post_chunks c
+JOIN posts p ON p.id = c.post_id AND p.is_deleted = false
+LEFT JOIN curriculum_posts cur
+       ON cur.post_id = c.post_id AND cur.is_excluded = false
+WHERE (%(category)s::varchar IS NULL OR p.category = %(category)s)
+ORDER BY c.embedding <=> %(q)s::vector
+LIMIT %(k)s
+"""
+
+
+def _vector_literal(values: list[float]) -> str:
+    """psycopg는 vector 타입을 모른다. '[0.1,0.2,...]' 문자열로 넘기고 ::vector로 캐스팅한다."""
+    return "[" + ",".join(f"{v:.8f}" for v in values) + "]"
+
+
+def _pg_build(chunks: list[Document]) -> int:
+    """조각 전체를 임베딩해서 post_chunks에 넣는다 (이미 있으면 덮어쓴다).
+
+    본문과 숫자만 넣는다. 분류·태그는 검색할 때 posts에서 읽으므로 여기 두지 않는다.
+    """
+    vectors = get_embeddings().embed_documents([c.page_content for c in chunks])
+    rows = [
+        {
+            "post_id": c.metadata["post_id"],
+            "chunk_index": c.metadata.get("chunk_index", 0),
+            "chunk_total": c.metadata.get("chunk_total", 1),
+            "content": c.page_content,
+            "embedding": _vector_literal(v),
+        }
+        for c, v in zip(chunks, vectors)
+    ]
+    with get_connection() as conn, conn.cursor() as cur:
+        # 지운 글의 조각이 남지 않게 통째로 비우고 다시 넣는다.
+        # 412개 규모에선 증분보다 이게 단순하고 안전하다 (증분은 글이 수만 개일 때 의미가 있다).
+        cur.execute("TRUNCATE post_chunks")
+        cur.executemany(_INSERT_SQL, rows)
+    return len(rows)
+
+
+def _pg_rows_to_docs(rows: list[dict]) -> list[Document]:
+    """DB 행을 FAISS 경로와 **똑같은 모양**의 Document로 되돌린다.
+
+    모양이 다르면 rag_service·generator가 저장소에 따라 다르게 동작하게 된다.
+    """
+    docs = []
+    for r in rows:
+        created = r.get("post_created_at")
+        docs.append(Document(
+            page_content=r["content"],
+            metadata={
+                "post_id": r["post_id"],
+                "slack_ts": r.get("slack_ts") or "",
+                "ai_title": r.get("ai_title") or "",
+                "category": r.get("category") or "",
+                "tags": list(r.get("tags") or []),
+                "created_at": created.isoformat() if created else "",
+                "reaction_count": r.get("reaction_count") or 0,
+                "reply_count": 0,  # 사람 댓글 수는 검색에 쓰지 않는다 (loader가 따로 세는 값)
+                "stage": r.get("stage") or "",
+                "sub_category": r.get("sub_category") or "",
+                "chunk_index": r.get("chunk_index", 0),
+                "chunk_total": r.get("chunk_total", 1),
+                "score": float(r["distance"]),
+            },
+        ))
+    return docs
+
+
+def _pg_search(question: str, k: int, category: str | None) -> list[Document]:
+    """필터와 유사도를 한 쿼리에서 처리한다.
+
+    FAISS는 '전체에서 가까운 fetch_k개를 뽑고 거른다'라서, 그 안에 못 들면 놓친다.
+    여기서는 해당 카테고리 전체를 보고 고르므로 빠뜨리지 않는다.
+    """
+    q = _vector_literal(get_embeddings().embed_query(question))
+    rows = fetch_all(_SEARCH_SQL, {"q": q, "category": category, "k": k})
+    return _pg_rows_to_docs(rows)
 
 
 @lru_cache(maxsize=1)
@@ -110,6 +220,8 @@ def search_with_scores(question: str, k: int = 5, category: str | None = None) -
     벡터 저장소를 직접 부르는 곳은 이 함수와 아래 비동기 쌍둥이뿐이다.
     pgvector로 옮길 때 고칠 곳도 여기까지다.
     """
+    if settings.vector_store == "pgvector":
+        return _pg_search(question, k, category)
     if settings.vector_store != "faiss":
         _unsupported(settings.vector_store)
     pairs = load_index().similarity_search_with_score(question, **_search_kwargs(k, category))
@@ -120,6 +232,9 @@ async def asearch_with_scores(
     question: str, k: int = 5, category: str | None = None
 ) -> list[Document]:
     """search_with_scores의 비동기 버전. 서버(FastAPI)는 이쪽을 쓴다."""
+    if settings.vector_store == "pgvector":
+        # DB 왕복이라 동기 함수지만, 412행 조회라 수 밀리초다. 체감 차이가 없어 그대로 쓴다.
+        return _pg_search(question, k, category)
     if settings.vector_store != "faiss":
         _unsupported(settings.vector_store)
     pairs = await load_index().asimilarity_search_with_score(

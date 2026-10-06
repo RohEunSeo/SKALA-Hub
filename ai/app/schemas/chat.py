@@ -20,6 +20,13 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     context: str = "전체 피드"
     category: str | None = None
+    # 몇 개를 찾을지. 비우면 서버 기본값(5).
+    # "더 찾아볼까요?"를 수락했을 때만 채워져 오고, 그 값은 **서버가 offer로 알려준 것**이다
+    # (화면에 숫자를 박아두면 서버에서 바꿔도 안 바뀐다).
+    limit: int | None = Field(default=None, ge=1, le=50)
+    # 상세 페이지에서 챗봇을 열면 "지금 이 글을 보고 있다"를 알려준다.
+    # 이게 있으면 벡터 검색을 건너뛰고 그 글만 다룬다 - 엉뚱한 글이 섞일 수가 없다.
+    post_id: int | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -97,6 +104,12 @@ def clarify(question: str, options: list[dict[str, str]]) -> str:
     return sse({"type": "clarify", "question": question, "options": options})
 
 
-def offer(question: str, query: str) -> str:
-    """후속 제안. "네"를 누르면 query 문장으로 다시 물어본다 (stores/chat.js:116)."""
-    return sse({"type": "offer", "question": question, "query": query})
+def offer(question: str, query: str, scope: str | None = None, limit: int | None = None) -> str:
+    """후속 제안. "네"를 누르면 query 문장으로 다시 물어본다 (stores/chat.js).
+
+    scope="all" 이면 **카테고리 필터를 풀고** 다시 묻는다.
+    탭 안에 답이 없어서 전체로 넓히는 경우에 쓴다 - 안 그러면 같은 탭에서 또 못 찾는다.
+    scope="more" 면 같은 조건으로 limit개까지 더 찾는다.
+    """
+    return sse({"type": "offer", "question": question, "query": query,
+                "scope": scope, "limit": limit})

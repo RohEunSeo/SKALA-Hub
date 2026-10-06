@@ -23,7 +23,13 @@ class Settings(BaseSettings):
 
     # --- 생성 모델 (교체 지점은 core/generator.py 한 곳) ---
     llm_provider: str = "google"  # google | anthropic
-    llm_model: str = "gemini-3.5-flash-lite"  # 2.5는 신규 사용자에게 닫힘(404)
+    llm_model: str = "gemini-3.5-flash-lite"  # 2.5-flash-lite는 신규 사용자에게 닫힘(404)
+    # 1순위가 한도 초과(429)면 순서대로 넘어간다. 무료 한도는 **모델마다 따로** 센다.
+    # 주의: 이름에 -latest가 붙은 건 **별칭**이라 본 모델과 쿼터를 공유한다 → 넣어도 소용없다
+    llm_fallbacks: str = "gemini-3.1-flash-lite,gemini-3.5-flash"
+    # 0으로 둬야 한도 초과 시 **즉시** 다음 모델로 넘어간다.
+    # 기본값이면 구글 클라이언트가 내부적으로 재시도하느라 폴백까지 37초가 걸렸다(실측).
+    llm_retries: int = 0
     gemini_api_key: str = ""
     claude_api_key: str = ""
 
@@ -75,6 +81,18 @@ class Settings(BaseSettings):
     def allowed_classes(self) -> set[str]:
         """공개할 반 목록. 비어 있으면 '제한 없음'을 뜻한다."""
         return {c.strip() for c in self.chat_allowed_classes.split(",") if c.strip()}
+
+    @property
+    def fallback_models(self) -> list[str]:
+        """1순위 다음에 시도할 모델들. 1순위와 중복되는 건 뺀다."""
+        seen = {self.llm_model}
+        out = []
+        for m in self.llm_fallbacks.split(","):
+            m = m.strip()
+            if m and m not in seen:
+                seen.add(m)
+                out.append(m)
+        return out
 
     @property
     def allowed_users(self) -> set[str]:

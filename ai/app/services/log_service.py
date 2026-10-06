@@ -86,6 +86,16 @@ def can_use_chat(slack_id: str, scope: dict[str, Any] | None) -> bool:
     return True
 
 
+def is_unlimited(scope: dict[str, Any] | None) -> bool:
+    """하루 한도를 적용하지 않을 사람.
+
+    관리자는 면제한다 - 기능을 확인하려면 하루에 수십 번 물어봐야 하는데,
+    10번에 막히면 테스트 자체가 안 된다. 횟수는 면제해도 **로그는 그대로 남으므로**
+    누가 얼마나 썼는지는 chat_logs에서 그대로 보인다(비용이 숨지 않는다).
+    """
+    return bool(scope) and scope.get("role") == "admin"
+
+
 def used_today(slack_id: str) -> int:
     """오늘 LLM을 부른 횟수. 조회가 실패하면 0을 돌려줘 통과시킨다."""
     try:
@@ -106,6 +116,7 @@ def save(
     answer: str | None = None,
     abstained: bool = False,
     llm_called: bool = False,
+    model: str | None = None,
     latency_ms: int | None = None,
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
@@ -125,7 +136,8 @@ def save(
         "answer": answer,
         "abstained": abstained,
         "llm_called": llm_called,
-        "model": settings.llm_model if llm_called else None,
+        # 폴백이 걸리면 설정값과 다를 수 있다. 실제 응답 모델을 우선한다.
+        "model": (model or settings.llm_model) if llm_called else None,
         "index_version": settings.index_version,
         "latency_ms": latency_ms,
         "prompt_tokens": prompt_tokens,
