@@ -59,13 +59,6 @@ ai/data/
 # 에디터 작업공간 설정 - 수업 교재 폴더의 로컬 경로가 들어 있다
 ai/app/skala-hub.code-workspace
 
-# 데모 영상 (녹화 원본/렌더 결과/로그인 세션은 로컬 전용)
-video/node_modules/
-video/raw/
-video/out/
-video/auth.json
-video/public/clips/
-video/public/timeline.json
 
 # Python (ai/ RAG 서버)
 .venv/
@@ -74,7 +67,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# 영상 제작용 로컬 작업 폴더 (972MB, 인증 토큰 포함)
+# 데모 영상 제작 폴더. 하위만 거르지 않고 통째로 제외한다 -
+# video/auth.json에 로그인 토큰이 들어 있고 이 저장소는 public이다.
 video/
 
 # Cloud Run 배포용 환경변수 파일 (비밀값 포함 - 루트 .env에서 생성됨)
