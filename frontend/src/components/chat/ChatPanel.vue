@@ -1,5 +1,7 @@
 <script setup>
-// AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 저장 제안 / 👍👎 피드백 / 남은 횟수.
+// AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 👍👎 피드백 / 남은 횟수.
+// 1차 베타(판교 5반)에서는 저장·폴더 기능이 꺼져 있다 - 서버가 save_proposal을 보내지 않으므로
+// 관련 블록(저장 제안/공유 드라이브)은 그려지지 않는다. 출처 카드의 저장 버튼은 제거했다.
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -34,8 +36,32 @@ const context = computed(() => {
   return cat ? `${cat.label} 피드` : '전체 피드'
 })
 
+// 상세 페이지(/posts/:id)에 있으면 그 글. 아니면 null.
+// 제목은 피드 목록에서 찾는다 - 추천 카드를 눌러 들어온 경우엔 항상 있다.
+// 주소를 직접 입력해 들어오면 제목만 비는데, 그때도 요약은 된다(서버가 글을 읽으므로).
+const openPost = computed(() => {
+  if (route.name !== 'post-detail') return null
+  const id = Number(route.params.id)
+  if (!id) return null
+  return { id, title: postsStore.posts.find((p) => p.id === id)?.aiTitle ?? '' }
+})
+
+// 탭 안에 있으면 그 탭 정보, 전체 피드면 null.
+// 챗봇은 보고 있는 탭 안에서만 찾는데, 그걸 모르면 "맥북 글이 왜 안 나오지?"가 된다.
+// (학습자료 탭에서 점심 질문을 하면 실제로 거절된다 - 실측)
+const scope = computed(() => CATEGORIES.find((c) => c.value === postsStore.category) ?? null)
+
 const userName = computed(() => authStore.user?.name ?? '')
 const isEmpty = computed(() => chatStore.messages.length === 0)
+
+// 상세 페이지에선 칩이 통째로 바뀐다.
+// 안내 문구로 "상세 페이지에선 요약도 됩니다"라고 설명하는 대신, 버튼이 바뀌어 있으면 된다.
+// 상세 페이지에서 쓰는 문구. 첫 화면 칩과 입력창 위 버튼이 같은 값을 보게 한 곳에 둔다.
+const POST_ACTIONS = ['이 글 요약해줘', '비슷한 글 찾아줘']
+
+const chips = computed(() =>
+  openPost.value ? POST_ACTIONS : (chatStore.greeting?.chips ?? []),
+)
 // 답변이 아직 비어 있는 마지막 AI 메시지에만 로더를 보여줌
 const lastId = computed(() => chatStore.messages[chatStore.messages.length - 1]?.id)
 
@@ -72,10 +98,29 @@ function goSaved(proposal) {
   else router.push('/mypage?tab=saved')
 }
 
-// 추천 결과를 피드의 "AI 추천" 탭에서 보기
+// 폴더에 담긴 글 보기 - 추천 결과 자체는 게시글 탭에서 이미 하이라이트돼 있다
 function goPicks() {
-  if (route.path === '/feed') uiStore.feedTab = 'ai'
-  else router.push('/feed?tab=ai')
+  if (route.path === '/feed') uiStore.feedTab = 'posts'
+  else router.push('/feed')
+}
+
+// 추천된 글이 하이라이트된 게시글 목록으로 이동
+function goFeed() {
+  if (route.path !== '/feed') router.push('/feed')
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+// 추천 카드 → 그 글 상세로. 챗봇 패널은 열어 둔 채 왼쪽 본문만 바뀐다.
+// 뒤로가기로 돌아오면 추천 상태(postsStore.pickedIds)가 스토어에 남아 있어 그대로 복원되고,
+// 라우터의 scrollBehavior가 보던 위치까지 되돌려 준다.
+//
+// 이미 상세를 보고 있으면 push가 아니라 **replace**로 바꾼다.
+// 패널에서 카드를 옮겨 누르는 건 "더 깊이 들어가는 것"이 아니라 "옆으로 옮겨 보는 것"이라,
+// 방문한 글마다 기록이 쌓이면 뒤로가기를 여러 번 눌러야 피드로 돌아온다.
+function goPost(id) {
+  const to = { name: 'post-detail', params: { id } }
+  if (route.name === 'post-detail') router.replace(to)
+  else router.push(to)
 }
 
 // 추천 글의 카테고리 → 이모지/색 (categories.js가 원본)
@@ -127,7 +172,10 @@ const REASONS = ['관련 없는 글이에요', '내용이 틀려요', '너무 �
 function send(text = input.value) {
   if (!text.trim()) return
   input.value = ''
-  chatStore.ask(text, context.value)
+  // 라벨(표시용)과 카테고리 값(검색 범위 제한용)을 함께 넘긴다.
+  // 전체 피드에서 물으면 전체에서, 카테고리 피드에서 물으면 그 안에서만 찾는다.
+  // 상세 페이지면 글 번호도 넘긴다. 서버는 이게 있을 때만 요약/비슷한글을 처리한다.
+  chatStore.ask(text, context.value, postsStore.category, null, openPost.value?.id ?? null)
 }
 
 function onKeydown(e) {
@@ -204,9 +252,18 @@ watch(
           </div>
           <h2>{{ userName ? `${userName}님, ` : '' }}무엇이 궁금하세요?</h2>
           <p v-if="chatStore.greeting" class="cp-greeting">{{ chatStore.greeting.text }}</p>
+          <!-- 지금 보고 있는 화면을 알려준다. 전체 피드면 안 띄운다(설명할 게 없다) -->
+          <p v-if="openPost" class="cp-scope">
+            <span class="cp-scope-tag">📄 {{ openPost.title || '이 글' }}</span>
+            을 보고 있어요
+          </p>
+          <p v-else-if="scope" class="cp-scope">
+            <span class="cp-scope-tag">{{ scope.icon }} {{ scope.label }}</span>
+            안에서만 찾고 있어요 · 없으면 전체에서도 찾아드릴게요
+          </p>
         </div>
-        <div v-if="chatStore.greeting" class="cp-chips">
-          <button v-for="chip in chatStore.greeting.chips" :key="chip" class="cp-chip" @click="send(chip)">{{ chip }}</button>
+        <div v-if="chips.length" class="cp-chips">
+          <button v-for="chip in chips" :key="chip" class="cp-chip" @click="send(chip)">{{ chip }}</button>
         </div>
       </div>
 
@@ -233,7 +290,7 @@ watch(
           <!-- 출처 카드: 답변의 근거가 된 글 -->
           <!-- 키워드 집계 결과: 누르면 그 키워드로 바로 검색 -->
           <div v-if="msg.keywords" class="kw-row">
-            <button v-for="k in msg.keywords" :key="k.word" class="kw" @click="send(`'${k.word}' 관련 글 모아줘`)">
+            <button v-for="k in msg.keywords" :key="k.word" class="kw" @click="send(`'${k.word}' 관련 글 추천해줘`)">
               # {{ k.word }}<span>{{ k.count }}</span>
             </button>
           </div>
@@ -243,9 +300,15 @@ watch(
             <article
               v-for="(p, i) in msg.sources"
               :key="p.id"
-              class="source-card"
+              class="source-card clickable"
               :class="{ saved: p.saved, enter: !msg.seen }"
               :style="{ '--delay': `${350 + i * 260}ms`, '--dy': `${(msg.sources.length - i) * 96}px` }"
+              role="button"
+              tabindex="0"
+              :aria-label="`${p.title} 게시글 보기`"
+              @click="goPost(p.id)"
+              @keydown.enter.prevent="goPost(p.id)"
+              @keydown.space.prevent="goPost(p.id)"
             >
               <div class="sc-main">
                 <strong>{{ p.title }}</strong>
@@ -254,17 +317,13 @@ watch(
                   <span class="sc-react">반응 {{ p.reactions }}</span>
                 </div>
               </div>
-              <button class="sc-save" :class="{ saved: p.saved }" @click="p.saved = !p.saved">
-                <svg v-if="p.saved" class="sc-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
-                {{ p.saved ? '저장됨' : '저장' }}
-              </button>
             </article>
             <!-- 왼쪽 아래 작은 폴더 - 카드가 여기서 위로 펼쳐져 나옴 / 오른쪽은 피드 AI 추천 탭 링크 -->
             <div class="results-foot">
               <div class="results-folder" aria-hidden="true">
                 <PaperFlipLoader :width="54" still />
               </div>
-              <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goPicks">피드에서 AI 추천 탭 보기 →</button>
+              <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goFeed">피드에서 보기</button>
             </div>
           </div>
 
@@ -280,6 +339,20 @@ watch(
               <button class="goto-saved" @click="goSaved(msg.proposal)">{{ msg.proposal.folderId ? '폴더 보러가기 →' : '저장한 글 보러가기 →' }}</button>
             </div>
             <div v-else-if="msg.proposal.state === 'declined'" class="answer">알겠어요. 저장하지 않을게요.</div>
+          </template>
+
+          <!-- 공유 드라이브 push: 저장 후 폴더를 공유 레포로 올릴지 제안 (사용자가 네를 눌러야 실행) -->
+          <template v-if="msg.push">
+            <div v-if="msg.push.state === 'pushing'" class="bubble ai loading">
+              <span class="lo-icon"><SaveLoader :width="52" :color="msg.push.color" /></span>
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="think">'{{ msg.push.folder }}' 공유 드라이브에 push하는 중</span>
+            </div>
+            <div v-else-if="msg.push.state === 'pushed'" class="answer saved-note">
+              '{{ msg.push.folder }}' 폴더를 공유 드라이브에 push했어요. 다른 교육생이 star하고 clone할 수 있어요.
+              <button class="goto-saved" @click="router.push(`/community/drive/${encodeURIComponent(msg.push.owner)}/${encodeURIComponent(msg.push.folder)}`)">레포 보러가기 →</button>
+            </div>
+            <div v-else-if="msg.push.state === 'declined'" class="answer">알겠어요. 나중에 레포 화면에서 push할 수도 있어요.</div>
           </template>
 
           <!-- 답변 아래 아이콘 행: 좋아요/별로예요(추천 결과만) + 복사. 👎면 이유 칩 -->
@@ -336,9 +409,14 @@ watch(
           <span class="ask-n">✎</span>직접 입력할게요
         </button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/10회 남음</div>
+      <!-- 상세 페이지 전용 빠른 버튼. 첫 화면 칩은 대화가 시작되면 사라지는데,
+           추천 카드를 눌러 들어오면 이미 대화가 있어서 칩을 못 본다. 그래서 여기 따로 둔다. -->
+      <div v-if="openPost && !chatStore.pending" class="cp-quick">
+        <button v-for="q in POST_ACTIONS" :key="q" class="cp-quick-btn" @click="send(q)">{{ q }}</button>
+      </div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
       <div class="cp-input">
-        <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />"{{ context }}" 탭 공유 중</div>
+        <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</div>
         <textarea
           ref="inputEl"
           v-model="input"
@@ -588,6 +666,31 @@ watch(
   color: #1a1a2e;
 }
 
+.cp-scope {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #8a86a0;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cp-scope-tag {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #efedf8;
+  color: #4a3f8f;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .cp-greeting {
   margin: 0;
   font-size: 14px;
@@ -783,6 +886,23 @@ watch(
   transform: rotate(45deg);
 }
 
+/* 누르면 그 글 상세로 간다는 신호 - 커서와 아주 작은 들림만. 추천 카드가 이미 애니메이션을
+   갖고 있어서 호버까지 요란하면 시선이 분산된다 */
+.source-card.clickable {
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.source-card.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(74, 63, 143, 0.14);
+}
+
+.source-card.clickable:focus-visible {
+  outline: 2px solid #6c5ce7;
+  outline-offset: 2px;
+}
+
 .source-card.saved {
   border-color: #cfc9f3;
   background: #faf9ff;
@@ -940,6 +1060,30 @@ watch(
 
 .cp-foot {
   padding: 0 14px 14px;
+}
+
+.cp-quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 14px 8px;
+}
+
+.cp-quick-btn {
+  padding: 5px 11px;
+  border: 1px solid #e8e6f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #4a3f8f;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cp-quick-btn:hover {
+  background: #f4f2fb;
+  border-color: #c9c3ea;
 }
 
 .cp-usage {

@@ -1,11 +1,11 @@
 // AI 챗봇 패널 상태 - 열림 여부, 대화 메시지, 진행 중 상태, 오늘 남은 횟수
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchGreeting, streamChat } from '../api/chat'
-import { fetchPosts } from '../api/posts'
-import { useAuthStore } from './auth'
+import { fetchAccess, fetchGreeting, sendFeedback, streamChat } from '../api/chat'
+import { usePostsStore } from './posts'
 import { useFoldersStore, FOLDER_COLORS } from './folders'
 import { useBookmarksStore } from './bookmarks'
+import { useCommunityStore } from './community'
 
 const HISTORY_KEY = 'skala-chat-history'
 const HISTORY_MAX = 20 // 이전 대화 보관 개수 (목업: 브라우저 localStorage, 서버 연동 시 서버 저장으로 교체)
@@ -17,13 +17,69 @@ const MAX_W = 640 // 패널 최대 폭
 const MIN_LEFT = 480 // 여유가 있을 때 왼쪽(사이드바+게시글)에 남겨둘 폭 - 창이 좁으면 MIN_W가 우선
 
 const FIRST_STEP = '질문 의도 분석 중'
-const DAILY_LIMIT = 10 // 목업 기본값 - 실제 연동 시 서버 usage 이벤트의 남은 횟수를 사용
+const DAILY_LIMIT = 10 // 첫 화면용 초기값. 실제 값은 서버가 알려준다 (/api/chat/access, usage 이벤트)
+
+// 공유 드라이브(커뮤니티 레포)는 아직 MVP 범위가 아니다.
+// 저장 플로우 자체는 그대로 두고 "push 할까요?" 제안만 끈다 - 만들 때 true로 바꾸면 된다.
+const SHOW_PUSH_OFFER = false
+
+// 받은 글자 덩어리를 한 글자씩 흘려보내는 타자기.
+// 너무 느리면 답답하고 너무 빠르면 뭉텅이로 보인다. 밀린 양이 많을수록 빨라지게 해서
+// 긴 답변도 끝까지 기다리지 않게 한다.
+const TYPE_MS = 14
+
+function createTyper(message) {
+  const queue = []
+  let timer = null
+
+  const tick = () => {
+    if (!queue.length) {
+      clearInterval(timer)
+      timer = null
+      return
+    }
+    // 밀린 글자가 많으면 한 번에 여러 글자 - 긴 답변이 하염없이 길어지지 않게
+    const take = Math.max(1, Math.ceil(queue.length / 60))
+    message.text += queue.splice(0, take).join('')
+  }
+
+  return {
+    push(chunk) {
+      queue.push(...chunk)
+      if (!timer) timer = setInterval(tick, TYPE_MS)
+    },
+    // 스트림이 끝나도 큐가 남아 있으면 마저 흘려보낸다
+    finish() {
+      return new Promise((resolve) => {
+        const wait = setInterval(() => {
+          if (queue.length) return
+          clearInterval(wait)
+          if (timer) { clearInterval(timer); timer = null }
+          resolve()
+        }, TYPE_MS)
+      })
+    },
+  }
+}
 
 export const useChatStore = defineStore('chat', () => {
   const isOpen = ref(false)
   const messages = ref([]) // { id, role: 'user'|'ai', text, sources?, proposal?, feedback?, error? }
   const status = ref(null) // 진행 중 도구 상태 { tool, text } - null이면 대기 중 아님
   const remaining = ref(DAILY_LIMIT)
+  const limit = ref(DAILY_LIMIT)
+  // 챗봇을 열어줄지는 **서버가 판단한다** (판교 5반 + 관리자). null = 아직 안 물어봄.
+  // 화면이 같은 규칙을 들고 있으면 서버 .env만 바꿨을 때 어긋나므로 여기선 결과만 보관한다.
+  const canUse = ref(null)
+
+  /** 앱이 뜰 때 한 번. 실패하면 allowed:false라 챗봇 버튼이 안 보인다. */
+  async function loadAccess() {
+    const a = await fetchAccess()
+    canUse.value = a.allowed
+    limit.value = a.limit || DAILY_LIMIT
+    remaining.value = a.remaining ?? DAILY_LIMIT
+    return a.allowed
+  }
   const elapsed = ref(0)
   const greeting = ref(null)
   // AI 추천 탭 - 챗봇이 추천한 게시글(피드의 PostCard로 그대로 렌더링), pickSeq가 늘면 피드가 그 탭으로 전환
@@ -85,13 +141,16 @@ export const useChatStore = defineStore('chat', () => {
     isOpen.value = false
   }
 
-  async function ask(question, context) {
+  // category: 지금 보고 있는 피드의 카테고리(null이면 전체) - 검색 범위를 그 안으로 제한한다
+  // limit: "더 찾아볼까요?"를 수락했을 때만 채워진다 (서버가 offer로 알려준 값)
+  // postId: 상세 페이지에서 물을 때만. 있으면 서버가 검색을 건너뛰고 그 글만 다룬다
+  async function ask(question, context, category = null, limit = null, postId = null) {
     const q = question.trim()
     if (!q || status.value) return
     if (remaining.value <= 0) return askLimit()
     pending.value = null // 새 질문을 직접 입력하면 기존 되묻기는 닫음
     messages.value.push({ id: ++seq, role: 'user', text: q })
-    const reply = { id: ++seq, role: 'ai', text: '', sources: null, proposal: null, feedback: null, error: false }
+    const reply = { id: ++seq, role: 'ai', text: '', sources: null, proposal: null, feedback: null, error: false, logId: null }
     messages.value.push(reply)
     const current = messages.value[messages.value.length - 1] // 반응형 프록시를 잡아서 갱신
     status.value = { tool: 'intent', text: FIRST_STEP }
@@ -100,25 +159,47 @@ export const useChatStore = defineStore('chat', () => {
     elapsed.value = 0
     const timer = setInterval(() => (elapsed.value = Math.floor((Date.now() - t0) / 1000)), 1000)
 
+    // 서버는 글자를 덩어리로 보낸다(Gemini가 그렇게 준다). 그대로 붙이면 뭉텅이로 나타난다.
+    // 큐에 쌓아두고 일정 간격으로 한 글자씩 꺼내 붙여 타이핑처럼 보이게 한다.
+    const typer = createTyper(current)
+
     try {
-      for await (const ev of streamChat({ question: q, context })) {
+      for await (const ev of streamChat({ question: q, context, category, limit, postId })) {
         if (ev.type === 'status') status.value = { tool: ev.tool, text: ev.text } // 한 줄의 문구가 단계마다 바뀜
         else if (ev.type === 'token') {
           status.value = null // 글자가 나오기 시작하면 로더는 사라짐
-          current.text += ev.text
-        } else if (ev.type === 'sources') await applySources(current, ev.posts)
+          typer.push(ev.text)
+        } else if (ev.type === 'sources') await applySources(current, ev.posts, category, q)
         else if (ev.type === 'keywords') current.keywords = ev.items
+        else if (ev.type === 'offer') {
+          // "추천해 드릴까요?" → 네를 눌러야 그때 검색 모드로 넘어감.
+          // scope === 'all' 이면 탭 안에 답이 없어서 전체로 넓히는 경우다.
+          const toAll = ev.scope === 'all'
+          const more = ev.scope === 'more'
+          const yes = toAll ? '네, 전체에서 찾아주세요' : more ? '네, 더 보여주세요' : '네, 추천해 주세요'
+          askUser(ev.question, [{ label: yes, value: 'yes' }, { label: '아니요', value: 'no' }], (o) => {
+            if (o.value !== 'yes') return
+            // 검색만 넓히면 피드는 그대로 학습자료 탭이라, 추천받은 글이 화면에 안 보인다.
+            // 탭도 같이 전체로 돌린다 (사이드바 선택 표시도 이 값을 본다).
+            if (toAll) usePostsStore().setCategory(null)
+            ask(ev.query, toAll ? '전체 피드' : context, toAll ? null : category, ev.limit ?? null)
+          })
+        }
         else if (ev.type === 'save_proposal') {
           current.proposal = { folders: ev.folders, postIds: ev.postIds, state: 'pending' }
           askSave(current)
-        } else if (ev.type === 'clarify') askUser(ev.question, ev.options, (o) => ask(o.value, context), true)
-        else if (ev.type === 'usage') remaining.value -= 1
+        } else if (ev.type === 'clarify') askUser(ev.question, ev.options, (o) => ask(o.value, context, category), true)
+        // 서버가 남은 횟수를 알려준다. 없으면(옛 형식) 화면이 직접 1 뺀다
+        else if (ev.type === 'usage') remaining.value = ev.remaining ?? remaining.value - 1
+        // 👍👎를 어느 답변에 달지 알려면 서버가 남긴 로그 번호가 필요하다
+        else if (ev.type === 'done') current.logId = ev.logId ?? null
         else if (ev.type === 'error') {
           current.text = ev.message
           current.error = true
         }
       }
     } finally {
+      await typer.finish()
       clearInterval(timer)
       status.value = null
       if (remaining.value <= 0) askLimit() // 방금 마지막 횟수를 썼으면 바로 안내
@@ -130,28 +211,15 @@ export const useChatStore = defineStore('chat', () => {
     askUser('오늘 횟수를 모두 사용했어요. 내일 다시 이용할 수 있어요.', [{ label: '대화 종료하기', value: 'end' }], endConversation)
   }
 
-  // 목업(화면 녹화용): 추천 글을 "내가 쓴 글"로만 채움 → 다른 사람 이름이 화면에 나오지 않음.
-  // 내 글이 없으면 목업 글로 대체 (연동 시 서버가 준 글 ID로 조회)
-  async function applySources(message, mockPosts) {
-    const name = useAuthStore().user?.name
-    let mine = []
-    try {
-      if (name) mine = (await fetchPosts({ author: name, page: 0, size: 3 })).data?.content ?? []
-    } catch { /* 조회 실패 시 목업 글 사용 */ }
-    // 게시글 작성자명은 '4기_판교_5반_노은서'처럼 반/기수가 붙어 있어서 이름 포함 여부로 비교
-    mine = mine.filter((p) => p.userName?.includes(name)).slice(0, 3)
-    if (!mine.length) {
-      message.sources = mockPosts
-      return
-    }
-    aiPicks.value = mine
+  // 서버가 고른 글을 그대로 피드에 반영한다.
+  // posts는 관련도 순이고, 피드도 그 순서를 지켜 위로 올린다 (stores/posts.js의 setPicks).
+  async function applySources(message, posts, category = null, query = '') {
+    message.sources = posts.map((p) => ({ ...p }))  // 메시지마다 저장 상태가 따로 놀게 복사
+    if (!posts.length) return
+
+    aiPicks.value = posts
     pickSeq.value++
-    message.sources = mine.map((p) => ({
-      id: p.id,
-      title: p.aiTitle || (p.content ?? '').split('\n')[0].slice(0, 60),
-      category: p.category,
-      reactions: p.reactionCount ?? 0,
-    }))
+    await usePostsStore().setPicks(posts.map((p) => p.id), query)
   }
 
   function clearPicks() {
@@ -232,12 +300,30 @@ export const useChatStore = defineStore('chat', () => {
         useFoldersStore().assign(ids, folder?.id ?? null)
       }
       message.sources?.forEach((p, i) => setTimeout(() => (p.saved = true), i * 160)) // 카드가 차례로 폴더에 꽂히는 느낌
+      // 폴더에 담았으면 공유 레포로 push할지 물어봄 (MVP 범위 밖이라 꺼둠)
+      if (SHOW_PUSH_OFFER && folder) setTimeout(() => askPush(message, folder), 900)
     }, 2700) // 저장 모션이 한 바퀴 이상 보이게
   }
 
-  function setFeedback(message, value, reason = null) {
-    message.feedback = { value, reason }
+  // 공유 드라이브 push 제안 - 사용자가 네를 눌렀을 때만 (목업: 프론트 저장)
+  function askPush(message, folder) {
+    askUser(`'${folder.name}' 폴더를 공유 드라이브에 push 할까요?`, [{ label: '네, push할게요', value: 'yes' }, { label: '아니요', value: 'no' }], (o) => {
+      if (o.value === 'no') return (message.push = { state: 'declined' })
+      message.push = { state: 'pushing', folder: folder.name, color: folder.color }
+      setTimeout(() => {
+        const items = (message.sources ?? []).map((p) => ({ postId: aiPicks.value.length ? p.id : null, title: p.title, category: p.category }))
+        const repo = useCommunityStore().push({ name: folder.name, color: folder.color, items })
+        message.push = { state: 'pushed', folder: folder.name, color: folder.color, owner: repo.owner, count: items.length }
+      }, 2600)
+    })
   }
 
-  return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, messages, status, remaining, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
+  // 👍👎. 화면은 바로 바꾸고 서버 전송은 기다리지 않는다 - 눌렀는데 반응이 늦으면 더 이상하다.
+  // 전송이 실패해도 되돌리지 않는다(피드백이 본론이 아니다). 👎는 이유를 고를 때 한 번 더 덮어쓴다.
+  function setFeedback(message, value, reason = null) {
+    message.feedback = { value, reason }
+    sendFeedback(message.logId, value === 'up' ? 1 : -1, reason)
+  }
+
+  return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
 })

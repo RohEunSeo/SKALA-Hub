@@ -24,6 +24,8 @@ const props = defineProps({
   // 이 게시글이 이미 SKALA 커리큘럼 탭에 등록되어 있는지 ({ stage, subCategory } | null) - 피드 탭에서
   // 관리자 전용 배치 조회로 내려줌. 다른 화면(상세/마이페이지 등)에서는 안 넘어와도 무방(추가 버튼은 항상 동작)
   curriculumStatus: { type: Object, default: null },
+  // 챗봇이 방금 추천한 글인지 - 피드에서 맨 위로 올라오며 보라 테두리로 표시된다
+  picked: { type: Boolean, default: false },
 })
 
 const router = useRouter()
@@ -301,7 +303,11 @@ async function saveCurriculum({ stage, subCategory }) {
 </script>
 
 <template>
-  <article class="post-card" :class="{ pinned: post.isPinned, clickable: linkToDetail }" @click="goToDetail">
+  <article
+    class="post-card"
+    :class="{ pinned: post.isPinned, clickable: linkToDetail, picked }"
+    @click="goToDetail"
+  >
     <div v-if="post.isPinned" class="pinned-badge">📌 고정</div>
 
     <div class="post-header">
@@ -529,6 +535,42 @@ async function saveCurriculum({ stage, subCategory }) {
 
 .post-card.pinned {
   border: 1px solid rgba(108, 92, 231, 0.25);
+}
+
+/* 챗봇이 추천한 글 - 처음 떠오를 때의 부드러운 보라 번짐을 계속 유지한다.
+   얇은 테두리로 바뀌지 않고, 같은 번짐이 천천히 숨만 쉰다. */
+.post-card.picked {
+  animation:
+    picked-in 0.9s ease-out both,
+    picked-glow 2.8s ease-in-out 0.9s infinite;
+}
+
+/* 등장: 번짐이 없는 상태에서 기본 번짐까지 올라온다 */
+@keyframes picked-in {
+  from {
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06), 0 0 0 0 rgba(108, 92, 231, 0);
+  }
+  to {
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06), 0 0 16px 1px rgba(108, 92, 231, 0.3);
+  }
+}
+
+/* 유지: 번짐의 크기와 진하기만 오간다. 주기를 길게(2.8s) 잡아서
+   추천 글이 여러 장 동시에 떠도 깜빡임이 겹쳐 거슬리지 않는다. */
+@keyframes picked-glow {
+  0%, 100% {
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06), 0 0 16px 1px rgba(108, 92, 231, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06), 0 0 26px 4px rgba(108, 92, 231, 0.48);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-card.picked {
+    animation: none;
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06), 0 0 20px 2px rgba(108, 92, 231, 0.38);
+  }
 }
 
 .post-card.clickable {

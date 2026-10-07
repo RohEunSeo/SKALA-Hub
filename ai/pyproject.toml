@@ -1,0 +1,29 @@
+[project]
+name = "skala-hub-ai"
+version = "0.1.0"
+description = "SKALA Hub RAG 챗봇 서버 - 슬랙 게시글을 검색해 근거와 함께 답변"
+# 수업 실습 환경과 동일하게 맞춤 (langchain 1.x가 3.12를 아직 안 받음)
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+  # --- 수업 실습(rag-pipeline-lab2026)과 동일 버전 고정 ---
+  # 수업 코드를 그대로 참조할 수 있게 버전을 맞춘다. 올릴 때는 수업 코드도 같이 확인할 것.
+  "langchain==1.4.2",
+  "langchain-openai==1.6.3",        # 임베딩(text-embedding-3-small)
+  "langchain-community==0.4.2",
+  "langchain-classic==1.0.8",       # 1.x에서 구 리트리버(Ensemble/MultiQuery/ParentDocument)가 여기로 이사함
+  "langchain-text-splitters==1.1.2",
+  "langgraph==1.2.11",              # S6 의도 라우팅
+  "faiss-cpu==1.15.1",              # 평가용 고정 인덱스
+  "python-dotenv==1.2.3",
+  "rank-bm25==0.2.2",               # S5 BM25 비교 실험
+
+  # --- 이 프로젝트에만 필요한 것 (정확한 버전은 uv.lock이 잡음) ---
+  "langchain-google-genai",         # 기본 생성 모델 (Gemini 무료 티어)
+  "langchain-anthropic",            # S5 모델 비교용
+  "psycopg[binary]",                # Supabase에 Postgres로 직접 연결 (REST는 403이 남)
+  "pydantic-settings",              # config.py - .env 로딩 + 타입 검증
+  "fastapi",                        # Step 7~
+  "uvicorn[standard]",
+  "pyjwt",                          # Spring이 발급한 토큰 검증 (Step 7)
+]

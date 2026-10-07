@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.production
+.env.bak-*
 
 # Node
 node_modules/
@@ -46,3 +47,29 @@ test.html
 server.js
 /package.json
 /package-lock.json
+# Understand Anything 임시 파일 (그래프 결과물 .ua/*.json은 커밋)
+.ua/intermediate/
+.ua/tmp/
+.ua/.trash-*/
+
+# 수업 교재/실습 코드 (저작권 자료, 로컬 전용 - 절대 푸시 금지)
+rag-pipeline/
+*.pdf
+ai/data/
+# 에디터 작업공간 설정 - 수업 교재 폴더의 로컬 경로가 들어 있다
+ai/app/skala-hub.code-workspace
+
+
+# Python (ai/ RAG 서버)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 데모 영상 제작 폴더. 하위만 거르지 않고 통째로 제외한다 -
+# video/auth.json에 로그인 토큰이 들어 있고 이 저장소는 public이다.
+video/
+
+# Cloud Run 배포용 환경변수 파일 (비밀값 포함 - 루트 .env에서 생성됨)
+deploy/*.env.yaml

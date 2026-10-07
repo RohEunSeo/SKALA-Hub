@@ -1,9 +1,10 @@
 <script setup>
 // 공통 레이아웃 - 사이드바 + 중앙 정렬된 본문 (넓은 화면에서 좌우 여백 균형, 모바일에서 사이드바는 드로어로 전환)
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import Sidebar from './Sidebar.vue'
 import ChatLauncher from './chat/ChatLauncher.vue'
 import ChatPanel from './chat/ChatPanel.vue'
+import PushModal from './community/PushModal.vue'
 import { useUiStore } from '../stores/ui'
 import { useChatStore } from '../stores/chat'
 import { useAuthStore } from '../stores/auth'
@@ -19,9 +20,24 @@ const sidebarOpen = ref(false)
 // 데스크톱~태블릿 폭에서 사용자가 수동으로 사이드바를 접어 본문 폭을 넓힐 때 쓰는 상태 - 페이지 이동 간에도
 // 유지되어야 해서 스토어에 둠 (모바일 드로어용 sidebarOpen과는 별개 - 768px 미만에서는 CSS가 이 상태를 무시함)
 const uiStore = useUiStore()
-// AI 챗봇은 아직 관리자에게만 노출(작업 중 기능) - 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
+// AI 챗봇은 1차 베타라 일부 반에게만 열려 있다. **누구에게 열지는 서버가 판단한다**
+// (ai 서버 .env의 CHAT_ALLOWED_CAMPUS/CLASSES). 화면이 같은 규칙을 들고 있으면 서버 설정만
+// 바꿨을 때 조용히 어긋나므로, 여기서는 물어보고 결과만 쓴다.
+// AI 서버가 꺼져 있으면 allowed:false로 와서 버튼이 안 뜬다 - 눌러도 안 되는 버튼보다 낫다.
+// 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
 const chatStore = useChatStore()
 const authStore = useAuthStore()
+const showChat = computed(() => chatStore.canUse === true)
+
+// 로그인한 뒤에만 물어본다. 로그인 전에 부르면 401이라 의미가 없다.
+watch(
+  () => authStore.isAuthenticated,
+  (yes) => {
+    if (yes) chatStore.loadAccess()
+    else chatStore.canUse = false
+  },
+  { immediate: true },
+)
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
 const mainStyle = computed(() => ({ paddingTop: `${props.paddingTop}px` }))
 
@@ -37,7 +53,7 @@ function closeSidebar() {
 <template>
   <div
     class="app-layout"
-    :class="{ 'chat-open': authStore.effectiveIsAdmin && chatStore.isOpen, 'chat-resizing': chatStore.dragging }"
+    :class="{ 'chat-open': showChat && chatStore.isOpen, 'chat-resizing': chatStore.dragging }"
     :style="{ '--chat-w': `${chatStore.width}px` }"
   >
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
@@ -58,9 +74,10 @@ function closeSidebar() {
         <slot />
       </div>
     </main>
-    <template v-if="authStore.effectiveIsAdmin">
+    <template v-if="showChat">
       <ChatLauncher />
       <ChatPanel />
+      <PushModal />
     </template>
   </div>
 </template>
