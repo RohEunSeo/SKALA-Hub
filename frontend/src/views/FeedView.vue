@@ -755,47 +755,6 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   border-bottom-color: #4a3f8f;
 }
 
-/* AI 추천 탭 - 보라 포인트 + 개수 배지 + 닫기(×) */
-.feed-tab-ai {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #6c5ce7;
-}
-
-.ai-count {
-  padding: 0 7px;
-  border-radius: 999px;
-  background: #6c5ce7;
-  color: #fff;
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.ai-close {
-  padding: 0 2px;
-  border: 0;
-  background: none;
-  color: #9aa3a7;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.ai-close:hover {
-  color: #1a1a2e;
-}
-
-.ai-picks-banner {
-  margin: 8px 0 12px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: #f1eefc;
-  color: #4a3f8f;
-  font-size: 13px;
-  animation: pick-in 0.4s ease-out both;
-}
-
 /* 챗봇 추천으로 목록 순서가 바뀔 때 카드가 제자리를 찾아 미끄러진다.
    기존 UI가 쓰는 감속 커브(0.22,1,0.36,1)를 그대로 써서 이질감을 줄였다. */
 .feed-move {
