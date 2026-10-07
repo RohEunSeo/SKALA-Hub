@@ -44,12 +44,29 @@ def warn_bad_models() -> None:
         )
 
 
+def _index_size() -> int | None:
+    """지금 쓰는 저장소에 조각이 몇 개 있는지. 모르면 None.
+
+    pgvector를 쓰는데 FAISS 폴더를 보면 항상 '없음'이 나와서,
+    정작 인덱스가 빈 상황과 구분이 안 됐다. 그래서 저장소별로 나눠 본다.
+    """
+    if settings.vector_store == "pgvector":
+        try:
+            from app.db import fetch_all
+            return fetch_all("select count(*) as n from post_chunks")[0]["n"]
+        except Exception:
+            return None  # 헬스체크가 DB 때문에 실패하면 안 된다
+    return len(list(settings.faiss_dir.glob("*"))) if settings.faiss_dir.exists() else 0
+
+
 @app.get("/health")
 def health() -> dict:
-    """Render 헬스체크 + 콜드스타트 깨우기용. 인덱스가 있는지도 같이 알려준다."""
+    """콜드스타트 깨우기용. 지금 쓰는 인덱스에 내용이 있는지도 같이 알려준다."""
+    n = _index_size()
     return {
         "ok": True,
         "model": settings.llm_model,
         "vector_store": settings.vector_store,
-        "index_ready": settings.faiss_dir.exists(),
+        "index_ready": bool(n),  # None(조회 실패)도 false로 본다
+        "index_size": n,
     }
