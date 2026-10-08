@@ -1418,7 +1418,7 @@ watch(
   background: #ffffff;
   border: 1px solid #cfc9f3;
   box-shadow: 0 4px 14px rgba(74, 63, 143, 0.12);
-  animation: fade-up 0.25s ease-out both;
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .ask-head {
