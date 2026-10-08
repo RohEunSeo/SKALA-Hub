@@ -30,9 +30,9 @@ class ChatRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """👍 / 👎. 어느 답변인지는 URL의 log_id로 알린다 (done 이벤트가 알려준 값)."""
-    value: int = Field(description="좋아요 1 / 싫어요 -1")
-    reason: str | None = Field(default=None, max_length=200, description="👎일 때 고른 이유")
+    """답변 평가. 어느 답변인지는 URL의 log_id로 알린다 (done 이벤트가 알려준 값)."""
+    value: int = Field(description="좋아요 1 / 보통 0 / 별로 -1")
+    reason: str | None = Field(default=None, max_length=200, description="별로일 때 고른 이유")
 
 
 # --- 화면으로 내려보내는 이벤트 ---------------------------------------------
