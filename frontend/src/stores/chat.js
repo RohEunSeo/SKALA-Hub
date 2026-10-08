@@ -10,7 +10,6 @@ import { useCommunityStore } from './community'
 const HISTORY_KEY = 'skala-chat-history'
 const HISTORY_MAX = 20 // 이전 대화 보관 개수 (목업: 브라우저 localStorage, 서버 연동 시 서버 저장으로 교체)
 
-const WIDTH_KEY = 'skala-chat-width-v3'
 const DEFAULT_W = 420 // 처음 열릴 때 폭
 const MIN_W = 420 // 패널 최소 폭 (창이 아무리 작아져도 이보다 좁아지지 않음)
 const MAX_W = 640 // 패널 최대 폭
@@ -98,7 +97,13 @@ export const useChatStore = defineStore('chat', () => {
   const savedCount = ref(0) // 챗봇으로 저장한 글 수 (런처 폴더 배지용, 목업)
   const history = ref(load()) // 종료된 이전 대화 { id, title, messages }[] 최신순
   // 패널 폭 - 드래그로 조절, 브라우저 창이 작아지면 왼쪽 여유(MIN_LEFT)를 지키도록 자동으로 줄어듦 (경고 없이 보정)
-  const stored = ref(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_W)
+  //
+  // 폭을 브라우저에 저장하지 않는다. 저장하면 한 번 넓혀 본 사람은 그 뒤로 계속 넓게 열려서
+  // 매번 다시 줄여야 한다. 넓히는 건 '지금 이 글을 넓게 보고 싶다'는 일시적인 요구에 가까우므로
+  // 항상 최소 폭으로 열고, 드래그한 폭은 새로고침 전까지만 유지한다.
+  // 예전 버전이 저장해 둔 폭이 남아 있으면 치운다 (이제 안 쓴다)
+  try { localStorage.removeItem('skala-chat-width-v3') } catch { /* 무시 */ }
+  const stored = ref(DEFAULT_W)
   const winW = ref(window.innerWidth)
   const dragging = ref(false)
   window.addEventListener('resize', () => (winW.value = window.innerWidth))
@@ -106,7 +111,6 @@ export const useChatStore = defineStore('chat', () => {
 
   function setWidth(px) {
     stored.value = Math.max(MIN_W, Math.min(Math.round(px), MAX_W, winW.value - MIN_LEFT))
-    try { localStorage.setItem(WIDTH_KEY, String(stored.value)) } catch { /* 무시 */ }
   }
 
   let seq = Date.now() // 복원한 옛 메시지 id와 겹치지 않게 시간값에서 시작
