@@ -62,6 +62,15 @@ function createTyper(message) {
   }
 }
 
+// 추천 카드 등장 타이밍. 템플릿(--delay)과 저장 제안이 같은 값을 봐야 어긋나지 않는다.
+// 지속시간은 CSS(.source-card.enter)에 있으니 그 값을 바꾸면 여기도 같이 바꿀 것.
+export const CARD_DELAY = 250   // 첫 카드까지
+export const CARD_STEP = 260    // 카드 사이 - 한 장씩 올라오는 게 보이는 간격
+export const CARD_DURATION = 620  // CSS .source-card.enter 의 0.62s 와 같아야 한다
+export const CARD_SETTLE = 1400 // 다 뜬 뒤 쉬는 시간 - 바로 물으면 카드를 읽을 틈이 없다
+export const cardsDoneMs = (n) =>
+  CARD_DELAY + Math.max(0, n - 1) * CARD_STEP + CARD_DURATION + CARD_SETTLE
+
 export const useChatStore = defineStore('chat', () => {
   const isOpen = ref(false)
   const messages = ref([]) // { id, role: 'user'|'ai', text, sources?, proposal?, feedback?, error? }
@@ -169,7 +178,12 @@ export const useChatStore = defineStore('chat', () => {
         else if (ev.type === 'token') {
           status.value = null // 글자가 나오기 시작하면 로더는 사라짐
           typer.push(ev.text)
-        } else if (ev.type === 'sources') await applySources(current, ev.posts, category, q)
+        } else if (ev.type === 'sources') {
+          // 서버는 토큰을 다 보낸 뒤 sources 를 주지만, 화면은 타자기라 아직 쓰는 중이다.
+          // 기다리지 않으면 답변이 끝나기도 전에 카드가 올라와 둘이 겹쳐 보인다.
+          await typer.finish()
+          await applySources(current, ev.posts, category, q)
+        }
         else if (ev.type === 'keywords') current.keywords = ev.items
         else if (ev.type === 'offer') {
           // "추천해 드릴까요?" → 네를 눌러야 그때 검색 모드로 넘어감.
@@ -187,7 +201,8 @@ export const useChatStore = defineStore('chat', () => {
         }
         else if (ev.type === 'save_proposal') {
           current.proposal = { folders: ev.folders, postIds: ev.postIds, state: 'pending' }
-          askSave(current)
+          // 카드가 한 장씩 다 뜬 뒤에 묻는다. 같이 나오면 뭘 보라는 건지 알 수 없다.
+          setTimeout(() => askSave(current), cardsDoneMs(ev.postIds?.length ?? 0))
         } else if (ev.type === 'clarify') askUser(ev.question, ev.options, (o) => ask(o.value, context, category), true)
         // 서버가 남은 횟수를 알려준다. 없으면(옛 형식) 화면이 직접 1 뺀다
         else if (ev.type === 'usage') remaining.value = ev.remaining ?? remaining.value - 1
@@ -242,7 +257,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 저장 제안: 네/아니요 → 내 폴더 선택(폴더 아이콘) / 새 폴더 만들기 / 폴더 없이 저장
   function askSave(message) {
-    askUser('이 글들을 폴더에 저장할까요?', [{ label: '네, 저장할게요', value: 'yes' }, { label: '아니요', value: 'no' }], (o) => {
+    askUser('이 글들을 내 폴더에 저장할까요?', [{ label: '네, 저장할게요', value: 'yes' }, { label: '아니요', value: 'no' }], (o) => {
       if (o.value === 'no') return resolveProposal(message, false)
       askFolder(message)
     })

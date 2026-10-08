@@ -5,7 +5,7 @@
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useChatStore } from '../../stores/chat'
+import { CARD_DELAY, CARD_STEP, useChatStore } from '../../stores/chat'
 import { useAuthStore } from '../../stores/auth'
 import { usePostsStore } from '../../stores/posts'
 import { useMyPageStore } from '../../stores/mypage'
@@ -197,6 +197,10 @@ const otherInput = ref(null)
 const needsReason = (msg) =>
   msg.feedback && msg.feedback.value !== 'up' && !msg.feedback.reason && otherFor.value !== msg.id
 
+// 사용법 안내는 추천이 처음 나왔을 때만. 매번 띄우면 저장 제안·평가와 겹쳐 아무것도 안 읽힌다.
+// 실제로 카드를 '누를 수 있다'는 걸 몰라서 상세로 들어가 볼 생각을 못 한다는 피드백을 받았다.
+const firstSourcesId = computed(() => chatStore.messages.find((m) => m.sources?.length)?.id ?? null)
+
 async function startOther(msg) {
   otherFor.value = msg.id
   otherText.value = ''
@@ -352,7 +356,7 @@ watch(
               :key="p.id"
               class="source-card clickable"
               :class="{ saved: p.saved, enter: !msg.seen }"
-              :style="{ '--delay': `${350 + i * 260}ms`, '--dy': `${(msg.sources.length - i) * 96}px` }"
+              :style="{ '--delay': `${CARD_DELAY + i * CARD_STEP}ms` }"
               role="button"
               tabindex="0"
               :aria-label="`${p.title} 게시글 보기`"
@@ -389,33 +393,9 @@ watch(
 
           <!-- 추천 바로 아래에서 평가를 받는다. 답변 맨 끝 작은 아이콘 행에 두면 눈에 안 띄어
                아무도 누르지 않는다(로그 104건 중 피드백 1건). 글자를 붙여 크게 둔다. -->
-          <div v-if="msg.sources && !(chatStore.status && msg.id === lastId)" class="rate">
-            <template v-if="!msg.feedback">
-              <span class="rate-q">이 추천 어떠셨나요?</span>
-              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'up')">👍 좋아요</button>
-              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'mid')">😐 보통</button>
-              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'down')">👎 별로예요</button>
-            </template>
-            <!-- 좋아요가 아니면 왜 그런지 묻는다. 이유가 어디가 고장났는지를 가린다 -->
-            <template v-else-if="needsReason(msg)">
-              <span class="rate-q">어떤 점이 아쉬웠나요?</span>
-              <button v-for="r in REASONS" :key="r" class="rate-btn" @click="chatStore.setFeedback(msg, msg.feedback.value, r)">{{ r }}</button>
-              <button class="rate-btn" @click="startOther(msg)">✎ 직접 쓰기</button>
-            </template>
-            <template v-else-if="otherFor === msg.id">
-              <input
-                ref="otherInput"
-                v-model="otherText"
-                class="rate-input"
-                maxlength="200"
-                placeholder="어떤 점이 아쉬웠는지 적어주세요"
-                aria-label="아쉬운 점"
-                @keydown.enter.prevent="submitOther(msg)"
-              />
-              <button class="rate-btn" :disabled="!otherText.trim()" @click="submitOther(msg)">보내기</button>
-            </template>
-            <span v-else class="rate-thanks">의견 감사합니다 🙏</span>
-          </div>
+          <p v-if="msg.sources?.length && msg.id === firstSourcesId" class="hint">
+            💡 <b>카드를 누르면</b> 글로 이동해요. 거기서 <b>요약</b>이나 <b>비슷한 글</b>도 물어볼 수 있어요.
+          </p>
 
           <!-- 저장 제안: AI는 제안만 하고, 실제 저장은 사용자가 버튼을 눌러야 함 -->
           <template v-if="msg.proposal">
@@ -445,7 +425,41 @@ watch(
             <div v-else-if="msg.push.state === 'declined'" class="answer">알겠어요. 나중에 레포 화면에서 push할 수도 있어요.</div>
           </template>
 
-          <!-- 답변 아래 아이콘 행: 복사만. 평가는 위 추천 카드 바로 아래에서 받는다 -->
+          <div v-if="msg.sources && !(chatStore.status && msg.id === lastId)" class="rate bare">
+            <template v-if="!msg.feedback">
+              <span class="rate-q">이 추천 어떠셨나요?</span>
+              <button class="rate-ico" aria-label="좋아요" @click="chatStore.setFeedback(msg, 'up')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /></svg>좋아요
+              </button>
+              <button class="rate-ico" aria-label="보통이에요" @click="chatStore.setFeedback(msg, 'mid')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.5 15h7" /><path d="M9 9.5h.01M15 9.5h.01" /></svg>보통
+              </button>
+              <button class="rate-ico" aria-label="별로예요" @click="chatStore.setFeedback(msg, 'down')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V2M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" /></svg>별로예요
+              </button>
+            </template>
+            <!-- 좋아요가 아니면 왜 그런지 묻는다. 이유가 어디가 고장났는지를 가린다 -->
+            <template v-else-if="needsReason(msg)">
+              <span class="rate-q">어떤 점이 아쉬웠나요?</span>
+              <button v-for="r in REASONS" :key="r" class="rate-btn" @click="chatStore.setFeedback(msg, msg.feedback.value, r)">{{ r }}</button>
+              <button class="rate-btn" @click="startOther(msg)">✎ 직접 쓰기</button>
+            </template>
+            <template v-else-if="otherFor === msg.id">
+              <input
+                ref="otherInput"
+                v-model="otherText"
+                class="rate-input"
+                maxlength="200"
+                placeholder="어떤 점이 아쉬웠는지 적어주세요"
+                aria-label="아쉬운 점"
+                @keydown.enter.prevent="submitOther(msg)"
+              />
+              <button class="rate-btn" :disabled="!otherText.trim()" @click="submitOther(msg)">보내기</button>
+            </template>
+            <span v-else class="rate-thanks">의견 감사합니다 🙏</span>
+          </div>
+
+          <!-- 답변 아래 아이콘 행: 복사만 -->
           <div v-if="msg.text && !msg.error && !(chatStore.status && msg.id === lastId)" class="actions">
             <button class="act" aria-label="답변 복사" @click="copyAnswer(msg)">
               <svg v-if="copiedId === msg.id" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
@@ -974,7 +988,7 @@ watch(
 
 /* 등장 모션은 처음 나타날 때(.enter)만 */
 .source-card.enter {
-  animation: card-out 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) var(--delay, 0s) both;
+  animation: card-out 0.62s cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0s) both;
 }
 
 .source-card:last-of-type {
@@ -1124,6 +1138,48 @@ watch(
   background: #f7f5fd;
 }
 
+.rate.bare {
+  padding: 2px 2px 0;
+  background: none;   /* 보라 박스 + 흰 알약은 어느 서비스에나 있는 모양이라 걷어냈다 */
+  gap: 2px;
+}
+
+.rate.bare .rate-q {
+  margin-right: 8px;
+  color: #636e72;
+  font-weight: 600;
+}
+
+/* 원래 쓰던 선 아이콘에 글자만 붙였다 (예전 .act 와 같은 결) */
+.rate-ico {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #636e72;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.rate-ico svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rate-ico:hover {
+  background: #f1eefc;
+  color: #4a3f8f;
+}
+
 .rate-q {
   margin-right: 2px;
   color: #4a3f8f;
@@ -1165,6 +1221,50 @@ watch(
 .rate-input:focus {
   outline: 2px solid #cfc9f3;
   outline-offset: 1px;
+}
+
+.hint {
+  margin: 8px 2px 0;
+  color: #8a8f98;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hint b {
+  color: #6c5ce7;
+  font-weight: 600;
+}
+
+.save-ask {
+  background: #f1eefc;   /* 저장 제안은 평가와 구분되게 조금 더 진한 연보라 */
+}
+
+.save-head {
+  display: grid;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.save-sub {
+  color: #6b647f;
+  font-size: 11.5px;
+}
+
+.rate-btn.primary {
+  border-color: transparent;
+  background: #6c5ce7;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.rate-btn.primary:hover:not(:disabled) {
+  background: #5b4bd6;
+}
+
+.rate-btn.folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .rate-thanks {
@@ -1371,25 +1471,6 @@ watch(
   margin: 0 0 0 0;
 }
 
-.ask-form {
-  display: grid;
-  gap: 10px;
-  padding: 4px 6px 12px;
-}
-
-.ask-form input {
-  padding: 11px 14px;
-  border: 1px solid #d9d4f0;
-  border-radius: 12px;
-  font: inherit;
-  font-size: 15px;
-  outline: none;
-}
-
-.ask-form input:focus {
-  border-color: #6c5ce7;
-}
-
 .swatches {
   display: flex;
   gap: 8px;
@@ -1405,22 +1486,6 @@ watch(
 
 .swatch.on {
   border-color: #4a3f8f;
-}
-
-.ask-submit {
-  padding: 11px;
-  border: 0;
-  border-radius: 999px;
-  background: #4a3f8f;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ask-submit:disabled {
-  background: #b2a9e3;
-  cursor: default;
 }
 
 .ask-n {
@@ -1594,10 +1659,11 @@ watch(
   background: #f1eefc;
 }
 
+/* 예전엔 scale(0.2)에서 최대 480px를 날아와 만화처럼 튀었다.
+   살짝 떠오르는 정도로 줄이고, 피드가 쓰는 감속 커브(0.22,1,0.36,1)에 맞춘다. */
 @keyframes card-out {
-  from { opacity: 0; transform: translateY(var(--dy, 96px)) scale(0.2); }
-  35% { opacity: 1; }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes filed {
