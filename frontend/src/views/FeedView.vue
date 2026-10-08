@@ -524,7 +524,9 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           </div>
 
           <!-- 폴더는 탭이 아니라 카테고리와 같은 층위의 필터 - 어느 탭에서든 범위를 좁힌다 -->
-          <AiFolderBar v-if="authStore.effectiveIsAdmin && !showHidden" />
+          <!-- 내 폴더는 챗봇을 쓸 수 있는 사람에게 연다 (1차 베타 = 판교 5반).
+                 범위는 서버가 정하므로 화면은 chatStore.canUse 하나만 본다 -->
+            <AiFolderBar v-if="chatStore.canUse && !showHidden" />
 
           <!-- 동기화 시각과 정렬은 목록에 바로 붙는 정보라 필터들 아래, 게시글 바로 위에 둔다 -->
           <!-- 추천 칩 · 동기화 시각 · 정렬을 한 줄에 둔다. 추천 칩은 왼쪽에서 늘어나고

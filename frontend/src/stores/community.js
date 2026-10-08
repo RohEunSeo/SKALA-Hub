@@ -118,9 +118,9 @@ export const useCommunityStore = defineStore('community', () => {
   // ===== 클론 =====
   // 내 폴더 생성 + 레포의 실제 글(postId) 중 아직 다른 폴더에 없는 것을 담기, 출처(origin) 표시
   // 반환: 'ok' | 'limit'
-  function clone(repo) {
+  async function clone(repo) {
     const folders = useFoldersStore()
-    const folder = folders.create(repo.name, repo.color)
+    const folder = await folders.create(repo.name, repo.color)
     if (!folder) return 'limit'
     folder.origin = repo.id
     const ids = repo.files.flatMap((f) => (f.type === 'dir' ? f.items : [f])).map((f) => f.postId).filter((id) => Number.isFinite(id))

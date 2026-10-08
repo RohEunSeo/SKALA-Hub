@@ -6,6 +6,7 @@ import ChatLauncher from './chat/ChatLauncher.vue'
 import ChatPanel from './chat/ChatPanel.vue'
 import PushModal from './community/PushModal.vue'
 import { useUiStore } from '../stores/ui'
+import { useFoldersStore } from '../stores/folders'
 import { useChatStore } from '../stores/chat'
 import { useAuthStore } from '../stores/auth'
 
@@ -27,14 +28,17 @@ const uiStore = useUiStore()
 // 패널이 열리면 본문이 왼쪽으로 밀림 (chat-open 클래스)
 const chatStore = useChatStore()
 const authStore = useAuthStore()
+const foldersStore = useFoldersStore()
 const showChat = computed(() => chatStore.canUse === true)
 
 // 로그인한 뒤에만 물어본다. 로그인 전에 부르면 401이라 의미가 없다.
 watch(
   () => authStore.isAuthenticated,
   (yes) => {
-    if (yes) chatStore.loadAccess()
-    else chatStore.canUse = false
+    if (yes) {
+      chatStore.loadAccess()
+      foldersStore.load() // 내 폴더는 서버에 있다 - 로그인 후 한 번 불러온다
+    } else chatStore.canUse = false
   },
   { immediate: true },
 )

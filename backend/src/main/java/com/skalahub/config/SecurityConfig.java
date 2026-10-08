@@ -33,6 +33,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/api/bookmarks/**").authenticated()
+                .requestMatchers("/api/folders/**").authenticated()
                 .requestMatchers("/api/mypage/**").authenticated()
                 .requestMatchers("/api/posts/**").authenticated()
                 .requestMatchers("/api/links/**").authenticated()
