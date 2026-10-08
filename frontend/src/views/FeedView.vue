@@ -250,6 +250,14 @@ const DATE_LABELS = { today: '오늘', week: '이번 주', month: '이번 달' }
 
 // 칩 앞에 붙는 대표 아이콘. 카테고리마다 정해둔 것을 그대로 쓴다
 // (사이드바·카테고리 칩과 같은 기호라 눈에 익다). 전체일 땐 폴더.
+// 챗봇이 실제로 뒤지는 범위는 카테고리뿐이다 (ChatPanel 의 context 와 같은 규칙).
+// 예전엔 "게시글 20개 살펴보는 중"이었는데, 그 20은 화면에 로드된 수일 뿐
+// 검색 범위(글 272개)와 아무 상관이 없어 틀린 정보였다.
+const searchScope = computed(() => {
+  const cat = CATEGORIES.find((c) => c.value === postsStore.category)
+  return cat ? cat.label : '전체 피드'
+})
+
 const scopeIcon = computed(() => {
   const cat = CATEGORIES.find((c) => c.value === postsStore.category)
   return cat?.icon ?? '📁'
@@ -615,7 +623,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
           <div v-if="isScanning" class="scan-line" aria-hidden="true"></div>
           <div v-if="isScanning" class="scan-label">
             <span class="scan-dot" aria-hidden="true"></span>
-            게시글 {{ postsStore.posts.length }}개 살펴보는 중
+            {{ searchScope }}에서 검색 중
           </div>
 
           <!-- TransitionGroup은 목록 순서가 바뀔 때 각 카드가 실제로 미끄러져 이동한다(FLIP).
