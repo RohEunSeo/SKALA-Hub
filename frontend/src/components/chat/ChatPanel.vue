@@ -1,7 +1,7 @@
 <script setup>
 // AI 챗봇 우측 슬라이드 패널 - 첫 인사(추천 칩) / 대화 / 출처 카드 / 👍👎 피드백 / 남은 횟수.
-// 1차 베타(판교 5반)에서는 저장·폴더 기능이 꺼져 있다 - 서버가 save_proposal을 보내지 않으므로
-// 관련 블록(저장 제안/공유 드라이브)은 그려지지 않는다. 출처 카드의 저장 버튼은 제거했다.
+// 저장·폴더: 서버가 save_proposal 을 보내면 입력창 위에 "폴더에 저장할까요?" 카드가 뜬다.
+// 공유 드라이브 push 는 아직 범위 밖이라 SHOW_PUSH_OFFER 로 꺼둔 상태다.
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -9,9 +9,12 @@ import { useChatStore } from '../../stores/chat'
 import { useAuthStore } from '../../stores/auth'
 import { usePostsStore } from '../../stores/posts'
 import { useMyPageStore } from '../../stores/mypage'
+import { useBookmarksStore } from '../../stores/bookmarks'
+import { useToastStore } from '../../stores/toast'
 import { useUiStore } from '../../stores/ui'
 import { CATEGORIES } from '../../constants/categories'
 import { folderTextColor } from '../../utils/folderColors'
+import { inlineMarkdown } from '../../utils/miniMarkdown'
 import skalaIcon from '../../assets/skala_icon.png'
 import SproutLoader from './SproutLoader.vue'
 import PaperFlipLoader from './PaperFlipLoader.vue'
@@ -20,6 +23,20 @@ import FolderIcon from '../FolderIcon.vue'
 import { FOLDER_COLORS, useFoldersStore } from '../../stores/folders'
 
 const chatStore = useChatStore()
+const bookmarksStore = useBookmarksStore()
+const toastStore = useToastStore()
+
+// 추천 카드에서 바로 저장. 카드 전체가 '글 보기' 버튼이라 전파를 막아야 한다.
+const isSaved = (id) => bookmarksStore.bookmarkedPostIds.includes(id)
+async function toggleSave(id) {
+  const was = isSaved(id)
+  try {
+    await bookmarksStore.toggle(id)
+    toastStore.show(was ? '저장을 취소했습니다' : '저장했어요. 마이페이지에서 볼 수 있어요')
+  } catch {
+    toastStore.show('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
+  }
+}
 const authStore = useAuthStore()
 const postsStore = usePostsStore()
 const myPageStore = useMyPageStore()
@@ -57,7 +74,7 @@ const isEmpty = computed(() => chatStore.messages.length === 0)
 // 상세 페이지에선 칩이 통째로 바뀐다.
 // 안내 문구로 "상세 페이지에선 요약도 됩니다"라고 설명하는 대신, 버튼이 바뀌어 있으면 된다.
 // 상세 페이지에서 쓰는 문구. 첫 화면 칩과 입력창 위 버튼이 같은 값을 보게 한 곳에 둔다.
-const POST_ACTIONS = ['이 글 요약해줘', '비슷한 글 찾아줘']
+const POST_ACTIONS = ['이 글의 핵심 요약해줘', '비슷한 글 찾아줘']
 
 const chips = computed(() =>
   openPost.value ? POST_ACTIONS : (chatStore.greeting?.chips ?? []),
@@ -167,7 +184,33 @@ async function copyAnswer(msg) {
   } catch { /* 클립보드 권한이 없으면 무시 */ }
 }
 
-const REASONS = ['관련 없는 글이에요', '내용이 틀려요', '너무 길어요']
+// 아쉬운 이유. 고장 난 곳이 서로 달라서 이렇게 나눈다 -
+// '관련 없는 글' = 검색 정확도, '찾던 글이 없다' = 검색 누락, '내용이 틀리다' = 생성.
+// 로그를 볼 때 이 셋이 섞여 있으면 무엇부터 고칠지 못 정한다.
+const REASONS = ['관련 없는 글이 섞여 있어요', '찾던 글이 없어요', '답변 내용이 틀려요']
+
+// 좋아요가 아니고 아직 이유를 안 골랐으면 이유를 묻는다
+const otherFor = ref(null)
+const otherText = ref('')
+const otherInput = ref(null)
+
+const needsReason = (msg) =>
+  msg.feedback && msg.feedback.value !== 'up' && !msg.feedback.reason && otherFor.value !== msg.id
+
+async function startOther(msg) {
+  otherFor.value = msg.id
+  otherText.value = ''
+  await nextTick()
+  otherInput.value?.focus?.()
+}
+
+function submitOther(msg) {
+  const reason = otherText.value.trim()
+  if (!reason) return
+  chatStore.setFeedback(msg, msg.feedback.value, reason)
+  otherFor.value = null
+  otherText.value = ''
+}
 
 function send(text = input.value) {
   if (!text.trim()) return
@@ -252,6 +295,13 @@ watch(
           </div>
           <h2>{{ userName ? `${userName}님, ` : '' }}무엇이 궁금하세요?</h2>
           <p v-if="chatStore.greeting" class="cp-greeting">{{ chatStore.greeting.text }}</p>
+          <!-- 할 수 있는 일. 가운데 정렬하면 양 끝이 들쭉날쭉해 안 읽히므로 왼쪽으로 맞춘다 -->
+          <ul v-if="chatStore.greeting?.items" class="cp-help">
+            <li v-for="(it, i) in chatStore.greeting.items" :key="i">
+              <span class="cp-help-icon" aria-hidden="true">{{ it.icon }}</span>
+              <span><b>{{ it.strong }}</b> {{ it.rest }}</span>
+            </li>
+          </ul>
           <!-- 지금 보고 있는 화면을 알려준다. 전체 피드면 안 띄운다(설명할 게 없다) -->
           <p v-if="openPost" class="cp-scope">
             <span class="cp-scope-tag">📄 {{ openPost.title || '이 글' }}</span>
@@ -285,7 +335,7 @@ watch(
             <span class="secs">{{ chatStore.elapsed }}초</span>
           </div>
 
-          <div v-if="msg.text" class="answer" :class="{ error: msg.error }">{{ msg.text }}</div>
+          <div v-if="msg.text" class="answer" :class="{ error: msg.error }" v-html="inlineMarkdown(msg.text)"></div>
 
           <!-- 출처 카드: 답변의 근거가 된 글 -->
           <!-- 키워드 집계 결과: 누르면 그 키워드로 바로 검색 -->
@@ -317,6 +367,16 @@ watch(
                   <span class="sc-react">반응 {{ p.reactions }}</span>
                 </div>
               </div>
+              <!-- 목업 때 만든 .sc-save 디자인을 그대로 쓴다 (알약 + 글자) -->
+              <button
+                class="sc-save"
+                :class="{ saved: isSaved(p.id) }"
+                :aria-label="isSaved(p.id) ? '저장 취소' : '저장하기'"
+                :aria-pressed="isSaved(p.id)"
+                @click.stop="toggleSave(p.id)"
+                @keydown.enter.stop
+                @keydown.space.stop
+              >{{ isSaved(p.id) ? '저장됨' : '저장' }}</button>
             </article>
             <!-- 왼쪽 아래 작은 폴더 - 카드가 여기서 위로 펼쳐져 나옴 / 오른쪽은 피드 AI 추천 탭 링크 -->
             <div class="results-foot">
@@ -325,6 +385,36 @@ watch(
               </div>
               <button v-if="chatStore.aiPicks.length" class="goto-saved" @click="goFeed">피드에서 보기</button>
             </div>
+          </div>
+
+          <!-- 추천 바로 아래에서 평가를 받는다. 답변 맨 끝 작은 아이콘 행에 두면 눈에 안 띄어
+               아무도 누르지 않는다(로그 104건 중 피드백 1건). 글자를 붙여 크게 둔다. -->
+          <div v-if="msg.sources && !(chatStore.status && msg.id === lastId)" class="rate">
+            <template v-if="!msg.feedback">
+              <span class="rate-q">이 추천 어떠셨나요?</span>
+              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'up')">👍 좋아요</button>
+              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'mid')">😐 보통</button>
+              <button class="rate-btn" @click="chatStore.setFeedback(msg, 'down')">👎 별로예요</button>
+            </template>
+            <!-- 좋아요가 아니면 왜 그런지 묻는다. 이유가 어디가 고장났는지를 가린다 -->
+            <template v-else-if="needsReason(msg)">
+              <span class="rate-q">어떤 점이 아쉬웠나요?</span>
+              <button v-for="r in REASONS" :key="r" class="rate-btn" @click="chatStore.setFeedback(msg, msg.feedback.value, r)">{{ r }}</button>
+              <button class="rate-btn" @click="startOther(msg)">✎ 직접 쓰기</button>
+            </template>
+            <template v-else-if="otherFor === msg.id">
+              <input
+                ref="otherInput"
+                v-model="otherText"
+                class="rate-input"
+                maxlength="200"
+                placeholder="어떤 점이 아쉬웠는지 적어주세요"
+                aria-label="아쉬운 점"
+                @keydown.enter.prevent="submitOther(msg)"
+              />
+              <button class="rate-btn" :disabled="!otherText.trim()" @click="submitOther(msg)">보내기</button>
+            </template>
+            <span v-else class="rate-thanks">의견 감사합니다 🙏</span>
           </div>
 
           <!-- 저장 제안: AI는 제안만 하고, 실제 저장은 사용자가 버튼을 눌러야 함 -->
@@ -355,26 +445,13 @@ watch(
             <div v-else-if="msg.push.state === 'declined'" class="answer">알겠어요. 나중에 레포 화면에서 push할 수도 있어요.</div>
           </template>
 
-          <!-- 답변 아래 아이콘 행: 좋아요/별로예요(추천 결과만) + 복사. 👎면 이유 칩 -->
+          <!-- 답변 아래 아이콘 행: 복사만. 평가는 위 추천 카드 바로 아래에서 받는다 -->
           <div v-if="msg.text && !msg.error && !(chatStore.status && msg.id === lastId)" class="actions">
-            <template v-if="msg.sources">
-              <button class="act" :class="{ on: msg.feedback?.value === 'up' }" aria-label="좋아요" @click="chatStore.setFeedback(msg, 'up')">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /></svg>
-              </button>
-              <button class="act" :class="{ on: msg.feedback?.value === 'down' }" aria-label="별로예요" @click="chatStore.setFeedback(msg, 'down')">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V2M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" /></svg>
-              </button>
-            </template>
             <button class="act" aria-label="답변 복사" @click="copyAnswer(msg)">
               <svg v-if="copiedId === msg.id" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
               <svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
             </button>
           </div>
-          <div v-if="msg.feedback?.value === 'down' && !msg.feedback.reason" class="feedback">
-            <span>어떤 점이 아쉬웠나요?</span>
-            <button v-for="r in REASONS" :key="r" @click="chatStore.setFeedback(msg, 'down', r)">{{ r }}</button>
-          </div>
-          <span v-else-if="msg.feedback?.reason" class="thanks">의견 감사합니다.</span>
         </div>
       </template>
     </div>
@@ -700,6 +777,38 @@ watch(
   white-space: pre-line; /* 문구 안의 줄바꿈(\n)을 그대로 두 줄로 표시 */
 }
 
+.cp-help {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  list-style: none;
+  display: grid;
+  gap: 9px;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+  background: #f7f5fd;
+  text-align: left;   /* .cp-empty 의 가운데 정렬을 여기서만 되돌린다 */
+}
+
+.cp-help li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #636e72;
+}
+
+.cp-help-icon {
+  line-height: 1.55;
+}
+
+.cp-help b {
+  color: #4a3f8f;
+  font-weight: 700;
+}
+
 .cp-chips {
   display: flex;
   flex-direction: column;
@@ -983,11 +1092,84 @@ watch(
   word-break: break-word;
 }
 
+.answer strong {
+  font-weight: 700;
+  color: #4a3f8f;
+}
+
+.answer code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f7e0d9;
+  color: #e01e5a;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .answer.error {
   padding: 10px 14px;
   border-radius: 12px;
   background: #fdeef1;
   color: #b3163f;
+}
+
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f7f5fd;
+}
+
+.rate-q {
+  margin-right: 2px;
+  color: #4a3f8f;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.rate-btn {
+  padding: 6px 11px;
+  border: 1px solid #e0dcf4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a3f8f;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.rate-btn:hover:not(:disabled) {
+  background: #ece9fb;
+}
+
+.rate-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rate-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  border: 1px solid #e0dcf4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1a1a2e;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.rate-input:focus {
+  outline: 2px solid #cfc9f3;
+  outline-offset: 1px;
+}
+
+.rate-thanks {
+  color: #636e72;
+  font-size: 12.5px;
 }
 
 .actions {
@@ -1030,32 +1212,6 @@ watch(
 
 .act.on svg {
   fill: currentColor;
-}
-
-.feedback {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #636e72;
-}
-
-.feedback button {
-  border: 1px solid #d9d4f0;
-  background: #ffffff;
-  border-radius: 999px;
-  padding: 3px 10px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.feedback button:hover {
-  border-color: #6c5ce7;
-}
-
-.thanks {
-  color: #4a3f8f;
 }
 
 .cp-foot {

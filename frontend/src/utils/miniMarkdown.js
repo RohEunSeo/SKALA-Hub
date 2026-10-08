@@ -6,6 +6,18 @@ const inline = (s) =>
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
 
+/**
+ * 줄 구조는 건드리지 않고 **굵게** 와 `코드` 만 처리한다.
+ * 챗봇 답변용 - 거기는 white-space: pre-wrap 으로 줄바꿈과 '·'를 이미 살리고 있어서,
+ * miniMarkdown 처럼 <p>/<ul> 로 감싸면 간격이 다 틀어진다.
+ * 이스케이프를 먼저 하므로 글 본문에 HTML이 섞여 있어도 글자로만 보인다.
+ */
+export function inlineMarkdown(src = '') {
+  return esc(src)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+}
+
 export function miniMarkdown(src = '') {
   const out = []
   let list = false

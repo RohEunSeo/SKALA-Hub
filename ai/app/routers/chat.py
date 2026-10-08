@@ -8,10 +8,8 @@
 - search_posts 가 켜지면 피드에 "검색 중" 모션이 돈다 (FeedView.vue:145)
 - sources 가 와야 추천 글이 피드 위로 올라온다
 
-1차 베타(판교 5반)에서 **일부러 뺀 것**
-- save_proposal: 폴더가 localStorage라 기기를 바꾸면 사라진다. 저장했다고 믿고
-  잃어버리는 쪽이 검색 품질보다 더 큰 신뢰 손해다. 서버가 이벤트를 안 보내면
-  화면은 아무것도 그리지 않으므로 프론트에 분기를 넣지 않는다.
+- save_proposal 이 와야 "폴더에 저장할까요?" 카드가 뜬다. 폴더는 서버에 있고
+  (chat_folders + bookmarks.folder_id) 저장은 사용자가 눌러야 일어난다.
 """
 import logging
 import re
@@ -210,6 +208,7 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
         async for piece in say(text):
             yield piece
         yield ev.sources(posts)
+        yield ev.save_proposal([p["id"] for p in posts])
         rec["answer"] = text
         rec["post_ids"] = [p["id"] for p in posts]  # 유사도는 없다 - SQL로 고른 것
         return
@@ -275,6 +274,7 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
             yield piece
         rec["answer"] = text
         yield ev.sources(posts)
+        yield ev.save_proposal([p["id"] for p in posts])
         return
 
     # --- 게시글을 찾아 답하는 길 (기본, count도 여기로 이어진다) -------
@@ -336,6 +336,10 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
 
     posts = _to_sources(docs)
     yield ev.sources(posts)
+
+    # 찾아준 글을 폴더에 담을지 물어본다. 묻기만 하고 저장은 사용자가 눌러야 일어난다.
+    # abstention 가드(위)를 이미 지났으므로 "못 찾았어요" 밑에 제안이 붙는 일은 없다.
+    yield ev.save_proposal([p["id"] for p in posts])
 
     # 더 찾아볼지 물어본다. 이미 더 본 상태(req.limit)면 또 묻지 않는다.
     # 가져온 수가 k에 못 미치면 더 찾아도 나올 게 없으므로 묻지 않는다.
