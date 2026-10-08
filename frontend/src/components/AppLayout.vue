@@ -7,6 +7,7 @@ import ChatPanel from './chat/ChatPanel.vue'
 import PushModal from './community/PushModal.vue'
 import { useUiStore } from '../stores/ui'
 import { useFoldersStore } from '../stores/folders'
+import AnnouncementPopup from './AnnouncementPopup.vue'
 import { useChatStore } from '../stores/chat'
 import { useAuthStore } from '../stores/auth'
 
@@ -78,6 +79,9 @@ function closeSidebar() {
         <slot />
       </div>
     </main>
+    <!-- 안 읽은 공지 팝업. 챗봇과 달리 로그인한 모두에게 보여야 하므로 showChat 밖에 둔다 -->
+    <AnnouncementPopup />
+
     <template v-if="showChat">
       <ChatLauncher />
       <ChatPanel />

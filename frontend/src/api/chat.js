@@ -173,3 +173,18 @@ export async function* streamChat({ question, context, category, limit, postId }
 
   yield* parseSSE(response)
 }
+
+/**
+ * 관리자용 대화 로그. AI 서버가 chat_logs 를 소유하므로 Spring 이 아니라 여기로 묻는다.
+ * 서버가 users.role 을 직접 확인하므로, 화면의 미리보기 토글로는 열리지 않는다.
+ */
+export async function fetchChatLogs({ limit = 30, before = null, onlyAbstained = false, onlyFeedback = false } = {}) {
+  if (!AI_BASE_URL) return { items: [], today: null }
+  const q = new URLSearchParams({ limit })
+  if (before) q.set('before', before)
+  if (onlyAbstained) q.set('only_abstained', 'true')
+  if (onlyFeedback) q.set('only_feedback', 'true')
+  const res = await fetch(`${AI_BASE_URL}/api/admin/logs?${q}`, { headers: authHeaders() })
+  if (!res.ok) throw new Error(res.status === 403 ? '관리자만 볼 수 있습니다' : '로그를 불러오지 못했습니다')
+  return res.json()
+}

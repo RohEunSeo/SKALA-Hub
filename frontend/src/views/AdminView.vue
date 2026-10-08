@@ -3,6 +3,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
+import ChatLogPanel from '../components/admin/ChatLogPanel.vue'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 import { usePostsStore } from '../stores/posts'
@@ -854,6 +855,11 @@ onMounted(() => {
             </div>
           </div>
         </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">💬 챗봇 대화 로그</div>
+        <ChatLogPanel />
       </section>
 
       <section class="section">
