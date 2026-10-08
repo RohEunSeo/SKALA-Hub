@@ -1418,7 +1418,7 @@ watch(
   background: #ffffff;
   border: 1px solid #cfc9f3;
   box-shadow: 0 4px 14px rgba(74, 63, 143, 0.12);
-  animation: fade-up 0.25s ease-out both;
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .ask-head {
@@ -1469,6 +1469,41 @@ watch(
 
 .ask-folder {
   margin: 0 0 0 0;
+}
+
+.ask-form {
+  display: grid;
+  gap: 10px;
+  padding: 4px 6px 12px;
+}
+
+.ask-form input {
+  padding: 11px 14px;
+  border: 1px solid #d9d4f0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.ask-form input:focus {
+  border-color: #6c5ce7;
+}
+
+.ask-submit {
+  padding: 11px;
+  border: 0;
+  border-radius: 999px;
+  background: #4a3f8f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ask-submit:disabled {
+  background: #b2a9e3;
+  cursor: default;
 }
 
 .swatches {

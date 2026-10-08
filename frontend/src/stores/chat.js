@@ -67,7 +67,7 @@ function createTyper(message) {
 export const CARD_DELAY = 250   // 첫 카드까지
 export const CARD_STEP = 260    // 카드 사이 - 한 장씩 올라오는 게 보이는 간격
 export const CARD_DURATION = 620  // CSS .source-card.enter 의 0.62s 와 같아야 한다
-export const CARD_SETTLE = 1400 // 다 뜬 뒤 쉬는 시간 - 바로 물으면 카드를 읽을 틈이 없다
+export const CARD_SETTLE = 650  // 다 뜬 뒤 쉬는 시간 - 바로 물으면 카드를 읽을 틈이 없다
 export const cardsDoneMs = (n) =>
   CARD_DELAY + Math.max(0, n - 1) * CARD_STEP + CARD_DURATION + CARD_SETTLE
 

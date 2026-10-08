@@ -122,6 +122,24 @@ chat.postMessage / chat.update / chat.delete → 관리자가 동기화 안내�
   이 웹훅에서 하지 않고 여전히 스케줄러 경로로만 이루어짐
 
 
+## 배포 (대상이 3곳이고 하나만 수동이다)
+
+| 대상 | 무엇 | 언제 올라가나 |
+|---|---|---|
+| Vercel | frontend/ | **main 머지 시 자동** |
+| Render | backend/ (Spring) | **main 머지 시 자동** |
+| **Cloud Run** | **ai/ (RAG 서버)** | **수동** — `./deploy/deploy-ai.sh` |
+
+Cloud Run은 GitHub을 보지 않는다. `ai/` 를 고쳤으면 머지와 별개로 직접 배포해야 한다.
+실제로 save_proposal(저장 제안)을 추가하고 머지까지 했는데 AI 서버만 어제 코드로 남아
+"폴더에 저장할까요?"가 운영에서 안 뜬 적이 있다.
+
+- 프론트 환경변수 `VITE_AI_API_BASE_URL` 이 비면 챗봇 UI가 통째로 숨는다 (베타 on/off 스위치).
+  Vite는 빌드 시점에 값을 박으므로 Vercel에서 바꾸면 **재배포**해야 반영된다.
+- `backend/*.sql` 마이그레이션은 Supabase SQL 편집기에서 **직접** 돌린다. 자동 적용 안 됨.
+- AI 서버 환경변수는 `deploy/make-env.sh` 가 루트 .env에서 필요한 키만 추려 올린다
+  (슬랙 토큰·service_role 키는 일부러 제외).
+
 ## 컬러 시스템
 
 메인: #4A3F8F
