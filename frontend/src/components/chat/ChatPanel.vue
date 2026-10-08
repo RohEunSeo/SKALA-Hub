@@ -299,13 +299,6 @@ watch(
           </div>
           <h2>{{ userName ? `${userName}님, ` : '' }}무엇이 궁금하세요?</h2>
           <p v-if="chatStore.greeting" class="cp-greeting">{{ chatStore.greeting.text }}</p>
-          <!-- 할 수 있는 일. 가운데 정렬하면 양 끝이 들쭉날쭉해 안 읽히므로 왼쪽으로 맞춘다 -->
-          <ul v-if="chatStore.greeting?.items" class="cp-help">
-            <li v-for="(it, i) in chatStore.greeting.items" :key="i">
-              <span class="cp-help-icon" aria-hidden="true">{{ it.icon }}</span>
-              <span><b>{{ it.strong }}</b> {{ it.rest }}</span>
-            </li>
-          </ul>
           <!-- 지금 보고 있는 화면을 알려준다. 전체 피드면 안 띄운다(설명할 게 없다) -->
           <p v-if="openPost" class="cp-scope">
             <span class="cp-scope-tag">📄 {{ openPost.title || '이 글' }}</span>
@@ -789,38 +782,6 @@ watch(
   color: #636e72;
   max-width: 100%;
   white-space: pre-line; /* 문구 안의 줄바꿈(\n)을 그대로 두 줄로 표시 */
-}
-
-.cp-help {
-  margin: 4px 0 0;
-  padding: 12px 14px;
-  list-style: none;
-  display: grid;
-  gap: 9px;
-  width: 100%;
-  max-width: 320px;
-  border-radius: 12px;
-  background: #f7f5fd;
-  text-align: left;   /* .cp-empty 의 가운데 정렬을 여기서만 되돌린다 */
-}
-
-.cp-help li {
-  display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 8px;
-  align-items: start;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: #636e72;
-}
-
-.cp-help-icon {
-  line-height: 1.55;
-}
-
-.cp-help b {
-  color: #4a3f8f;
-  font-weight: 700;
 }
 
 .cp-chips {
