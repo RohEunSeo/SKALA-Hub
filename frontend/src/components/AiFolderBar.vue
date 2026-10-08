@@ -1,7 +1,7 @@
 <script setup>
 // 피드 필터 줄의 "내 폴더" - 폴더 카드 그리드 + 맨 끝 ＋ 타일.
 // ＋를 누르면 회색 폴더가 바로 생기고 카드 안에서 이름·색을 고친다(저장 버튼 없이 즉시 반영).
-// 폴더 데이터는 stores/folders.js (지금은 브라우저 localStorage 목업), 선택 상태는 foldersStore.selected
+// 폴더 데이터는 stores/folders.js (서버 저장), 선택 상태는 foldersStore.selected
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useFoldersStore, FOLDER_COLORS, NEW_FOLDER_COLOR } from '../stores/folders'
 import FolderCard from './FolderCard.vue'
@@ -24,7 +24,7 @@ async function startCreate() {
   for (let i = 2; taken.has(base); i += 1) base = `새 폴더 ${i}`
 
   // 회색 폴더를 먼저 만들고 편집 상태로 열어 그 자리에서 이름을 받는다
-  const folder = foldersStore.create(base, NEW_FOLDER_COLOR)
+  const folder = await foldersStore.create(base, NEW_FOLDER_COLOR)
   if (!folder) return
   foldersStore.selected = folder.id
   editingId.value = folder.id

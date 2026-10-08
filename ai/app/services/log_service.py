@@ -154,11 +154,11 @@ def save(
 
 
 def set_feedback(log_id: int, slack_id: str, value: int, reason: str | None = None) -> bool:
-    """👍(1)/👎(-1). 남의 로그에는 달 수 없다(WHERE에 user_slack_id가 있다).
+    """좋아요(1)/보통(0)/별로(-1). 남의 로그에는 달 수 없다(WHERE에 user_slack_id가 있다).
 
-    👎는 두 번 들어온다 - 누를 때 한 번, 이유를 고를 때 한 번. 같은 행을 덮어쓴다.
+    별로는 두 번 들어온다 - 누를 때 한 번, 이유를 고를 때 한 번. 같은 행을 덮어쓴다.
     """
-    if value not in (1, -1):
+    if value not in (1, 0, -1):
         return False
     try:
         with get_connection() as conn, conn.cursor() as cur:

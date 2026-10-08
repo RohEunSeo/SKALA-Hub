@@ -34,5 +34,11 @@ public class Bookmark {
     @JoinColumn(name = "post_id")
     private Post post;
 
+    // 내 폴더. null 이면 '미분류' - 폴더 기능 이전에 저장한 글이 전부 여기 해당한다.
+    // 폴더를 지워도 저장한 글은 남아야 하므로 DB에서 on delete set null 로 걸어뒀다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "folder_id")
+    private ChatFolder folder;
+
     private LocalDateTime savedAt;
 }

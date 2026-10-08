@@ -267,7 +267,8 @@ export const useChatStore = defineStore('chat', () => {
       question: '새 폴더 이름을 정해 주세요',
       form: true,
       defaultColor: FOLDER_COLORS[useFoldersStore().folders.length % FOLDER_COLORS.length],
-      onSubmit: ({ name, color }) => resolveProposal(message, true, useFoldersStore().create(name, color)),
+      onSubmit: async ({ name, color }) =>
+        resolveProposal(message, true, await useFoldersStore().create(name, color)),
     }
   }
 
@@ -278,7 +279,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // 저장 제안 승인/거절 - 실제 저장은 사용자가 버튼을 눌렀을 때만 (AI는 제안만)
-  function resolveProposal(message, accepted, folder) {
+  async function resolveProposal(message, accepted, folder) {
     if (!message.proposal) return
     message.proposal.folder = folder?.name ?? null // 폴더 없이 저장이면 null
     message.proposal.folderId = folder?.id ?? null
@@ -287,22 +288,31 @@ export const useChatStore = defineStore('chat', () => {
       message.proposal.state = 'declined'
       return
     }
-    // "저장하는 중" 로더를 잠깐 보여준 뒤 완료 (목업 - 실제 연동 시 저장 API 응답을 기다림)
     message.proposal.state = 'saving'
-    setTimeout(() => {
-      message.proposal.state = 'saved'
-      savedCount.value += message.proposal.postIds.length
-      // 추천 글이 실제 게시글(AI 추천 탭에 뜬 글)이면 진짜 저장하기 + 선택한 폴더에 담기 - 사용자가 폴더를 고른 뒤에만 실행
-      if (aiPicks.value.length) {
-        const ids = aiPicks.value.map((p) => p.id)
-        const bookmarks = useBookmarksStore()
-        ids.forEach((id) => !bookmarks.bookmarkedPostIds.includes(id) && bookmarks.toggle(id).catch(() => {}))
-        useFoldersStore().assign(ids, folder?.id ?? null)
-      }
-      message.sources?.forEach((p, i) => setTimeout(() => (p.saved = true), i * 160)) // 카드가 차례로 폴더에 꽂히는 느낌
-      // 폴더에 담았으면 공유 레포로 push할지 물어봄 (MVP 범위 밖이라 꺼둠)
-      if (SHOW_PUSH_OFFER && folder) setTimeout(() => askPush(message, folder), 900)
-    }, 2700) // 저장 모션이 한 바퀴 이상 보이게
+
+    // 서버가 알려준 글 번호를 쓴다. aiPicks는 피드 표시용이라 경로(비슷한 글·인기 글)에 따라 비어 있다.
+    const ids = message.proposal.postIds ?? []
+    const bookmarks = useBookmarksStore()
+    const motion = new Promise((r) => setTimeout(r, 2700)) // 저장 모션이 한 바퀴 이상 보이게
+
+    try {
+      // 북마크를 **먼저 끝낸 뒤** 폴더에 담는다.
+      // 서버의 assign은 '북마크 행이 있으면 폴더를 지정'하는 구조라, 동시에 보내면
+      // 아직 행이 없어서 조용히 건너뛴다 - 저장은 됐는데 폴더엔 없는 상태가 된다.
+      await Promise.all(
+        ids
+          .filter((id) => !bookmarks.bookmarkedPostIds.includes(id))
+          .map((id) => bookmarks.toggle(id).catch(() => {})),
+      )
+      await useFoldersStore().assign(ids, folder?.id ?? null)
+    } catch { /* 개별 실패는 위에서 삼킨다 - 여기까지 오면 화면은 '저장함'으로 마무리 */ }
+
+    await motion
+    message.proposal.state = 'saved'
+    savedCount.value += ids.length
+    message.sources?.forEach((p, i) => setTimeout(() => (p.saved = true), i * 160)) // 카드가 차례로 폴더에 꽂히는 느낌
+    // 폴더에 담았으면 공유 레포로 push할지 물어봄 (MVP 범위 밖이라 꺼둠)
+    if (SHOW_PUSH_OFFER && folder) setTimeout(() => askPush(message, folder), 900)
   }
 
   // 공유 드라이브 push 제안 - 사용자가 네를 눌렀을 때만 (목업: 프론트 저장)
@@ -320,9 +330,12 @@ export const useChatStore = defineStore('chat', () => {
 
   // 👍👎. 화면은 바로 바꾸고 서버 전송은 기다리지 않는다 - 눌렀는데 반응이 늦으면 더 이상하다.
   // 전송이 실패해도 되돌리지 않는다(피드백이 본론이 아니다). 👎는 이유를 고를 때 한 번 더 덮어쓴다.
+  // 좋아요/보통/별로. 서버는 1/0/-1 로 받는다 (chat_logs.feedback)
+  const FEEDBACK_SCORE = { up: 1, mid: 0, down: -1 }
+
   function setFeedback(message, value, reason = null) {
     message.feedback = { value, reason }
-    sendFeedback(message.logId, value === 'up' ? 1 : -1, reason)
+    sendFeedback(message.logId, FEEDBACK_SCORE[value] ?? 0, reason)
   }
 
   return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
