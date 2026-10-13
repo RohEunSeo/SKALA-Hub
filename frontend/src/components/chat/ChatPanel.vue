@@ -709,11 +709,10 @@ watch(
 }
 
 .cp-body {
-  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 16px;
+  padding: 8px 20px 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -726,15 +725,18 @@ watch(
   display: none; /* 스크롤바는 안 보이게 - Chrome/Safari/Edge(Chromium) */
 }
 
-/* 스크롤 영역 맨 아래에 깔리는 흐림 띠 - 콘텐츠의 일부가 아니라 컨테이너(.cp-body) 위에
-   떠 있는 오버레이라서(position:absolute, 컨테이너 기준) 스크롤해도 같이 안 밀리고 늘
-   바닥에 고정돼 있다. 지나가는 내용이 입력창 쪽으로 갈수록 점점 흐려지며 자연스럽게 이어짐 */
+/* 스크롤 영역 맨 아래에 고정(position:sticky) - 뒤늦게 absolute로 바꿔봤는데, absolute는
+   스크롤 컨테이너 안에서는 "지금 보이는 화면 맨 아래"가 아니라 "스크롤 안 했을 때의 맨 아래"에
+   고정돼버려서, 내용이 길어지면 화면 중간 어딘가에 떠버리는 버그가 났다(실측 확인함).
+   sticky여야 스크롤 위치와 무관하게 항상 보이는 화면 맨 아래에 붙어서, 지나가는 내용이
+   입력창 쪽으로 갈수록 점점 흐려지며 자연스럽게 이어진다 */
 .cp-scroll-fade {
-  position: absolute;
+  position: sticky;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
   height: 56px;
+  flex-shrink: 0;
   pointer-events: none;
   z-index: 1;
   backdrop-filter: blur(8px);
