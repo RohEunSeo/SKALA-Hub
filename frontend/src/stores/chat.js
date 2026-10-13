@@ -78,6 +78,12 @@ export const cardsDoneMs = (n) =>
 export const useChatStore = defineStore('chat', () => {
   const uiStore = useUiStore()
   const isOpen = ref(false)
+  // 런처의 인사/안내 말풍선 닫힘 상태 - ChatLauncher는 AppLayout이 각 View 안에 있어서
+  // 페이지(라우트) 이동마다 통째로 재마운트된다. 컴포넌트 로컬 ref로 두면 그때마다 초기화돼서
+  // 닫아도 다른 페이지로 넘어가면 다시 뜨는 것처럼 보인다 - 스토어(싱글턴)에 둬서 세션 동안
+  // (새로고침 전까지) 유지되게 한다
+  const greetingDismissed = ref(false)
+  const narrowHintDismissed = ref(false)
   const messages = ref([]) // { id, role: 'user'|'ai', text, sources?, proposal?, feedback?, error? }
   const status = ref(null) // 진행 중 도구 상태 { tool, text } - null이면 대기 중 아님
   const remaining = ref(DAILY_LIMIT)
@@ -374,5 +380,5 @@ export const useChatStore = defineStore('chat', () => {
     sendFeedback(message.logId, FEEDBACK_SCORE[value] ?? 0, reason)
   }
 
-  return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, narrow, isMobile, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
+  return { isOpen, greetingDismissed, narrowHintDismissed, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, narrow, isMobile, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
 })
