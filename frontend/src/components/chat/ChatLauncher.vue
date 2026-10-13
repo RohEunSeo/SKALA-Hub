@@ -199,26 +199,30 @@ function dismissGreeting() {
   box-sizing: border-box;
 }
 
+/* "Hub-Bot" 제목 왼쪽 위에 놓이는 작은 아이콘 - 이전엔 가운데 크게 뒀지만, 제목이
+   폴더 너비를 거의 다 쓰게 되면서 타이틀 곁의 작은 심볼 역할로 축소 */
 .fab-sprout {
   position: absolute;
-  left: 50%;
-  top: 40%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
+  left: 9%;
+  top: 8%;
+  width: 13px;
+  height: 13px;
+  transform-origin: 50% 100%;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* 폴더 왼쪽 아래 작은 워드마크 - Sidebar.vue 로고와 같은 색 조합(진한 남색 + 포인트 보라) */
+/* 폴더 너비를 거의 다 쓰는 워드마크 - Sidebar.vue 로고와 같은 색 조합(진한 남색 + 포인트 보라) */
 .fab-hubbot {
   position: absolute;
-  left: 6px;
-  bottom: 3px;
-  font-size: 6.5px;
+  left: 9%;
+  right: 7%;
+  bottom: 12%;
+  font-size: 11px;
   font-weight: 900;
-  letter-spacing: -0.1px;
+  letter-spacing: -0.3px;
   line-height: 1;
   color: #1a1a2e;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -237,7 +241,7 @@ function dismissGreeting() {
 }
 
 .chat-launcher:hover .fab-sprout {
-  transform: translate(-50%, -50%) rotate(-8deg) scale(1.12);
+  transform: rotate(-8deg) scale(1.12);
 }
 
 /* 챗봇으로 저장한 글 수 배지 */
