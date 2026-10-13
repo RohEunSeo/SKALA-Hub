@@ -223,6 +223,7 @@ function dismissGreeting() {
   letter-spacing: -0.3px;
   line-height: 1;
   color: #1a1a2e;
+  opacity: 0.82;
   white-space: nowrap;
   pointer-events: none;
 }
