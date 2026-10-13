@@ -79,7 +79,6 @@ function dismissGreeting() {
       <span class="fab-paper"></span>
       <span class="fab-front">
         <svg class="fab-sprout" viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M24 37 C24 34 24 30 24 27" fill="none" stroke="#43a047" stroke-width="3.4" stroke-linecap="round" />
           <path d="M24 27 C14.5 27 9 19.5 9.5 11 C18 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
           <path d="M24 27 C33.5 27 39 19.5 38.5 11 C30 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
         </svg>
@@ -199,14 +198,13 @@ function dismissGreeting() {
   box-sizing: border-box;
 }
 
-/* "Hub-Bot" 제목 왼쪽 위에 놓이는 작은 아이콘 - 이전엔 가운데 크게 뒀지만, 제목이
-   폴더 너비를 거의 다 쓰게 되면서 타이틀 곁의 작은 심볼 역할로 축소 */
+/* "Hub-Bot" 제목 바로 위에 놓이는 아이콘 - 줄기 없이 잎 2개만 */
 .fab-sprout {
   position: absolute;
   left: 9%;
-  top: 8%;
-  width: 13px;
-  height: 13px;
+  top: 2%;
+  width: 17px;
+  height: 17px;
   transform-origin: 50% 100%;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -216,8 +214,8 @@ function dismissGreeting() {
   position: absolute;
   left: 9%;
   right: 7%;
-  bottom: 12%;
-  font-size: 11px;
+  bottom: 10%;
+  font-size: 12.5px;
   font-weight: 900;
   letter-spacing: -0.3px;
   line-height: 1;
@@ -227,7 +225,7 @@ function dismissGreeting() {
 }
 
 .fab-hubbot-accent {
-  color: #4a3f8f;
+  color: #342a73;
 }
 
 .chat-launcher:hover .fab-front,
