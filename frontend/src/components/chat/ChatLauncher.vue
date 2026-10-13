@@ -205,7 +205,7 @@ function dismissGreeting() {
 .fab-sprout {
   position: absolute;
   left: 12px;
-  top: 8px;
+  top: 5px;
   width: 20px;
   height: 20px;
   transform-origin: 50% 100%;
