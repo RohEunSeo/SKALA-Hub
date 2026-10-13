@@ -810,7 +810,7 @@ watch(
   flex-direction: column;
   align-items: flex-start; /* 글자 길이만큼만 박스가 생김 */
   gap: 10px;
-  padding: 0 0 6px;
+  padding: 0;
 }
 
 .cp-chip {
@@ -1299,7 +1299,7 @@ watch(
 }
 
 .cp-foot {
-  padding: 0 14px 6px;
+  padding: 0 14px 2px;
 }
 
 .cp-quick {
