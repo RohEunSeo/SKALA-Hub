@@ -185,6 +185,9 @@ public class SlackSyncService {
 
             int newPosts = 0;
             int repliesProcessed = 0;
+            // 전체 글 수 - 신규 글마다 매번 COUNT(*) 쿼리를 새로 던지지 않도록 루프 시작 전에 한 번만
+            // 조회하고, 이후로는 신규 글이 생길 때마다 메모리에서 1씩 증가시켜 재사용한다
+            long totalCount = postRepository.countByIsDeletedFalse();
             for (JsonNode msg : messages) {
                 String subtype = msg.path("subtype").asString("");
                 if (SKIP_SUBTYPES.contains(subtype)) {
@@ -207,13 +210,12 @@ public class SlackSyncService {
                     log.error("게시글 저장 실패 (slackTs={})", slackTs, e);
                     recordSyncFailure(slackTs, msg, e);
                     String preview = msg.path("text").asString("");
-                    slackDmNotificationService.sendSyncFailure(
-                            slackTs, preview, e.getMessage(), postRepository.countByIsDeletedFalse());
+                    slackDmNotificationService.sendSyncFailure(slackTs, preview, e.getMessage(), totalCount);
                     continue;
                 }
                 if (isNew) {
                     newPosts++;
-                    long totalCount = postRepository.countByIsDeletedFalse();
+                    totalCount++;
                     post.setPostNumber((int) totalCount);
                     post = postRepository.save(post);
                     log.info(
@@ -245,9 +247,10 @@ public class SlackSyncService {
                         slackDmNotificationService.sendSyncResult(post, totalCount);
                     }
                 } else if (post.getPostNumber() == null) {
-                    // 과거 동기화 중 번호 부여가 누락된 기존 글 - 봇 댓글 재전송 없이 번호만 조용히 보정
-                    long totalCount = postRepository.countByIsDeletedFalse();
-                    post.setPostNumber((int) totalCount);
+                    // 과거 동기화 중 번호 부여가 누락된 기존 글 - 이미 존재하던 글이라 루프 시작 시점의
+                    // totalCount에 포함돼 있으므로 증가시키지 않고 별도로 다시 조회한다(드문 보정 경로라
+                    // 쿼리 1회 비용보다 정확성이 우선). 봇 댓글 재전송 없이 번호만 조용히 보정
+                    post.setPostNumber((int) postRepository.countByIsDeletedFalse());
                     postRepository.save(post);
                     log.info("[번호보정] slackTs={} postId={} postNumber={} 누락된 순번 보정", slackTs, post.getId(), post.getPostNumber());
                 }

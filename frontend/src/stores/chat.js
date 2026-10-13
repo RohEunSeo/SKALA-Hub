@@ -6,6 +6,7 @@ import { usePostsStore } from './posts'
 import { useFoldersStore, FOLDER_COLORS } from './folders'
 import { useBookmarksStore } from './bookmarks'
 import { useCommunityStore } from './community'
+import { useUiStore } from './ui'
 
 const HISTORY_KEY = 'skala-chat-history'
 const HISTORY_MAX = 20 // 이전 대화 보관 개수 (목업: 브라우저 localStorage, 서버 연동 시 서버 저장으로 교체)
@@ -13,7 +14,11 @@ const HISTORY_MAX = 20 // 이전 대화 보관 개수 (목업: 브라우저 loca
 const DEFAULT_W = 420 // 처음 열릴 때 폭
 const MIN_W = 420 // 패널 최소 폭 (창이 아무리 작아져도 이보다 좁아지지 않음)
 const MAX_W = 640 // 패널 최대 폭
-const MIN_LEFT = 480 // 여유가 있을 때 왼쪽(사이드바+게시글)에 남겨둘 폭 - 창이 좁으면 MIN_W가 우선
+const SIDEBAR_W = 260 // Sidebar.vue 고정 폭과 맞춰둔 값 - 접혀 있으면 0으로 침
+// 이 밑으로 본문이 좁아지면 챗봇 자체를 숨긴다 (narrow). 400도 여전히 일찍 숨었음(패널을 최대
+// 폭까지 드래그만 해도 1300px 노트북에서 숨어버림) - 폴더/카테고리 그리드가 이제 알아서 줄어드니
+// 진짜 못 읽을 정도로 좁을 때만 숨도록 300으로 더 낮춤
+const CONTENT_MIN = 300
 
 const FIRST_STEP = '질문 의도 분석 중'
 const DAILY_LIMIT = 10 // 첫 화면용 초기값. 실제 값은 서버가 알려준다 (/api/chat/access, usage 이벤트)
@@ -71,6 +76,7 @@ export const cardsDoneMs = (n) =>
   CARD_DELAY + Math.max(0, n - 1) * CARD_STEP + CARD_DURATION + CARD_SETTLE
 
 export const useChatStore = defineStore('chat', () => {
+  const uiStore = useUiStore()
   const isOpen = ref(false)
   const messages = ref([]) // { id, role: 'user'|'ai', text, sources?, proposal?, feedback?, error? }
   const status = ref(null) // 진행 중 도구 상태 { tool, text } - null이면 대기 중 아님
@@ -96,7 +102,8 @@ export const useChatStore = defineStore('chat', () => {
   const pending = ref(null) // 사용자에게 던진 질문 { question, options: [{label,value}], onPick } - 입력창 위 카드로 표시
   const savedCount = ref(0) // 챗봇으로 저장한 글 수 (런처 폴더 배지용, 목업)
   const history = ref(load()) // 종료된 이전 대화 { id, title, messages }[] 최신순
-  // 패널 폭 - 드래그로 조절, 브라우저 창이 작아지면 왼쪽 여유(MIN_LEFT)를 지키도록 자동으로 줄어듦 (경고 없이 보정)
+  // 패널 폭 - 드래그로 420~640px 사이에서 조절. 드래그 한계만 clamp하면 된다 -
+  // 자리가 부족해지는 건(사이드바+챗봇 동시 오픈 등) narrow로 따로 감지해서 챗봇 자체를 숨긴다
   //
   // 폭을 브라우저에 저장하지 않는다. 저장하면 한 번 넓혀 본 사람은 그 뒤로 계속 넓게 열려서
   // 매번 다시 줄여야 한다. 넓히는 건 '지금 이 글을 넓게 보고 싶다'는 일시적인 요구에 가까우므로
@@ -104,14 +111,24 @@ export const useChatStore = defineStore('chat', () => {
   // 예전 버전이 저장해 둔 폭이 남아 있으면 치운다 (이제 안 쓴다)
   try { localStorage.removeItem('skala-chat-width-v3') } catch { /* 무시 */ }
   const stored = ref(DEFAULT_W)
-  const winW = ref(window.innerWidth)
   const dragging = ref(false)
-  window.addEventListener('resize', () => (winW.value = window.innerWidth))
-  const width = computed(() => Math.max(MIN_W, Math.min(stored.value, MAX_W, winW.value - MIN_LEFT)))
+  const width = computed(() => Math.max(MIN_W, Math.min(stored.value, MAX_W)))
 
   function setWidth(px) {
-    stored.value = Math.max(MIN_W, Math.min(Math.round(px), MAX_W, winW.value - MIN_LEFT))
+    stored.value = Math.max(MIN_W, Math.min(Math.round(px), MAX_W))
   }
+
+  // 사이드바+패널이 동시에 본문을 밀어낼 때, 본문이 너무 좁아지면(CONTENT_MIN 미만) 챗봇 자체를
+  // 숨긴다 (작은 위젯으로 욱여넣는 대신) - AppLayout이 이 값을 보고 런처·패널을 통째로 안 보여준다
+  const winW = ref(window.innerWidth)
+  window.addEventListener('resize', () => { winW.value = window.innerWidth })
+  const sidebarW = computed(() => (uiStore.sidebarCollapsed ? 0 : SIDEBAR_W))
+  const contentW = computed(() => winW.value - sidebarW.value - width.value)
+  // 실제 가장 큰 스마트폰(Pixel Pro XL급)도 CSS 폭 448px 정도 - 480이면 전부 커버된다.
+  // 768은 사실 태블릿(iPad mini) 기준이라 데스크톱 리사이즈 테스트에서도 "폰"처럼 처리돼버려서 낮춤.
+  // AppLayout.vue의 사이드바 드로어 900px 기준과는 별개 값
+  const isMobile = computed(() => winW.value <= 480)
+  const narrow = computed(() => !isMobile.value && contentW.value < CONTENT_MIN)
 
   let seq = Date.now() // 복원한 옛 메시지 id와 겹치지 않게 시간값에서 시작
 
@@ -357,5 +374,5 @@ export const useChatStore = defineStore('chat', () => {
     sendFeedback(message.logId, FEEDBACK_SCORE[value] ?? 0, reason)
   }
 
-  return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
+  return { isOpen, aiPicks, pickSeq, clearPicks, elapsed, pending, askUser, answer, dismiss, submitForm, width, dragging, setWidth, narrow, isMobile, messages, status, remaining, limit, canUse, loadAccess, greeting, savedCount, history, endConversation, openConversation, open, close, ask, resolveProposal, setFeedback }
 })

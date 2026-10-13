@@ -1,0 +1,55 @@
+# ai/ 또는 deploy/가 바뀐 채로 main에 머지되면 Cloud Run에 자동 배포.
+# 기존 deploy/make-env.sh + deploy/deploy-ai.sh를 그대로 재사용 - 로컬 수동 배포와 로직이 갈라지지 않게 함.
+# 필요한 깃허브 Secrets: GCP_SA_KEY, GCP_PROJECT_ID, 그리고 deploy/make-env.sh의 KEYS 목록(.env에 있는 값들)
+name: Deploy AI server to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ai/**"
+      - "deploy/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: .env 생성 (AI 서버가 쓰는 키만 - deploy/make-env.sh 기준)
+        run: |
+          cat > .env <<EOF
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_DB_HOST=${{ secrets.SUPABASE_DB_HOST }}
+          SUPABASE_DB_PORT=${{ secrets.SUPABASE_DB_PORT }}
+          SUPABASE_DB_USER=${{ secrets.SUPABASE_DB_USER }}
+          SUPABASE_DB_PASSWORD=${{ secrets.SUPABASE_DB_PASSWORD }}
+          LLM_PROVIDER=${{ secrets.LLM_PROVIDER }}
+          LLM_MODEL=${{ secrets.LLM_MODEL }}
+          LLM_FALLBACKS=${{ secrets.LLM_FALLBACKS }}
+          LLM_RETRIES=${{ secrets.LLM_RETRIES }}
+          EMBEDDING_MODEL=${{ secrets.EMBEDDING_MODEL }}
+          INDEX_VERSION=${{ secrets.INDEX_VERSION }}
+          CHAT_DAILY_LIMIT=${{ secrets.CHAT_DAILY_LIMIT }}
+          CHAT_ALLOWED_CAMPUS=${{ secrets.CHAT_ALLOWED_CAMPUS }}
+          CHAT_ALLOWED_CLASSES=${{ secrets.CHAT_ALLOWED_CLASSES }}
+          CHAT_ALLOWED_USERS=${{ secrets.CHAT_ALLOWED_USERS }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+          EOF
+
+      - name: Deploy
+        run: |
+          chmod +x deploy/deploy-ai.sh
+          ./deploy/deploy-ai.sh

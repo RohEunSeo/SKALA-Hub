@@ -739,25 +739,13 @@ onUnmounted(() => {
   background: #4a3f8f;
 }
 
-/* 기본(전체화면)은 1행 6열, 화면이 좁아지면 3열 → 2열 → 1열로 반응형 전환 */
+/* grid auto-fill은 컨테이너 폭 계산이 상황에 따라 들쭉날쭉해서 카드가 예상보다 커지는 경우가
+   있었다 - flex-wrap + 카드별 고정 폭(.category-card)이 더 예측 가능하다 */
 .category-grid {
   margin-top: 24px;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 18px;
-}
-
-@media (max-width: 1100px) {
-  .category-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-  }
-}
-
-@media (max-width: 860px) {
-  .category-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 480px) {
@@ -766,18 +754,21 @@ onUnmounted(() => {
   }
 }
 
-/* 아바타/알림벨(.top-bar)이 데스크톱에선 컨테이너가 넓어 문제없이 오른쪽 위에 떠 있지만, 모바일처럼
-   폭이 좁아지면 절대 위치라 그 아래 안내 문구(eyebrow)/인사말이 그대로 깔려서 가려짐 - 모바일에서는
-   절대 위치를 풀어 일반 흐름의 한 줄(맨 위, 오른쪽 정렬)로 빼서 겹칠 여지 자체를 없앤다 */
-@media (max-width: 768px) {
+/* 아바타/알림벨(.top-bar)이 본문 폭이 넓을 땐 문제없이 오른쪽 위에 떠 있지만, 좁아지면 절대
+   위치라 그 아래 안내 문구(eyebrow)/인사말이 그대로 깔려서 가려짐 - 좁을 땐 절대 위치를 풀어
+   일반 흐름의 한 줄(맨 위, 오른쪽 정렬)로 빼서 겹칠 여지 자체를 없앤다.
+   뷰포트가 아니라 본문 실제 가용 폭(@container, AppLayout.vue의 .app-main-inner 기준) 으로 판단 -
+   사이드바+챗봇이 동시에 열려 본문만 좁아지는 경우도 잡아야 해서 */
+@container (max-width: 768px) {
   .top-bar {
     position: static;
     margin-bottom: 12px;
   }
 }
 
-/* 폴더 모양/호버 효과는 FolderCard가 담당 - 여기서는 탭이 위로 삐져나오는 만큼의 여백만 */
+/* 폴더 모양/호버 효과는 FolderCard가 담당 - 여기서는 탭이 위로 삐져나오는 만큼의 여백 + 고정 폭 */
 .category-card {
+  flex: 0 0 140px;
   margin-top: 14px;
 }
 

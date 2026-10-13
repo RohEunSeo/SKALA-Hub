@@ -1121,7 +1121,11 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
   font-size: 12.5px;
   font-weight: 600;
   color: #4a3f8f;
-  word-break: keep-all;
+  /* 사이드바+챗봇이 겹쳐 극단적으로 좁아지면 word-break:keep-all도 결국 한 글자씩 세로로
+     쪼개질 수 있다 - 그 지경이면 줄바꿈 대신 말줄임표로 끊는 게 훨씬 읽기 낫다 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pick-chip-clear {
