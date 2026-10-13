@@ -1339,7 +1339,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px 18px 14px;
+  padding: 14px 18px 12px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px);
@@ -1371,7 +1371,7 @@ watch(
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  min-height: 66px;
+  min-height: 56px;
   padding: 4px 48px 4px 0;
   background: transparent;
   color: #1a1a2e;
