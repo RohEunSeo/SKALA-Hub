@@ -121,11 +121,11 @@ function dismissGreeting() {
    자체가 버튼이라 동그란 틀이 없어도 바로 알아볼 수 있고, 브랜드 컬러와도 맞는다 */
 .chat-launcher {
   position: fixed;
-  right: 32px;
-  bottom: 34px;
+  right: 48px;
+  bottom: 56px;
   z-index: 60;
-  width: 50px;
-  height: 41px;
+  width: 62px;
+  height: 50px;
   /* 말풍선과 같은 주기로 움직여야 둘이 붙어 다니는 것처럼 보인다 */
   animation: fab-float 3.2s ease-in-out infinite;
   padding: 0;
@@ -227,8 +227,8 @@ function dismissGreeting() {
   left: 50%;
   top: 40%;
   transform: translate(-50%, -50%);
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -249,8 +249,8 @@ function dismissGreeting() {
 /* 챗봇으로 저장한 글 수 배지 */
 .fab-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -8px;
+  right: -8px;
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
@@ -268,7 +268,7 @@ function dismissGreeting() {
 /* 호버하면 왼쪽으로 라벨이 펼쳐짐 */
 .fab-label {
   position: absolute;
-  right: 60px;
+  right: 72px;
   top: 50%;
   transform: translateY(-50%) translateX(8px);
   padding: 6px 12px;
@@ -309,8 +309,8 @@ function dismissGreeting() {
 /* ── 인사 말풍선 ───────────────────────────────────────────── */
 .fab-intro {
   position: fixed;
-  right: 52px;          /* 런처(right 32, 폭 50)보다 왼쪽으로 */
-  bottom: 85px;          /* 런처 윗변(bottom 75)보다 위로 */
+  right: 68px;          /* 런처(right 48, 폭 62)보다 왼쪽으로 */
+  bottom: 116px;          /* 런처 윗변(bottom 56, 높이 50 → 106)보다 위로 */
   animation: fab-float 3.2s ease-in-out infinite;
   z-index: 60;
   max-width: 320px;
@@ -388,7 +388,7 @@ function dismissGreeting() {
 @media (max-width: 900px) {
   .fab-intro {
     right: 20px;
-    bottom: 85px;
+    bottom: 116px;
     max-width: calc(100vw - 40px);
   }
   .fab-intro-body {
