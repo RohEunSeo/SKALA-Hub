@@ -393,9 +393,10 @@ function dismissGreeting() {
 
 /* 좁은 화면에서는 옆에 둘 자리가 없어 런처 위로 올린다 */
 @media (max-width: 900px) {
+  /* right/bottom은 기본 .fab-intro 규칙 그대로 둔다(런처 위치에서 계산된 값) - 전엔 여기서
+     right:20px로 따로 하드코딩해뒀는데, 런처를 옮길 때마다 이 숫자만 안 바뀌어서 말풍선이
+     런처보다 오른쪽으로 삐져나가 버렸다(화면이 좁을 때만 드러나는 버그였음) */
   .fab-intro {
-    right: 20px;
-    bottom: v-bind('(LAUNCHER_BOTTOM + LAUNCHER_H + 10) + "px"');
     max-width: calc(100vw - 40px);
   }
   .fab-intro-body {
