@@ -498,7 +498,6 @@ watch(
       <div v-if="openPost && !chatStore.pending" class="cp-quick">
         <button v-for="q in POST_ACTIONS" :key="q" class="cp-quick-btn" @click="send(q)">{{ q }}</button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
       <div class="cp-input">
         <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</div>
         <textarea
@@ -515,6 +514,7 @@ watch(
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
     </footer>
   </aside>
 </template>
@@ -794,9 +794,11 @@ watch(
 
 .cp-chip {
   padding: 13px 20px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 999px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: #4a3f8f;
   font-size: 15px;
   font-weight: 600;
@@ -1318,7 +1320,10 @@ watch(
   gap: 10px;
   padding: 16px 18px 14px;
   border-radius: 26px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 2px 10px rgba(74, 63, 143, 0.12);
 }
 
