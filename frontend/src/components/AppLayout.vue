@@ -30,7 +30,9 @@ const uiStore = useUiStore()
 const chatStore = useChatStore()
 const authStore = useAuthStore()
 const foldersStore = useFoldersStore()
-const showChat = computed(() => chatStore.canUse === true)
+// 사이드바+챗봇이 동시에 열려서 본문 놓을 자리가 없을 만큼 좁아지면(chatStore.narrow) 작은 위젯으로
+// 욱여넣는 대신 챗봇 자체(런처·패널)를 통째로 숨긴다 - 넓어지면 다시 보임
+const showChat = computed(() => chatStore.canUse === true && !chatStore.narrow)
 
 // 로그인한 뒤에만 물어본다. 로그인 전에 부르면 401이라 의미가 없다.
 watch(
@@ -42,6 +44,13 @@ watch(
     } else chatStore.canUse = false
   },
   { immediate: true },
+)
+
+// 좁아져서 챗봇이 숨겨질 때는 열려 있던 패널도 닫아둔다 - 나중에 다시 넓어졌을 때
+// 누르지도 않았는데 패널이 저절로 열려 있는 상태로 나타나지 않게
+watch(
+  () => chatStore.narrow,
+  (yes) => { if (yes) chatStore.close() },
 )
 const innerStyle = computed(() => ({ maxWidth: `${props.maxWidth}px` }))
 const mainStyle = computed(() => ({ paddingTop: `${props.paddingTop}px` }))
@@ -82,8 +91,9 @@ function closeSidebar() {
     <!-- 안 읽은 공지 팝업. 챗봇과 달리 로그인한 모두에게 보여야 하므로 showChat 밖에 둔다 -->
     <AnnouncementPopup />
 
+    <!-- 좁아서 패널을 못 띄우는 동안에도 아이콘은 그대로 두고, 안내 말풍선은 ChatLauncher 안에서 뜬다 -->
+    <ChatLauncher v-if="chatStore.canUse === true" />
     <template v-if="showChat">
-      <ChatLauncher />
       <ChatPanel />
       <PushModal />
     </template>
@@ -172,6 +182,10 @@ function closeSidebar() {
   width: 100%;
   min-width: 0;
   position: relative;
+  /* 사이드바+챗봇이 동시에 열려서 "본문 가용 폭"만 좁아지는 경우, 뷰포트 기준 @media로는
+     못 잡는다 - 각 페이지가 실제 본문 폭 기준으로 반응하고 싶을 때 이 컨테이너를 기준으로
+     @container 쿼리를 쓸 수 있게 미리 선언해둔다 */
+  container-type: inline-size;
 }
 
 @media (max-width: 1024px) {

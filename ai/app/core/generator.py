@@ -32,14 +32,27 @@ ABSTAIN_PHRASE = "올라온 글 중에는 찾지 못했어요"
 _ABSTAIN = re.compile(r"(올라온|관련된?|해당)\s*(글|게시글|내용)[^.!?\n]{0,40}?찾(지\s*못했|을\s*수\s*없)")
 
 
+# 목록 줄. 프롬프트가 찾은 글을 '· '로 적게 돼 있어서, 이 줄이 있으면 뭔가를 준 것이다.
+_HAS_ITEMS = re.compile(r"^\s*·\s", re.M)
+
+
 def is_abstention(answer: str) -> bool:
     """답변이 "근거를 못 찾았다"는 뜻인지.
+
+    문구만 보면 **부분 답변을 거절로 오판**한다. 실제로 "SKALA 관련 내용은 찾았으나
+    SAP 관련 내용은 찾지 못했어요" 뒤에 글 목록이 붙은 답변이 거절로 찍혔고,
+    운영에서 출처 카드가 통째로 사라졌다(abstained면 sources를 안 보낸다).
+    그래서 목록 줄이 하나라도 있으면 거절이 아니라고 본다.
+    실제 로그 38건으로 확인했을 때 뒤집히는 것은 그 1건뿐이었다.
 
     완벽한 판정은 아니다. 더 확실하게 하려면 모델에게 JSON으로 플래그를 받아야 하는데,
     그러면 스트리밍(글자가 한 자씩 나오는 효과)이 깨진다. 지금은 문구로 판단하고,
     놓친 사례가 로그에 쌓이면 그때 방식을 바꾼다.
     """
-    return bool(_ABSTAIN.search(answer or ""))
+    text = answer or ""
+    if not _ABSTAIN.search(text):
+        return False
+    return not _HAS_ITEMS.search(text)
 
 # 수업 13_agentic_rag.py의 generate_prompt를 슬랙 게시글에 맞게 옮긴 것.
 # 핵심 두 줄: "주어진 글만 근거로" + "없으면 모른다고 할 것".

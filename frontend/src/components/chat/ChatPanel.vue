@@ -1687,8 +1687,8 @@ watch(
   50% { transform: scale(1.12) rotate(8deg); opacity: 0.85; }
 }
 
-/* 모바일은 피드를 밀지 않고 화면 전체를 덮음 */
-@media (max-width: 900px) {
+/* 모바일은 피드를 밀지 않고 화면 전체를 덮음 - chat.js의 isMobile(480px)과 맞춘 값 */
+@media (max-width: 480px) {
   .cp-resize, .cp-fold { display: none; }
 
   .chat-panel {

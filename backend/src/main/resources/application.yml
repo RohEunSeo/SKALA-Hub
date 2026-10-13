@@ -40,8 +40,10 @@ slack:
   sync-interval-ms: ${SLACK_SYNC_INTERVAL_MS:300000}
   # 증분 동기화가 다시 훑는 범위 - 이 기간 안에서는 새 글/댓글/반응수/수정이 모두 5분마다 반영됨
   sync-recent-window-days: ${SLACK_SYNC_RECENT_WINDOW_DAYS:7}
-  # 채널 전체(옛 글 포함)를 처음부터 다시 훑는 전체 재동기화 주기 - 새벽 4시(한산한 시간)
-  full-sync-cron: ${SLACK_FULL_SYNC_CRON:0 0 4 * * *}
+  # 채널 전체(옛 글 포함)를 처음부터 다시 훑는 전체 재동기화 주기 - 일요일 새벽 4시(한산한 시간).
+  # 증분 동기화(5분, 최근 7일)가 새 글/댓글/반응/수정을 이미 다 잡아내므로, 전체 재동기화는
+  # "7일보다 오래된 글의 반응수 변화"만 추가로 잡는 용도라 매일 돌릴 만큼 가치가 크지 않음 - 주 1회로 낮춤
+  full-sync-cron: ${SLACK_FULL_SYNC_CRON:0 0 4 * * SUN}
   # false면 자동 스케줄러(증분/전체 재동기화)만 꺼짐 - 교육 종료 후 새 글이 더 이상 없을 때용.
   # /admin의 수동 동기화 버튼은 이 값과 무관하게 항상 동작함
   sync-enabled: ${SLACK_SYNC_ENABLED:true}

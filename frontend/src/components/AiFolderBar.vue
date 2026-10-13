@@ -352,33 +352,30 @@ function doRemove() {
   color: #4a3f8f;
 }
 
+/* 줄바꿈 대신 카드가 같이 줄어들며 한 줄을 유지한다 - 폴더가 아주 많아서 최소 폭(70px)
+   밑으로도 안 들어가면 그때만 가로 스크롤로 받는다 */
 .fgrid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 18px;
 }
 
-@media (max-width: 900px) {
-  .fgrid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
-  .fgrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 /* 홈 "카테고리별 아카이브"의 폴더 카드를 필터 크기로 줄여 쓴다.
-   FolderCard가 cqw 단위라 폭만 정하면 안쪽 글씨/여백이 같은 비율로 따라 줄어든다. */
+   FolderCard가 cqw 단위라 폭만 정하면 안쪽 글씨/아이콘/여백이 같은 비율로 따라 줄어든다. */
 .fslot {
   position: relative;
+  flex: 1 1 0;
+  min-width: 70px;
+  max-width: 140px;
 }
 
 /* + 타일 - 폴더 윤곽선을 그려서 그리드에서 혼자 사각형으로 튀지 않게 한다 */
 .fadd {
   position: relative;
+  flex: 1 1 0;
+  min-width: 70px;
+  max-width: 140px;
   aspect-ratio: 200 / 170;
   border: 0;
   padding: 0;
