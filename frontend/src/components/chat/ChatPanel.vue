@@ -503,7 +503,6 @@ watch(
       <div v-if="openPost && !chatStore.pending" class="cp-quick">
         <button v-for="q in POST_ACTIONS" :key="q" class="cp-quick-btn" @click="send(q)">{{ q }}</button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
       <div class="cp-input">
         <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</div>
         <textarea
@@ -520,6 +519,7 @@ watch(
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
     </footer>
   </aside>
 </template>
@@ -1339,7 +1339,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 10px;
   padding: 12px 18px 10px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
