@@ -739,12 +739,14 @@ onUnmounted(() => {
   background: #4a3f8f;
 }
 
-/* grid auto-fill은 컨테이너 폭 계산이 상황에 따라 들쭉날쭉해서 카드가 예상보다 커지는 경우가
-   있었다 - flex-wrap + 카드별 고정 폭(.category-card)이 더 예측 가능하다 */
+/* flex-wrap + 카드별 고정 폭은 마지막 줄의 카드가 비어있는 만큼 나머지 카드 쪽으로 안 늘어나서
+   위 순위보드(전체 폭)랑 오른쪽 끝이 안 맞았다 - grid auto-fit은 한 줄이 아니라 그리드 전체가
+   같은 컬럼 트랙을 공유해서 줄마다 들쭉날쭉해지지 않고, 1fr이 남는 폭을 끝까지 채워준다.
+   minmax(140px, 1fr)라 140px 밑으로는 안 줄고 컬럼 수가 먼저 준다 */
 .category-grid {
   margin-top: 24px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 18px;
 }
 
@@ -766,10 +768,11 @@ onUnmounted(() => {
   }
 }
 
-/* 폴더 모양/호버 효과는 FolderCard가 담당 - 여기서는 탭이 위로 삐져나오는 만큼의 여백 + 고정 폭 */
+/* 폴더 모양/호버 효과는 FolderCard가 담당 - 여기서는 탭이 위로 삐져나오는 만큼의 여백만.
+   폭은 category-grid의 grid-template-columns가 정함(140px~1fr) */
 .category-card {
-  flex: 0 0 140px;
   margin-top: 14px;
+  min-width: 0;
 }
 
 /* 아이콘/글씨는 FolderCard 폭 기준(cqw)으로 같이 줄어듦 */
