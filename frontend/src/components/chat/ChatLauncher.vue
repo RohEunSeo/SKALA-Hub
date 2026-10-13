@@ -17,8 +17,8 @@ import { useChatStore } from '../../stores/chat'
 
 // 런처 위치/크기 - 말풍선(.fab-intro)이 이 값에서 직접 계산되게 해서(CSS v-bind), 런처를
 // 옮길 때마다 말풍선 쪽 right/bottom을 손으로 맞춰 쓰다가 자꾸 어긋났던 문제를 근본적으로 없앤다
-const LAUNCHER_RIGHT = 54
-const LAUNCHER_BOTTOM = 38
+const LAUNCHER_RIGHT = 40
+const LAUNCHER_BOTTOM = 28
 const LAUNCHER_W = 62
 const LAUNCHER_H = 50
 
