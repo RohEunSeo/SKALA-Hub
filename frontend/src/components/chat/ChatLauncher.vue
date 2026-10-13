@@ -83,6 +83,8 @@ function dismissGreeting() {
           <path d="M24 27 C14.5 27 9 19.5 9.5 11 C18 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
           <path d="M24 27 C33.5 27 39 19.5 38.5 11 C30 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
         </svg>
+        <!-- SKALAHub 로고(Sidebar.vue .logo-text/.logo-accent)랑 같은 2톤 패턴 - Hub만 포인트 보라 -->
+        <span class="fab-hubbot"><span class="fab-hubbot-accent">Hub</span>-Bot</span>
       </span>
     </span>
     <span v-if="chatStore.savedCount" class="fab-badge">{{ chatStore.savedCount }}</span>
@@ -205,6 +207,23 @@ function dismissGreeting() {
   width: 20px;
   height: 20px;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 폴더 왼쪽 아래 작은 워드마크 - Sidebar.vue 로고와 같은 색 조합(진한 남색 + 포인트 보라) */
+.fab-hubbot {
+  position: absolute;
+  left: 6px;
+  bottom: 3px;
+  font-size: 6.5px;
+  font-weight: 900;
+  letter-spacing: -0.1px;
+  line-height: 1;
+  color: #1a1a2e;
+  pointer-events: none;
+}
+
+.fab-hubbot-accent {
+  color: #4a3f8f;
 }
 
 .chat-launcher:hover .fab-front,

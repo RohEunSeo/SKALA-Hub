@@ -708,8 +708,8 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
    반투명 + blur로 뒤 게시글이 은은하게 비치게 해서 진한 단색보다 콘텐츠를 덜 가리게 함 */
 .scroll-top-btn {
   position: fixed;
-  right: 20px;
-  bottom: 92px; /* 우하단 AI 챗봇 런처(bottom 24px, 높이 50px) 위로 띄움 */
+  right: 28px;
+  bottom: 120px; /* 우하단 AI 챗봇 런처(bottom 56px, 높이 50px → 윗변 106px) 위로 안 겹치게 띄움 */
   z-index: 50;
   display: flex;
   flex-direction: column;
