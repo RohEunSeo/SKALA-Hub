@@ -163,10 +163,10 @@ function closeSidebar() {
   display: flex;
   justify-content: center;
   /* padding-top은 :style="mainStyle"로 페이지별(paddingTop prop)로 넘어옴 */
-  /* 하단 여백(160px)은 ChatLauncher의 뷰포트 고정 인사 말풍선(bottom:85px + 말풍선 자체 높이
+  /* 하단 여백(190px)은 ChatLauncher의 뷰포트 고정 인사 말풍선(bottom:116px + 말풍선 자체 높이
      ~55~60px) 높이를 가린다 - 짧으면 페이지 끝까지 스크롤했을 때 마지막 콘텐츠(폴더 카드 등)가
      말풍선에 가려 보임 */
-  padding: 0 48px 160px;
+  padding: 0 48px 190px;
   transition: margin-right 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
@@ -193,7 +193,7 @@ function closeSidebar() {
 
 @media (max-width: 1024px) {
   .app-main {
-    padding: 0 24px 150px;
+    padding: 0 24px 170px;
     padding-top: 56px !important;
   }
 }
@@ -227,7 +227,7 @@ function closeSidebar() {
   }
 
   .app-main {
-    padding: 0 16px 140px;
+    padding: 0 16px 160px;
     padding-top: 68px !important;
   }
 }
