@@ -504,11 +504,14 @@ watch(
         <button v-for="q in POST_ACTIONS" :key="q" class="cp-quick-btn" @click="send(q)">{{ q }}</button>
       </div>
       <div class="cp-input">
-        <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</div>
+        <div class="cp-context">
+          <span class="cp-context-tab"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</span>
+          <span class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</span>
+        </div>
         <textarea
           ref="inputEl"
           v-model="input"
-          rows="3"
+          rows="2"
           maxlength="500"
           :placeholder="chatStore.remaining > 0 ? '관심 있는 주제를 입력하세요...' : '오늘 횟수를 모두 사용했어요'"
           :disabled="chatStore.remaining <= 0"
@@ -519,7 +522,6 @@ watch(
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
     </footer>
   </aside>
 </template>
@@ -1327,19 +1329,19 @@ watch(
 }
 
 .cp-usage {
-  text-align: center;
-  font-size: 12px;
+  flex: none;
+  font-size: 11px;
   font-weight: 600;
   color: #4a3f8f;
-  padding: 8px 0;
+  white-space: nowrap;
 }
 
 .cp-input {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px 14px;
+  gap: 6px;
+  padding: 14px 18px 10px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px);
@@ -1351,10 +1353,21 @@ watch(
 .cp-context {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: #1a1a2e;
+}
+
+.cp-context-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cp-logo {
@@ -1371,7 +1384,7 @@ watch(
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  min-height: 66px;
+  min-height: 44px;
   padding: 4px 48px 4px 0;
   background: transparent;
   color: #1a1a2e;
