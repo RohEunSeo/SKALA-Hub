@@ -5,7 +5,7 @@
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { CARD_DELAY, CARD_STEP, useChatStore } from '../../stores/chat'
+import { CARD_DELAY, CARD_STEP, CARD_DURATION, useChatStore } from '../../stores/chat'
 import { useAuthStore } from '../../stores/auth'
 import { usePostsStore } from '../../stores/posts'
 import { useMyPageStore } from '../../stores/mypage'
@@ -233,12 +233,42 @@ function onKeydown(e) {
   }
 }
 
-// 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤
+// 추천 카드(.source-card)는 한 장씩 시차를 두고 올라오는데(CARD_DELAY/CARD_STEP), 그 전엔
+// 카드가 뜨자마자 전체 높이(scrollHeight, 이미 카드 n장 다 차지한 상태)로 바로 스크롤해버려서
+// 1~2번째 카드만 보고 바로 맨 아래로 뚝 떨어지는 것처럼 보였다. 카드가 실제로 올라오는
+// 속도에 맞춰 한 장씩 순서대로 스크롤하도록 분리한다 - 이 시퀀스가 진행되는 동안은
+// 아래 "전체 스크롤" 효과를 잠깐 꺼둔다(stagingCardScroll)
+const stagingCardScroll = ref(false)
+let cardScrollTimers = []
 watch(
-  () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status],
+  () => chatStore.messages[chatStore.messages.length - 1]?.sources?.length,
+  async (n, prev) => {
+    if (!n || prev) return // 0(또는 없음) → n 으로 막 생긴 순간에만 (이미 있던 카드 수 변화는 무시)
+    cardScrollTimers.forEach(clearTimeout)
+    cardScrollTimers = []
+    stagingCardScroll.value = true
+    await nextTick()
+    const cards = Array.from(bodyEl.value?.querySelectorAll('.source-card') ?? []).slice(-n)
+    cards.forEach((card, i) => {
+      cardScrollTimers.push(
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'end' })
+          if (i === cards.length - 1) stagingCardScroll.value = false
+        }, CARD_DELAY + i * CARD_STEP + CARD_DURATION * 0.7),
+      )
+    })
+  },
+)
+
+// 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤. chatStore.pending(폴더 저장 제안 등 되묻기 카드)도
+// 같이 감시한다 - 이게 뜨면 입력창 위 footer가 그만큼 커져서 body가 보이는 영역이 줄어드는데,
+// 그 순간 다시 스크롤하지 않으면 방금 추천된 카드가 그 제안 카드에 가려 보인다
+watch(
+  () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status, chatStore.pending],
   async () => {
     await nextTick()
-    if (bodyEl.value) bodyEl.value.scrollTop = bodyEl.value.scrollHeight
+    if (stagingCardScroll.value) return // 카드가 한 장씩 올라오는 시퀀스 진행 중이면 건너뜀
+    if (bodyEl.value) bodyEl.value.scrollTo({ top: bodyEl.value.scrollHeight, behavior: 'smooth' })
   },
   { deep: true },
 )
@@ -461,6 +491,9 @@ watch(
           </div>
         </div>
       </template>
+      <!-- 입력창과 만나는 경계가 뚝 끊기지 않고 제미나이 챗봇처럼 아래로 갈수록 흐려지도록 -
+           스크롤 영역 맨 아래에 붙어서(sticky) 지나가는 내용 위에 점점 진해지는 블러를 깐다 -->
+      <div class="cp-scroll-fade" aria-hidden="true"></div>
     </div>
 
     <footer class="cp-foot">
@@ -498,7 +531,6 @@ watch(
       <div v-if="openPost && !chatStore.pending" class="cp-quick">
         <button v-for="q in POST_ACTIONS" :key="q" class="cp-quick-btn" @click="send(q)">{{ q }}</button>
       </div>
-      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
       <div class="cp-input">
         <div class="cp-context"><img class="cp-logo" :src="skalaIcon" alt="SKALA" />{{ openPost ? `"${openPost.title || '이 글'}" 글 보는 중` : `"${context}" 탭 공유 중` }}</div>
         <textarea
@@ -515,6 +547,7 @@ watch(
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </div>
+      <div class="cp-usage">오늘 {{ chatStore.remaining }}/{{ chatStore.limit }}회 남음</div>
     </footer>
   </aside>
 </template>
@@ -679,10 +712,38 @@ watch(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 16px;
+  padding: 8px 20px 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* 스크롤은 그대로 되지만 스크롤바는 안 보이게 - Firefox/구 Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cp-body::-webkit-scrollbar {
+  display: none; /* 스크롤바는 안 보이게 - Chrome/Safari/Edge(Chromium) */
+}
+
+/* 스크롤 영역 맨 아래에 고정(position:sticky) - 뒤늦게 absolute로 바꿔봤는데, absolute는
+   스크롤 컨테이너 안에서는 "지금 보이는 화면 맨 아래"가 아니라 "스크롤 안 했을 때의 맨 아래"에
+   고정돼버려서, 내용이 길어지면 화면 중간 어딘가에 떠버리는 버그가 났다(실측 확인함).
+   sticky여야 스크롤 위치와 무관하게 항상 보이는 화면 맨 아래에 붙어서, 지나가는 내용이
+   입력창 쪽으로 갈수록 점점 흐려지며 자연스럽게 이어진다 */
+.cp-scroll-fade {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  flex-shrink: 0;
+  pointer-events: none;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(247, 245, 253, 0.85) 70%);
+  mask-image: linear-gradient(to bottom, transparent, #000 55%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 55%);
 }
 
 .cp-empty {
@@ -789,14 +850,16 @@ watch(
   flex-direction: column;
   align-items: flex-start; /* 글자 길이만큼만 박스가 생김 */
   gap: 10px;
-  padding: 0 0 18px;
+  padding: 0;
 }
 
 .cp-chip {
   padding: 13px 20px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: 999px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: #4a3f8f;
   font-size: 15px;
   font-weight: 600;
@@ -1276,7 +1339,7 @@ watch(
 }
 
 .cp-foot {
-  padding: 0 14px 14px;
+  padding: 0 14px 2px;
 }
 
 .cp-quick {
@@ -1316,9 +1379,12 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 16px 18px 14px;
+  padding: 12px 18px 10px;
   border-radius: 26px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
   box-shadow: 0 2px 10px rgba(74, 63, 143, 0.12);
 }
 
@@ -1345,7 +1411,7 @@ watch(
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  min-height: 66px;
+  min-height: 48px;
   padding: 4px 48px 4px 0;
   background: transparent;
   color: #1a1a2e;
@@ -1374,10 +1440,12 @@ watch(
 /* 사용자에게 되묻는 카드 - 입력창 위 */
 .cp-ask {
   margin-bottom: 10px;
-  padding: 14px 14px 8px;
+  padding: 10px 14px 6px;
   border-radius: 22px;
-  background: #ffffff;
-  border: 1px solid #cfc9f3;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(207, 201, 243, 0.8);
   box-shadow: 0 4px 14px rgba(74, 63, 143, 0.12);
   animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -1387,7 +1455,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 6px 8px;
+  padding: 0 6px 6px;
 }
 
 .ask-q {
@@ -1414,7 +1482,7 @@ watch(
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 11px 8px;
+  padding: 9px 8px;
   border: 0;
   border-top: 1px solid #f0edfa;
   background: transparent;

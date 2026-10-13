@@ -15,6 +15,13 @@
 import { ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 
+// 런처 위치/크기 - 말풍선(.fab-intro)이 이 값에서 직접 계산되게 해서(CSS v-bind), 런처를
+// 옮길 때마다 말풍선 쪽 right/bottom을 손으로 맞춰 쓰다가 자꾸 어긋났던 문제를 근본적으로 없앤다
+const LAUNCHER_RIGHT = 40
+const LAUNCHER_BOTTOM = 28
+const LAUNCHER_W = 62
+const LAUNCHER_H = 50
+
 const chatStore = useChatStore()
 
 const hovering = ref(false)
@@ -100,11 +107,11 @@ function dismissGreeting() {
    자체가 버튼이라 동그란 틀이 없어도 바로 알아볼 수 있고, 브랜드 컬러와도 맞는다 */
 .chat-launcher {
   position: fixed;
-  right: 54px;
-  bottom: 56px;
+  right: v-bind('LAUNCHER_RIGHT + "px"');
+  bottom: v-bind('LAUNCHER_BOTTOM + "px"');
   z-index: 60;
-  width: 62px;
-  height: 50px;
+  width: v-bind('LAUNCHER_W + "px"');
+  height: v-bind('LAUNCHER_H + "px"');
   /* 말풍선과 같은 주기로 움직여야 둘이 붙어 다니는 것처럼 보인다 */
   animation: fab-float 3.2s ease-in-out infinite;
   padding: 0;
@@ -309,8 +316,8 @@ function dismissGreeting() {
 /* ── 인사 말풍선 ───────────────────────────────────────────── */
 .fab-intro {
   position: fixed;
-  right: 74px;          /* 런처(right 54, 폭 62)보다 왼쪽으로 */
-  bottom: 116px;          /* 런처 윗변(bottom 56, 높이 50 → 106)보다 위로 */
+  right: v-bind('(LAUNCHER_RIGHT + 20) + "px"');    /* 런처보다 왼쪽으로 - LAUNCHER_RIGHT에서 계산 */
+  bottom: v-bind('(LAUNCHER_BOTTOM + LAUNCHER_H + 10) + "px"');    /* 런처 윗변보다 위로 - LAUNCHER_BOTTOM/H에서 계산 */
   animation: fab-float 3.2s ease-in-out infinite;
   z-index: 60;
   max-width: 320px;
@@ -386,9 +393,10 @@ function dismissGreeting() {
 
 /* 좁은 화면에서는 옆에 둘 자리가 없어 런처 위로 올린다 */
 @media (max-width: 900px) {
+  /* right/bottom은 기본 .fab-intro 규칙 그대로 둔다(런처 위치에서 계산된 값) - 전엔 여기서
+     right:20px로 따로 하드코딩해뒀는데, 런처를 옮길 때마다 이 숫자만 안 바뀌어서 말풍선이
+     런처보다 오른쪽으로 삐져나가 버렸다(화면이 좁을 때만 드러나는 버그였음) */
   .fab-intro {
-    right: 20px;
-    bottom: 116px;
     max-width: calc(100vw - 40px);
   }
   .fab-intro-body {

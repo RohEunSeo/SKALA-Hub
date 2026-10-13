@@ -709,7 +709,9 @@ onUnmounted(() => window.removeEventListener('scroll', handleScrollForTopButton)
 .scroll-top-btn {
   position: fixed;
   right: 28px;
-  bottom: 120px; /* 우하단 AI 챗봇 런처(bottom 56px, 높이 50px → 윗변 106px) 위로 안 겹치게 띄움 */
+  /* 런처 윗변(106px)만 피하면 됐었는데, 그 위에 떠 있는 챗봇 인사/안내 말풍선(z-index가 더 높음)
+     까지 감안해야 한다 - 말풍선이 안 닫혀 있는 동안은 이 버튼이 그 밑에 깔려 안 보였다 */
+  bottom: 185px;
   z-index: 50;
   display: flex;
   flex-direction: column;

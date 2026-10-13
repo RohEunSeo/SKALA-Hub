@@ -11,8 +11,8 @@ import { useUiStore } from './ui'
 const HISTORY_KEY = 'skala-chat-history'
 const HISTORY_MAX = 20 // 이전 대화 보관 개수 (목업: 브라우저 localStorage, 서버 연동 시 서버 저장으로 교체)
 
-const DEFAULT_W = 420 // 처음 열릴 때 폭
-const MIN_W = 420 // 패널 최소 폭 (창이 아무리 작아져도 이보다 좁아지지 않음)
+const DEFAULT_W = 440 // 처음 열릴 때 폭
+const MIN_W = 440 // 패널 최소 폭 (창이 아무리 작아져도 이보다 좁아지지 않음)
 const MAX_W = 640 // 패널 최대 폭
 const SIDEBAR_W = 260 // Sidebar.vue 고정 폭과 맞춰둔 값 - 접혀 있으면 0으로 침
 // 이 밑으로 본문이 좁아지면 챗봇 자체를 숨긴다 (narrow). 400도 여전히 일찍 숨었음(패널을 최대
