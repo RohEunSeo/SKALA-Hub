@@ -204,10 +204,11 @@ function dismissGreeting() {
 /* "Hub-Bot" 제목 바로 위에 놓이는 아이콘 - 줄기 없이 잎 2개만 */
 .fab-sprout {
   position: absolute;
-  left: 8px;
+  left: 50%;
   top: 4px;
   width: 20px;
   height: 20px;
+  transform: translateX(-50%);
   transform-origin: 50% 100%;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -242,7 +243,7 @@ function dismissGreeting() {
 }
 
 .chat-launcher:hover .fab-sprout {
-  transform: rotate(-8deg) scale(1.12);
+  transform: translateX(-50%) rotate(-8deg) scale(1.12);
 }
 
 /* 챗봇으로 저장한 글 수 배지 */
