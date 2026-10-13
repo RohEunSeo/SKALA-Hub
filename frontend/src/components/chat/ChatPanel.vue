@@ -240,7 +240,7 @@ watch(
   () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status, chatStore.pending],
   async () => {
     await nextTick()
-    if (bodyEl.value) bodyEl.value.scrollTop = bodyEl.value.scrollHeight
+    if (bodyEl.value) bodyEl.value.scrollTo({ top: bodyEl.value.scrollHeight, behavior: 'smooth' })
   },
   { deep: true },
 )
@@ -463,6 +463,9 @@ watch(
           </div>
         </div>
       </template>
+      <!-- 입력창과 만나는 경계가 뚝 끊기지 않고 제미나이 챗봇처럼 아래로 갈수록 흐려지도록 -
+           스크롤 영역 맨 아래에 붙어서(sticky) 지나가는 내용 위에 점점 진해지는 블러를 깐다 -->
+      <div class="cp-scroll-fade" aria-hidden="true"></div>
     </div>
 
     <footer class="cp-foot">
@@ -685,6 +688,22 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* 스크롤 영역 맨 아래 고정(sticky) - 지나가는 내용이 점점 흐려지며 입력창과 자연스럽게 이어짐.
+   margin-bottom을 음수로 줘서 레이아웃 높이는 안 차지하고 시각적으로만 바닥에 깔린다 */
+.cp-scroll-fade {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  margin-top: -32px;
+  pointer-events: none;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  mask-image: linear-gradient(to bottom, transparent, #000 85%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 85%);
 }
 
 .cp-empty {
@@ -1280,7 +1299,7 @@ watch(
 }
 
 .cp-foot {
-  padding: 0 14px 14px;
+  padding: 0 14px 6px;
 }
 
 .cp-quick {
@@ -1383,8 +1402,10 @@ watch(
   margin-bottom: 10px;
   padding: 10px 14px 6px;
   border-radius: 22px;
-  background: #ffffff;
-  border: 1px solid #cfc9f3;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(207, 201, 243, 0.8);
   box-shadow: 0 4px 14px rgba(74, 63, 143, 0.12);
   animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
