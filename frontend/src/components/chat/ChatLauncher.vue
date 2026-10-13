@@ -81,6 +81,9 @@ function dismissGreeting() {
         <svg class="fab-sprout" viewBox="0 0 48 48" aria-hidden="true">
           <path d="M24 27 C14.5 27 9 19.5 9.5 11 C18 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="1.1" stroke-linejoin="round" />
           <path d="M24 27 C33.5 27 39 19.5 38.5 11 C30 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="1.1" stroke-linejoin="round" />
+          <!-- 잎맥 - 잎 테두리 곡선 가운데를 따라가는 중심선 -->
+          <path d="M24 27 Q17 20.5 9.8 11.5" fill="none" stroke="#3d8b41" stroke-width="0.9" stroke-linecap="round" />
+          <path d="M24 27 Q31 20.5 38.2 11.5" fill="none" stroke="#3d8b41" stroke-width="0.9" stroke-linecap="round" />
         </svg>
         <!-- SKALAHub 로고(Sidebar.vue .logo-text/.logo-accent)랑 같은 2톤 패턴 - Hub만 포인트 보라 -->
         <span class="fab-hubbot"><span class="fab-hubbot-accent">Hub</span>-Bot</span>
