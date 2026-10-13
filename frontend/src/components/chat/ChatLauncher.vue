@@ -204,8 +204,8 @@ function dismissGreeting() {
 /* "Hub-Bot" 제목 바로 위에 놓이는 아이콘 - 줄기 없이 잎 2개만 */
 .fab-sprout {
   position: absolute;
-  left: 8px;
-  top: 4px;
+  left: 12px;
+  top: 8px;
   width: 20px;
   height: 20px;
   transform-origin: 50% 100%;
