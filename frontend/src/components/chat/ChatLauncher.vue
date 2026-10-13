@@ -79,8 +79,8 @@ function dismissGreeting() {
       <span class="fab-paper"></span>
       <span class="fab-front">
         <svg class="fab-sprout" viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M24 27 C14.5 27 9 19.5 9.5 11 C18 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
-          <path d="M24 27 C33.5 27 39 19.5 38.5 11 C30 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="0.8" stroke-linejoin="round" />
+          <path d="M24 27 C14.5 27 9 19.5 9.5 11 C18 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="1.1" stroke-linejoin="round" />
+          <path d="M24 27 C33.5 27 39 19.5 38.5 11 C30 11 24 16.5 24 27 Z" fill="#5fb865" stroke="#3d8b41" stroke-width="1.1" stroke-linejoin="round" />
         </svg>
         <!-- SKALAHub 로고(Sidebar.vue .logo-text/.logo-accent)랑 같은 2톤 패턴 - Hub만 포인트 보라 -->
         <span class="fab-hubbot"><span class="fab-hubbot-accent">Hub</span>-Bot</span>
@@ -201,10 +201,10 @@ function dismissGreeting() {
 /* "Hub-Bot" 제목 바로 위에 놓이는 아이콘 - 줄기 없이 잎 2개만 */
 .fab-sprout {
   position: absolute;
-  left: 9%;
-  top: 2%;
-  width: 17px;
-  height: 17px;
+  left: 8px;
+  top: 1px;
+  width: 20px;
+  height: 20px;
   transform-origin: 50% 100%;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -212,10 +212,10 @@ function dismissGreeting() {
 /* 폴더 너비를 거의 다 쓰는 워드마크 - Sidebar.vue 로고와 같은 색 조합(진한 남색 + 포인트 보라) */
 .fab-hubbot {
   position: absolute;
-  left: 9%;
-  right: 7%;
-  bottom: 10%;
-  font-size: 12.5px;
+  left: 8px;
+  right: 5px;
+  top: 22px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: -0.3px;
   line-height: 1;
