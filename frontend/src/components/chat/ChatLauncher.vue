@@ -3,68 +3,25 @@
 //
 // 인사 말풍선: 호버 라벨(.fab-label)은 마우스를 올려야만 보이고 모바일에선 아예 숨겨져서,
 // 챗봇이 있다는 걸 아무도 모른다. 그래서 늘 떠 있는 말풍선을 따로 둔다.
-// x로 닫으면 이번 세션(새로고침 전까지)만 숨고, 닫은 뒤에도 아이콘에 마우스를 올리는 동안은
-// 툴팁처럼 잠깐 다시 뜬다 - localStorage에 저장하지 않아 새로고침하면 처음 상태로 돌아온다.
+// 저절로 사라지지 않는다 - 사용자가 x로 닫을 때만 꺼지고(이번 세션 동안 유지), 그 뒤엔
+// 아이콘에 마우스를 올리는 동안만 툴팁처럼 잠깐 다시 뜬다. (자동으로 몇 초 뒤 접는 방식도
+// 시도해봤는데, "안 눌렀는데 왜 사라지냐"는 오해를 사서 되돌림)
+// localStorage에 저장하지 않아 새로고침하면 처음 상태로 돌아온다.
 //
 // 닫힘 상태(greetingDismissed/narrowHintDismissed)는 chatStore에 둔다 - 이 컴포넌트는
 // AppLayout을 통해 View마다(HomeView/FeedView/...) 따로 쓰여서, 페이지 이동(라우트 변경)마다
 // 통째로 재마운트된다. 로컬 ref로 두면 그때마다 false로 초기화돼서 "분명 닫았는데 다른 페이지로
 // 가면 다시 뜬다"가 된다 - 스토어는 싱글턴이라 라우트가 바뀌어도 값이 유지된다.
-//
-// position:fixed라 스크롤 위치와 무관하게 늘 뷰포트 우하단에 떠 있다 - 페이지 하단 여백을
-// 아무리 늘려도 "그리드가 막 다 보이자마자 스크롤을 멈추는" 가장 흔한 경우엔 말풍선이 결국
-// 뒤 콘텐츠(폴더 카드 등)와 같은 자리에 겹친다. 그래서 일정 시간 뒤 자동으로 접어 평소엔
-// 작은 아이콘만 남긴다 (호버하면 다시 뜸 - 처음 보는 사람에게 알려주는 목적은 유지)
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
-
-const AUTO_HIDE_MS = 6000
 
 const chatStore = useChatStore()
 
 const hovering = ref(false)
-let greetingTimer = null
-
-onMounted(() => {
-  // 이미 (이전 페이지에서) 닫혔으면 또 띄울 필요 없음 - 안 닫혔을 때만 6초 뒤 자동으로 접음
-  if (!chatStore.greetingDismissed) {
-    greetingTimer = setTimeout(() => { chatStore.greetingDismissed = true }, AUTO_HIDE_MS)
-  }
-})
-onUnmounted(() => clearTimeout(greetingTimer))
-
-// 좁아서 뜨는 "화면을 넓히면..." 안내는 닫을 수 있다 - 대신 폴더 아이콘을 다시 누르면 그 자리에서
-// 다시 튀어나온다 (narrow가 풀렸다가 다시 좁아질 때도 당연히 다시 뜨도록 리셋). 이것도 같은 이유로
-// 일정 시간 뒤 자동으로 접힌다.
-//
-// 마운트 시점에 이미 narrow+안 닫힌 상태면(다른 페이지에서 넘어옴) 그대로 타이머만 이어 걸고,
-// "진짜로 narrow가 아니다가 true로 바뀐" 경우에만 닫힘 상태를 리셋한다 - watch를 immediate로
-// 걸면 리마운트 때마다 이미 닫아 놨던 것까지 다시 false로 되돌려버린다
-let narrowHintTimer = null
-function startNarrowHintTimer() {
-  clearTimeout(narrowHintTimer)
-  if (!chatStore.narrowHintDismissed) {
-    narrowHintTimer = setTimeout(() => { chatStore.narrowHintDismissed = true }, AUTO_HIDE_MS)
-  }
-}
-onMounted(() => { if (chatStore.narrow) startNarrowHintTimer() })
-watch(() => chatStore.narrow, (yes) => {
-  if (yes) {
-    chatStore.narrowHintDismissed = false
-    startNarrowHintTimer()
-  } else {
-    clearTimeout(narrowHintTimer)
-  }
-})
-onUnmounted(() => clearTimeout(narrowHintTimer))
 
 function onLauncherClick() {
-  if (chatStore.narrow) {
-    chatStore.narrowHintDismissed = false
-    startNarrowHintTimer()
-  } else {
-    chatStore.open()
-  }
+  if (chatStore.narrow) chatStore.narrowHintDismissed = false
+  else chatStore.open()
 }
 
 // x를 누르는 순간 마우스는 아직 말풍선 위에 있다 - 말풍선이 사라지면 그 자리에서

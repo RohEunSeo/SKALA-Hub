@@ -1,6 +1,6 @@
 // AI 챗봇 패널 상태 - 열림 여부, 대화 메시지, 진행 중 상태, 오늘 남은 횟수
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { fetchAccess, fetchGreeting, sendFeedback, streamChat } from '../api/chat'
 import { usePostsStore } from './posts'
 import { useFoldersStore, FOLDER_COLORS } from './folders'
@@ -135,6 +135,9 @@ export const useChatStore = defineStore('chat', () => {
   // AppLayout.vue의 사이드바 드로어 900px 기준과는 별개 값
   const isMobile = computed(() => winW.value <= 480)
   const narrow = computed(() => !isMobile.value && contentW.value < CONTENT_MIN)
+  // narrow가 풀리면 안내 닫힘 상태를 리셋해둔다 - 다음에 다시 좁아졌을 때도 당연히 다시 뜨도록.
+  // 여기(스토어)에 둬야 ChatLauncher가 페이지 이동으로 재마운트되는 것과 무관하게 한 번만 동작한다
+  watch(narrow, (yes) => { if (!yes) narrowHintDismissed.value = false })
 
   let seq = Date.now() // 복원한 옛 메시지 id와 겹치지 않게 시간값에서 시작
 
