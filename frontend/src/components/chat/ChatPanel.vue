@@ -5,7 +5,7 @@
 // 지금은 api/chat.js의 가짜 응답으로 동작하는 화면 목업 (서버 연동 전)
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { CARD_DELAY, CARD_STEP, useChatStore } from '../../stores/chat'
+import { CARD_DELAY, CARD_STEP, CARD_DURATION, useChatStore } from '../../stores/chat'
 import { useAuthStore } from '../../stores/auth'
 import { usePostsStore } from '../../stores/posts'
 import { useMyPageStore } from '../../stores/mypage'
@@ -233,6 +233,33 @@ function onKeydown(e) {
   }
 }
 
+// 추천 카드(.source-card)는 한 장씩 시차를 두고 올라오는데(CARD_DELAY/CARD_STEP), 그 전엔
+// 카드가 뜨자마자 전체 높이(scrollHeight, 이미 카드 n장 다 차지한 상태)로 바로 스크롤해버려서
+// 1~2번째 카드만 보고 바로 맨 아래로 뚝 떨어지는 것처럼 보였다. 카드가 실제로 올라오는
+// 속도에 맞춰 한 장씩 순서대로 스크롤하도록 분리한다 - 이 시퀀스가 진행되는 동안은
+// 아래 "전체 스크롤" 효과를 잠깐 꺼둔다(stagingCardScroll)
+const stagingCardScroll = ref(false)
+let cardScrollTimers = []
+watch(
+  () => chatStore.messages[chatStore.messages.length - 1]?.sources?.length,
+  async (n, prev) => {
+    if (!n || prev) return // 0(또는 없음) → n 으로 막 생긴 순간에만 (이미 있던 카드 수 변화는 무시)
+    cardScrollTimers.forEach(clearTimeout)
+    cardScrollTimers = []
+    stagingCardScroll.value = true
+    await nextTick()
+    const cards = Array.from(bodyEl.value?.querySelectorAll('.source-card') ?? []).slice(-n)
+    cards.forEach((card, i) => {
+      cardScrollTimers.push(
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'end' })
+          if (i === cards.length - 1) stagingCardScroll.value = false
+        }, CARD_DELAY + i * CARD_STEP + CARD_DURATION * 0.7),
+      )
+    })
+  },
+)
+
 // 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤. chatStore.pending(폴더 저장 제안 등 되묻기 카드)도
 // 같이 감시한다 - 이게 뜨면 입력창 위 footer가 그만큼 커져서 body가 보이는 영역이 줄어드는데,
 // 그 순간 다시 스크롤하지 않으면 방금 추천된 카드가 그 제안 카드에 가려 보인다
@@ -240,6 +267,7 @@ watch(
   () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status, chatStore.pending],
   async () => {
     await nextTick()
+    if (stagingCardScroll.value) return // 카드가 한 장씩 올라오는 시퀀스 진행 중이면 건너뜀
     if (bodyEl.value) bodyEl.value.scrollTo({ top: bodyEl.value.scrollHeight, behavior: 'smooth' })
   },
   { deep: true },
@@ -681,6 +709,7 @@ watch(
 }
 
 .cp-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -688,22 +717,31 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* 스크롤은 그대로 되지만 스크롤바는 안 보이게 - Firefox/구 Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-/* 스크롤 영역 맨 아래 고정(sticky) - 지나가는 내용이 점점 흐려지며 입력창과 자연스럽게 이어짐.
-   margin-bottom을 음수로 줘서 레이아웃 높이는 안 차지하고 시각적으로만 바닥에 깔린다 */
+.cp-body::-webkit-scrollbar {
+  display: none; /* 스크롤바는 안 보이게 - Chrome/Safari/Edge(Chromium) */
+}
+
+/* 스크롤 영역 맨 아래에 깔리는 흐림 띠 - 콘텐츠의 일부가 아니라 컨테이너(.cp-body) 위에
+   떠 있는 오버레이라서(position:absolute, 컨테이너 기준) 스크롤해도 같이 안 밀리고 늘
+   바닥에 고정돼 있다. 지나가는 내용이 입력창 쪽으로 갈수록 점점 흐려지며 자연스럽게 이어짐 */
 .cp-scroll-fade {
-  position: sticky;
-  bottom: 0;
+  position: absolute;
   left: 0;
   right: 0;
-  height: 32px;
-  margin-top: -32px;
+  bottom: 0;
+  height: 56px;
   pointer-events: none;
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  mask-image: linear-gradient(to bottom, transparent, #000 85%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 85%);
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(247, 245, 253, 0.85) 70%);
+  mask-image: linear-gradient(to bottom, transparent, #000 55%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 55%);
 }
 
 .cp-empty {
