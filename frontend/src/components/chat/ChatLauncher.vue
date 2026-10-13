@@ -100,7 +100,7 @@ function dismissGreeting() {
    자체가 버튼이라 동그란 틀이 없어도 바로 알아볼 수 있고, 브랜드 컬러와도 맞는다 */
 .chat-launcher {
   position: fixed;
-  right: 36px;
+  right: 42px;
   bottom: 56px;
   z-index: 60;
   width: 62px;
@@ -309,7 +309,7 @@ function dismissGreeting() {
 /* ── 인사 말풍선 ───────────────────────────────────────────── */
 .fab-intro {
   position: fixed;
-  right: 56px;          /* 런처(right 36, 폭 62)보다 왼쪽으로 */
+  right: 62px;          /* 런처(right 42, 폭 62)보다 왼쪽으로 */
   bottom: 116px;          /* 런처 윗변(bottom 56, 높이 50 → 106)보다 위로 */
   animation: fab-float 3.2s ease-in-out infinite;
   z-index: 60;
