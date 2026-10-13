@@ -233,9 +233,11 @@ function onKeydown(e) {
   }
 }
 
-// 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤
+// 새 글자/메시지가 붙을 때마다 맨 아래로 스크롤. chatStore.pending(폴더 저장 제안 등 되묻기 카드)도
+// 같이 감시한다 - 이게 뜨면 입력창 위 footer가 그만큼 커져서 body가 보이는 영역이 줄어드는데,
+// 그 순간 다시 스크롤하지 않으면 방금 추천된 카드가 그 제안 카드에 가려 보인다
 watch(
-  () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status],
+  () => [chatStore.messages.length, chatStore.messages[chatStore.messages.length - 1]?.text, chatStore.status, chatStore.pending],
   async () => {
     await nextTick()
     if (bodyEl.value) bodyEl.value.scrollTop = bodyEl.value.scrollHeight
@@ -794,11 +796,11 @@ watch(
 
 .cp-chip {
   padding: 13px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: #4a3f8f;
   font-size: 15px;
   font-weight: 600;
@@ -1320,10 +1322,10 @@ watch(
   gap: 10px;
   padding: 16px 18px 14px;
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
   box-shadow: 0 2px 10px rgba(74, 63, 143, 0.12);
 }
 
@@ -1379,7 +1381,7 @@ watch(
 /* 사용자에게 되묻는 카드 - 입력창 위 */
 .cp-ask {
   margin-bottom: 10px;
-  padding: 14px 14px 8px;
+  padding: 10px 14px 6px;
   border-radius: 22px;
   background: #ffffff;
   border: 1px solid #cfc9f3;
@@ -1392,7 +1394,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 6px 8px;
+  padding: 0 6px 6px;
 }
 
 .ask-q {
@@ -1419,7 +1421,7 @@ watch(
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 11px 8px;
+  padding: 9px 8px;
   border: 0;
   border-top: 1px solid #f0edfa;
   background: transparent;
