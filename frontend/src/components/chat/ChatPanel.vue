@@ -491,9 +491,6 @@ watch(
           </div>
         </div>
       </template>
-      <!-- 입력창과 만나는 경계가 뚝 끊기지 않고 제미나이 챗봇처럼 아래로 갈수록 흐려지도록 -
-           스크롤 영역 맨 아래에 붙어서(sticky) 지나가는 내용 위에 점점 진해지는 블러를 깐다 -->
-      <div class="cp-scroll-fade" aria-hidden="true"></div>
     </div>
 
     <footer class="cp-foot">
@@ -712,7 +709,7 @@ watch(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 0;
+  padding: 8px 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -723,27 +720,6 @@ watch(
 
 .cp-body::-webkit-scrollbar {
   display: none; /* 스크롤바는 안 보이게 - Chrome/Safari/Edge(Chromium) */
-}
-
-/* 스크롤 영역 맨 아래에 고정(position:sticky) - 뒤늦게 absolute로 바꿔봤는데, absolute는
-   스크롤 컨테이너 안에서는 "지금 보이는 화면 맨 아래"가 아니라 "스크롤 안 했을 때의 맨 아래"에
-   고정돼버려서, 내용이 길어지면 화면 중간 어딘가에 떠버리는 버그가 났다(실측 확인함).
-   sticky여야 스크롤 위치와 무관하게 항상 보이는 화면 맨 아래에 붙어서, 지나가는 내용이
-   입력창 쪽으로 갈수록 점점 흐려지며 자연스럽게 이어진다 */
-.cp-scroll-fade {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 56px;
-  flex-shrink: 0;
-  pointer-events: none;
-  z-index: 1;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(247, 245, 253, 0.85) 70%);
-  mask-image: linear-gradient(to bottom, transparent, #000 55%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 55%);
 }
 
 .cp-empty {
