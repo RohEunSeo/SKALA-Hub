@@ -810,7 +810,7 @@ watch(
   flex-direction: column;
   align-items: flex-start; /* 글자 길이만큼만 박스가 생김 */
   gap: 10px;
-  padding: 0 0 18px;
+  padding: 0 0 6px;
 }
 
 .cp-chip {
@@ -1339,7 +1339,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 18px 12px;
+  padding: 12px 18px 10px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px);
@@ -1371,7 +1371,7 @@ watch(
   font: inherit;
   font-size: 15px;
   line-height: 1.5;
-  min-height: 56px;
+  min-height: 48px;
   padding: 4px 48px 4px 0;
   background: transparent;
   color: #1a1a2e;
