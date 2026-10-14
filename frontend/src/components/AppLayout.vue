@@ -39,6 +39,11 @@ watch(
   () => authStore.isAuthenticated,
   (yes) => {
     if (yes) {
+      // 서버 대답을 기다리면 아이콘이 11초 뒤에 뿅 나타난다 (Cloud Run 콜드스타트 실측 11.6초).
+      // 그래서 일단 보여주고, loadAccess()가 받아온 결과로 덮어쓴다 - 공개 범위 판단은
+      // 여전히 서버에만 있고 화면은 "아마 될 것"이라고 가정만 한다.
+      // 덤으로 사용자가 패널을 열고 질문을 타이핑하는 동안 서버가 예열된다.
+      chatStore.canUse = true
       chatStore.loadAccess()
       foldersStore.load() // 내 폴더는 서버에 있다 - 로그인 후 한 번 불러온다
     } else chatStore.canUse = false

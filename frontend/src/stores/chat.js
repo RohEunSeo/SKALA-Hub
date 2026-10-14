@@ -88,8 +88,9 @@ export const useChatStore = defineStore('chat', () => {
   const status = ref(null) // 진행 중 도구 상태 { tool, text } - null이면 대기 중 아님
   const remaining = ref(DAILY_LIMIT)
   const limit = ref(DAILY_LIMIT)
-  // 챗봇을 열어줄지는 **서버가 판단한다** (판교 5반 + 관리자). null = 아직 안 물어봄.
+  // 챗봇을 열어줄지는 **서버가 판단한다**(CHAT_ALLOWED_* 가 비면 전체 공개). null = 아직 안 물어봄.
   // 화면이 같은 규칙을 들고 있으면 서버 .env만 바꿨을 때 어긋나므로 여기선 결과만 보관한다.
+  // 단, AppLayout이 로그인 직후 true로 먼저 켠다 - 콜드스타트 11초를 기다리면 아이콘이 늦게 뜬다.
   const canUse = ref(null)
 
   /** 앱이 뜰 때 한 번. 실패하면 allowed:false라 챗봇 버튼이 안 보인다. */
