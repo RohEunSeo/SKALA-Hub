@@ -131,6 +131,17 @@ async def say(text: str):
     for piece in text:
         yield ev.token(piece)
 
+
+def record_cost(rec: dict, tracker: ModelTracker) -> None:
+    """이 호출이 어느 모델로 얼마를 썼는지 로그에 적는다.
+
+    LLM을 부르는 곳마다 불러야 한다. 한 군데라도 빠지면 그만큼 비용이 안 보인다
+    - 토큰을 안 적던 시절 로그 210건이 전부 빈칸이라 운영비를 계산할 수 없었다.
+    """
+    rec["model"] = tracker.model
+    rec["prompt_tokens"] = tracker.prompt_tokens
+    rec["completion_tokens"] = tracker.completion_tokens
+
 # HTTPBearer를 쓰면 /docs(Swagger)에 "Authorize" 자물쇠 버튼이 생겨 토큰을 붙여 테스트할 수 있다.
 # 헤더를 직접 읽으면 FastAPI가 인증이 있는 줄 몰라서 그 버튼이 안 나온다.
 bearer = HTTPBearer(auto_error=False, description="SKALA Hub 로그인 토큰")
@@ -249,7 +260,7 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
                 pieces.append(piece)
                 yield ev.token(piece)
             rec["answer"] = "".join(pieces)
-            rec["model"] = tracker.model
+            record_cost(rec, tracker)
             rec["post_ids"] = [post["id"]]
             # 카드를 보내지 않는다. 사용자는 **이미 그 글을 보고 있다.**
             # 보내면 같은 글이 한 번 더 뜨고, 피드까지 그 글 하나로 좁혀진다(setPicks).
@@ -312,7 +323,7 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
     async for piece in stream_answer(req.question, docs, tracker):
         pieces.append(piece)
         yield ev.token(piece)
-    rec["model"] = tracker.model
+    record_cost(rec, tracker)
     answer_text = "".join(pieces)
     rec["answer"] = (COUNT_TEXT + answer_text) if path == "count" else answer_text
     rec["abstained"] = is_abstention(answer_text)

@@ -95,19 +95,62 @@ PROMPT = ChatPromptTemplate.from_messages([
 
 
 class ModelTracker(BaseCallbackHandler):
-    """실제로 **응답한** 모델 이름을 기록한다.
+    """실제로 **응답한** 모델 이름과 쓴 토큰 수를 기록한다.
 
     폴백이 걸리면 설정값(LLM_MODEL)과 실제 응답 모델이 달라진다.
     로그에 설정값만 적으면 "폴백이 몇 번 돌았나"를 영영 알 수 없다
     - 그걸 모르면 한도를 언제 늘려야 할지도 모른다.
+
+    토큰을 **여기서** 줍는 이유: 체인이 `... | StrOutputParser()`로 끝나서
+    화면으로 흘러나가는 건 글자뿐이고 토큰 정보는 파서가 버린다. 콜백은 버려지기
+    전 원본(AIMessage)을 받으므로, 스트리밍이어도 집계가 된다.
+    (실제로 이게 없어서 로그 210건의 토큰 칸이 전부 비어 있었다 = 운영비를 몰랐다)
     """
 
     def __init__(self) -> None:
         self.model: str | None = None
+        self.prompt_tokens: int | None = None
+        self.completion_tokens: int | None = None
 
     def on_chat_model_start(self, serialized, messages, **kwargs) -> None:
         meta = kwargs.get("metadata") or {}
         self.model = meta.get("llm_model") or self.model
+
+    def on_llm_end(self, response, **kwargs) -> None:
+        """끝난 뒤 한 번 불린다. 스트리밍이면 조각이 합쳐진 메시지가 온다.
+
+        합쳐진 값이 곧 총계다 - langchain-google-genai가 조각마다 **증가분**만
+        넣어주므로 더해도 이중 집계가 되지 않는다(chat_models.py의 prev_usage).
+
+        폴백이 돌면 실패한 모델의 on_llm_end도 올 수 있다. 성공한 마지막 값으로
+        덮어써야 맞으므로 조건 없이 대입한다.
+        """
+        usage = _usage_of(response)
+        if usage:
+            self.prompt_tokens = usage.get("input_tokens")
+            self.completion_tokens = usage.get("output_tokens")
+
+
+def _usage_of(response) -> dict | None:
+    """LLMResult에서 토큰 수를 꺼낸다. 모델/버전마다 위치가 달라 순서대로 뒤진다.
+
+    못 찾으면 None - 토큰을 못 구했다고 답변을 막을 이유는 없다(로그는 부가기능).
+    """
+    for gens in getattr(response, "generations", []) or []:
+        for gen in gens or []:
+            msg = getattr(gen, "message", None)
+            usage = getattr(msg, "usage_metadata", None)
+            if usage:
+                return dict(usage)
+    # 구버전 통합 패키지는 llm_output에만 넣기도 한다
+    out = getattr(response, "llm_output", None) or {}
+    usage = out.get("usage_metadata") or out.get("token_usage")
+    if usage:
+        return {
+            "input_tokens": usage.get("input_tokens") or usage.get("prompt_tokens"),
+            "output_tokens": usage.get("output_tokens") or usage.get("completion_tokens"),
+        }
+    return None
 
 
 def _rate_limit_errors() -> tuple[type[BaseException], ...]:
