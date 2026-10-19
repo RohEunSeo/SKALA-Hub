@@ -25,6 +25,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.core.generator import is_abstention
+from app.core.grader import agrade
 from app.core.router import route as route_of
 from app.db import fetch_all
 from app.services.rag_service import search, stream_answer
@@ -87,7 +88,12 @@ async def run_one(item: dict, k: int, gen: bool) -> dict:
     if got_route in ("search", "count", "similar"):
         docs = await search(q, k=k)
         r["top1"] = round(float(docs[0].metadata["score"]), 3) if docs else None
+        # retrieved 는 **거르기 전** 검색 결과다 - 지난 결과 파일과 같은 뜻이어야 비교가 된다.
         r["retrieved"] = [d.metadata.get("post_id") for d in docs]
+        # grade 가 켜져 있으면 무관한 글을 버린다. Hit/RR 은 **남은 글**로 잰다
+        # - "쓰레기를 버리려다 정답을 버렸나"를 보는 게 이 측정의 핵심이다.
+        docs = await agrade(q, docs)
+        r["kept"] = [d.metadata.get("post_id") for d in docs]
         # Hit@K 는 '검색이 정답 글을 찾았나'만 재야 한다.
         # meta(넌 누구야) · impossible(집계) 은 애초에 글을 찾는 질문이 아니므로 분모에서 뺀다.
         # 안 그러면 라우팅 실패가 검색 실패로 이중 계상돼 두 지표가 같은 것을 두 번 센다.
@@ -104,8 +110,13 @@ async def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--k", type=int, default=5)
     p.add_argument("--gen", action="store_true", help="생성까지 평가 (LLM 호출)")
+    p.add_argument("--no-grade", action="store_true",
+                   help="관련성 판정을 끈다 (grade 전/후 비교용). 기본은 켜짐")
     p.add_argument("--save", help="결과를 JSON으로 저장")
     a = p.parse_args()
+
+    # 평가에서는 .env 값보다 플래그가 이긴다. 켜고/끄고 한 번씩 돌려 비교하는 게 목적이다.
+    settings.grade_enabled = not a.no_grade
 
     items = load_questions()
     # 데이터가 매일 늘어나므로 언제·무엇으로 잰 수치인지 같이 남긴다.
@@ -117,9 +128,11 @@ async def main() -> None:
         "store": settings.vector_store, "index_version": settings.index_version,
         "embedding": settings.embedding_model,
         "llm": settings.llm_model if a.gen else None,
+        "grade": settings.grade_enabled,
     }
     print(f"  {env['posts']}글 / {env['chunks']}조각 · k={a.k} · {env['embedding']}"
-          + (f" · {env['llm']}" if a.gen else " · 검색만"))
+          + (f" · {env['llm']}" if a.gen else " · 검색만")
+          + (" · grade ON" if env["grade"] else " · grade OFF"))
     print()
 
     results = [await run_one(it, a.k, a.gen) for it in items]
@@ -138,9 +151,28 @@ async def main() -> None:
     mrr = sum(r["rr"] for r in scored) / len(scored) if scored else 0.0
     route_ok = sum(1 for r in results if r["route_ok"])
 
+    # Precision - "5개 중 몇 개가 쓸만한가". Hit@K가 **구조적으로 못 보는** 값이다
+    # (정답이 하나라도 들어 있으면 나머지 4개가 쓰레기여도 Hit은 만점).
+    # 주의: gold_doc_ids 는 "관련 글 전부"가 아니라 "확실히 관련 있는 글 몇 개"라서
+    # 이 값은 **하한**이다. 절대값으로 읽지 말고 전/후 비교에만 쓴다.
+    golds = {it["id"]: set(it["gold_doc_ids"]) for it in items if it.get("gold_doc_ids")}
+    precs, kepts = [], []
+    for r in results:
+        shown = r.get("kept", r.get("retrieved"))
+        if shown is None:
+            continue
+        kepts.append(len(shown))
+        g = golds.get(r["id"])
+        if g and shown:
+            precs.append(len(set(shown) & g) / len(shown))
+
     print("\n  === 베이스라인 ===")
     print(f"    Hit@{a.k}   {hits}/{len(scored)} = {hits/len(scored):.3f}" if scored else "    Hit: 측정 대상 없음")
     print(f"    MRR@{a.k}   {mrr:.3f}")
+    if precs:
+        print(f"    Prec@{a.k}  {sum(precs)/len(precs):.3f}   ({len(precs)}문항, gold 기준 하한)")
+    if kepts:
+        print(f"    남은 글   평균 {sum(kepts)/len(kepts):.2f}개 / {a.k}개")
     print(f"    Route    {route_ok}/{len(results)} = {route_ok/len(results):.3f}")
 
     if a.gen:

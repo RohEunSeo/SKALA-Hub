@@ -34,6 +34,7 @@ from app.services.rag_service import (
     stream_answer,
     stream_summary,
 )
+from app.core.grader import agrade
 from app.services.stats_service import get_post, popular_posts
 
 log = logging.getLogger(__name__)
@@ -299,13 +300,22 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
     # 지금 보고 있는 탭 안에서 먼저 찾는다 (없으면 rag_service가 전체로 넓힌다)
     k = req.limit or DEFAULT_K
     docs = await search(req.question, k=k, category=req.category)
+    # 로그에는 **거르기 전** 검색 결과를 남긴다. 지난 로그와 같은 뜻이어야 비교가 된다.
+    # (몇 개를 버렸는지는 아직 로그에 안 남는다 - 컬럼 추가가 필요해 별건으로 둔다)
+    rec["post_ids"] = [d.metadata["post_id"] for d in docs]
+    rec["scores"] = [d.metadata.get("score") for d in docs]
+
+    # 무관한 글을 버린다. 검색은 "관련 있는 k개"가 아니라 **"그나마 가까운 k개"**를 준다
+    # - 실측 Hit@5 0.952 / Precision@5 0.300. 자세한 근거는 core/grader.py 머리말.
+    # 전부 무관하면 빈 목록이 되고, 바로 아래 `if not docs`가 "못 찾았어요"로 받는다
+    # (생성 호출도 안 하므로 한도를 아낀다).
+    if docs:
+        yield ev.status("think", "관련 있는 글 고르는 중")
+        docs = await agrade(req.question, docs)
+
     in_scope = bool(req.category) and all(
         d.metadata.get("category") == req.category for d in docs
     )
-    # 조각 순서 그대로 남긴다 (글 단위로 합치지 않음).
-    # 같은 글이 두 번 나오는 것 자체가 측정 대상이다 - "상위 5개 중 서로 다른 글 몇 개인가".
-    rec["post_ids"] = [d.metadata["post_id"] for d in docs]
-    rec["scores"] = [d.metadata.get("score") for d in docs]
 
     if not docs:
         yield ev.status("compose", "답변 정리하는 중")

@@ -72,18 +72,30 @@ ON CONFLICT (post_id, chunk_index) DO UPDATE SET
 #
 # <=> 는 코사인 거리다 (0이면 같은 방향, 1이면 무관, 2면 정반대).
 # FAISS의 L2 거리와 눈금이 다르다 - 그래서 로그에 index_version을 같이 남긴다.
+#
+# **k개를 세는 단위는 '조각'이 아니라 '글'이다** (DISTINCT ON).
+# 조각으로 세면 한 글의 조각들이 상위를 독식해 칸이 날아간다. 화면은 _to_sources()에서
+# 중복을 걸러내므로 같은 글이 두 번 뜨지는 않지만, 그만큼 **카드 수가 줄어든다.**
+# 실측(10-16, 평가셋 42문항): 상위 5개의 서로 다른 글이 평균 4.12개.
+# 최악은 R02 "학습노트 퀴즈" - 5칸 전부 글 131이라 카드가 1개만 나왔다.
+# loader가 조각마다 제목을 붙인 뒤로 한 글의 조각들이 서로 닮아져 더 심해졌다
+# (같은 측정: 4.54 → 4.12, 칸을 낭비한 질문 9개 → 14개).
 _SEARCH_SQL = """
-SELECT c.post_id, c.chunk_index, c.chunk_total, c.content,
-       p.category, p.tags, p.ai_title, p.slack_ts,
-       p.reaction_count, p.created_at AS post_created_at,
-       cur.stage, cur.sub_category,
-       c.embedding <=> %(q)s::vector AS distance
-FROM post_chunks c
-JOIN posts p ON p.id = c.post_id AND p.is_deleted = false
-LEFT JOIN curriculum_posts cur
-       ON cur.post_id = c.post_id AND cur.is_excluded = false
-WHERE (%(category)s::varchar IS NULL OR p.category = %(category)s)
-ORDER BY c.embedding <=> %(q)s::vector
+SELECT * FROM (
+    SELECT DISTINCT ON (c.post_id)
+           c.post_id, c.chunk_index, c.chunk_total, c.content,
+           p.category, p.tags, p.ai_title, p.slack_ts,
+           p.reaction_count, p.created_at AS post_created_at,
+           cur.stage, cur.sub_category,
+           c.embedding <=> %(q)s::vector AS distance
+    FROM post_chunks c
+    JOIN posts p ON p.id = c.post_id AND p.is_deleted = false
+    LEFT JOIN curriculum_posts cur
+           ON cur.post_id = c.post_id AND cur.is_excluded = false
+    WHERE (%(category)s::varchar IS NULL OR p.category = %(category)s)
+    ORDER BY c.post_id, c.embedding <=> %(q)s::vector
+) best
+ORDER BY distance
 LIMIT %(k)s
 """
 
@@ -188,13 +200,39 @@ def load_index() -> VectorStore:
 FETCH_MULTIPLIER = 20
 
 
+# 글 단위로 줄이기 전에 조각을 몇 배로 받아올지. 한 글이 조각 5개까지 나는 걸 봤으니
+# 3배면 최악에도 서로 다른 글 k개를 채운다. pgvector는 SQL이 한 번에 처리해 이 값이 없다.
+DEDUPE_MULTIPLIER = 3
+
+
 def _search_kwargs(k: int, category: str | None) -> dict:
-    """검색 조건을 만드는 곳. 동기/비동기가 같은 조건을 쓰게 하려고 분리했다."""
-    kwargs: dict = {"k": k}
+    """검색 조건을 만드는 곳. 동기/비동기가 같은 조건을 쓰게 하려고 분리했다.
+
+    k개가 아니라 k*3개를 요청한다 - _best_per_post()가 글 단위로 줄일 재료가 필요하다.
+    """
+    kwargs: dict = {"k": k * DEDUPE_MULTIPLIER}
     if category:
         kwargs["filter"] = {"category": category}
-        kwargs["fetch_k"] = k * FETCH_MULTIPLIER
+        kwargs["fetch_k"] = k * DEDUPE_MULTIPLIER * FETCH_MULTIPLIER
     return kwargs
+
+
+def _best_per_post(docs: list[Document], k: int) -> list[Document]:
+    """글마다 가장 가까운 조각 하나만 남기고 앞에서 k개. (pgvector의 DISTINCT ON과 같은 일)
+
+    docs는 이미 가까운 순이라 먼저 나온 조각이 그 글의 1등이다.
+    """
+    seen: set = set()
+    out: list[Document] = []
+    for doc in docs:
+        pid = doc.metadata.get("post_id")
+        if pid in seen:
+            continue
+        seen.add(pid)
+        out.append(doc)
+        if len(out) == k:
+            break
+    return out
 
 
 def _with_scores(pairs) -> list[Document]:
@@ -225,7 +263,7 @@ def search_with_scores(question: str, k: int = 5, category: str | None = None) -
     if settings.vector_store != "faiss":
         _unsupported(settings.vector_store)
     pairs = load_index().similarity_search_with_score(question, **_search_kwargs(k, category))
-    return _with_scores(pairs)
+    return _best_per_post(_with_scores(pairs), k)
 
 
 async def asearch_with_scores(
@@ -240,4 +278,4 @@ async def asearch_with_scores(
     pairs = await load_index().asimilarity_search_with_score(
         question, **_search_kwargs(k, category)
     )
-    return _with_scores(pairs)
+    return _best_per_post(_with_scores(pairs), k)

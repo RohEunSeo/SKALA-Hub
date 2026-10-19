@@ -116,17 +116,27 @@ def load_posts() -> tuple[list[Document], list[int]]:
             continue
         body = clean_slack_text(raw)
         title = (row.get("ai_title") or "").strip()
-        # 제목을 본문 앞에 붙인다. 본문이 비고 제목만 있는 글도 검색에 걸리게 된다.
-        text = f"{title}\n\n{body}".strip() if title else body
-        if not text:
+        # 제목은 **여기서 붙이지 않는다.** split_documents()가 조각마다 붙인다.
+        # 여기서 붙이면 자른 뒤 첫 조각에만 제목이 남아, 뒤 조각은 제목 없이 떠돈다
+        # (실측: 416조각 중 144개 = 35%). 제목은 metadata["ai_title"]에 이미 있다.
+        if not body and not title:
             skipped.append((row["id"], "본문·제목 없음"))  # 이미지만 올린 글. OCR은 범위 밖
             continue
-        docs.append(Document(page_content=text, metadata=_to_metadata(row)))
+        docs.append(Document(page_content=body, metadata=_to_metadata(row)))
     return docs, skipped
 
 
 def split_documents(docs: list[Document]) -> list[Document]:
-    """짧은 글은 그대로, 긴 글만 자른다."""
+    """짧은 글은 그대로, 긴 글만 자른다. **조각마다 제목을 머리에 붙인다.**
+
+    제목을 붙이고 자르면 첫 조각만 제목을 갖는다. 실측으로 416조각 중 144개(35%)가
+    제목 없이 떠돌고 있었고, 그 조각이 검색 상위에 올라오면 무엇에 관한 글인지
+    모르는 상태로 LLM에 들어간다 (#259에서 글 131의 5조각 중 4개가 그런 상태였다).
+    ai_title은 LLM이 글 전체를 읽고 쓴 요약이라 뒤 조각에 특히 필요한 문맥이다.
+
+    자르는 기준 길이(SHORT_DOC_CHARS)는 이제 **본문 길이**로 잰다. 제목 길이가
+    섞여 들어가지 않으므로 전보다 조금 덜 쪼개진다.
+    """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
@@ -134,7 +144,10 @@ def split_documents(docs: list[Document]) -> list[Document]:
     chunks: list[Document] = []
     for doc in docs:
         pieces = [doc] if len(doc.page_content) < SHORT_DOC_CHARS else splitter.split_documents([doc])
+        title = (doc.metadata.get("ai_title") or "").strip()
         for i, piece in enumerate(pieces):
+            body = piece.page_content.strip()
+            piece.page_content = f"{title}\n\n{body}".strip() if title else body
             # 검색 결과에 같은 post_id가 여러 개 나올 때 어느 부분인지 알 수 있게
             piece.metadata = {**piece.metadata, "chunk_index": i, "chunk_total": len(pieces)}
             chunks.append(piece)
