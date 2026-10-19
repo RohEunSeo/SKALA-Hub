@@ -152,9 +152,11 @@ const colorVars = computed(() => ({
     transform: translateY(-16%) rotate(-3deg);
   }
 
-  /* 앞판 윗면이 관객 쪽으로 살짝 기울어 폴더가 열리는 느낌 */
+  /* 앞판 윗면이 관객 쪽으로 살짝 기울어 폴더가 열리는 느낌 - rotateX는 양수여야 윗변이
+     아래/앞으로 내려오면서 문서가 올라올 자리를 열어준다. 음수였을 때는 원근법 때문에
+     윗변이 오히려 위로 들려서 올라오는 문서를 덮어버렸다(실제로 그렇게 보임, 확인 필요) */
   .folder-card:hover .folder-front {
-    transform: rotateX(-8deg);
+    transform: rotateX(8deg);
   }
 }
 
