@@ -10,9 +10,11 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 
 from app.core.generator import PROMPT, SUMMARY_PROMPT, format_docs, get_llm
+from app.core.grader import grade
 from app.core.retriever import asearch_with_scores, search_with_scores
 
-DEFAULT_K = 5  # 몇 개를 근거로 줄지. 늘리면 비용↑ + 중간 글을 놓치기 쉬움 (S5에서 스윕)
+DEFAULT_K = 10  # 몇 개를 검색해 grade에 넘길지. grade가 무관한 걸 거르므로
+# 5였을 때보다 넉넉히 가져온다 - 안 그러면 진짜 관련 글이 6개 이상이어도 5개로 막힌다.
 
 
 def answer(question: str, k: int = DEFAULT_K) -> dict:
@@ -21,7 +23,7 @@ def answer(question: str, k: int = DEFAULT_K) -> dict:
     반환: {"answer": 답변 글, "sources": [{post_id, title, category, reaction_count}, ...]}
     sources는 화면의 추천 카드와 Step 6의 Hit@K 측정에 함께 쓰인다.
     """
-    docs = search_with_scores(question, k)
+    docs = grade(question, search_with_scores(question, k))
 
     chain = PROMPT | get_llm() | StrOutputParser()
     text = chain.invoke({"context": format_docs(docs), "question": question})

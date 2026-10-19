@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     openai_api_key: str = ""
 
+    # --- 검색 결과 걸러내기 (교체 지점은 core/grader.py 한 곳) ---
+    # 검색된 글마다 "질문과 관련 있나"를 LLM에게 묻고 무관한 것을 버린다.
+    # 끌 수 있게 둔 이유 둘: ① 같은 평가셋으로 켜고/끄고 비교해야 효과를 숫자로 말할 수 있다
+    # ② 운영에서 과하게 버리는 게 보이면 재배포 없이 환경변수로 끈다
+    grade_enabled: bool = True
+
     # --- 벡터 저장소 (교체 지점은 core/retriever.py 한 곳) ---
     vector_store: str = "faiss"  # faiss(평가용 고정 인덱스) | pgvector(실사용)
     faiss_index_path: str = "data/faiss_index"
