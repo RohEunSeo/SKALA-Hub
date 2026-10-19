@@ -353,12 +353,18 @@ function doRemove() {
 }
 
 /* 줄바꿈 대신 카드가 같이 줄어들며 한 줄을 유지한다 - 폴더가 아주 많아서 최소 폭(70px)
-   밑으로도 안 들어가면 그때만 가로 스크롤로 받는다 */
+   밑으로도 안 들어가면 그때만 가로 스크롤로 받는다.
+   overflow-x:auto를 주면 overflow-y도 자동으로 clip 대상이 돼서(CSS 스펙상 둘 중 하나라도
+   visible이 아니면 다른 쪽도 auto로 계산됨), 호버 때 카드/문서가 위로 올라오는 애니메이션이
+   스크롤 영역 위쪽 경계에 잘려 보이는 문제가 있었다. padding-top으로 여유 공간을 확보하고
+   margin-top을 그만큼 당겨서 평소 위치는 그대로 유지하면서 올라올 자리만 scrollport 안쪽에 만든다 */
 .fgrid {
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
   gap: 18px;
+  padding-top: 28px;
+  margin-top: -28px;
 }
 
 /* 홈 "카테고리별 아카이브"의 폴더 카드를 필터 크기로 줄여 쓴다.
