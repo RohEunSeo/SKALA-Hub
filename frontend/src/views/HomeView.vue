@@ -182,6 +182,15 @@ function goToTodayFeed() {
   router.push({ name: 'feed' })
 }
 
+// "전체 게시글" 뱃지 클릭 - 카테고리·기간 필터를 모두 초기화(전체)한 채 피드로 이동
+function goToAllFeed() {
+  postsStore.category = null
+  postsStore.tag = null
+  postsStore.date = null
+  postsStore.fetchPosts(true)
+  router.push({ name: 'feed' })
+}
+
 onMounted(() => {
   // 슬랙 OAuth 콜백이 홈으로 바로 돌아오므로 여기서 토큰을 받는다 (별도 로그인 페이지 없음)
   const { token, error } = route.query
@@ -244,7 +253,7 @@ onUnmounted(() => {
         🎓 SKALA {{ authStore.user.cohort }} <strong>{{ summary.cohortDay }}일째 ({{ summary.cohortWeek }}주차)</strong>
       </div>
       <div class="pill pill-action" @click="goToTodayFeed">📬 오늘 새 글 <strong>{{ summary.todayNewPostCount ?? 0 }}개</strong> ›</div>
-      <div class="pill">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong></div>
+      <div class="pill pill-action" @click="goToAllFeed">📝 전체 게시글 <strong>{{ summary.totalPostCount ?? 0 }}개</strong> ›</div>
       <div class="pill">👥 함께하는 교육생 <strong>{{ summary.userCount ?? 0 }}명</strong></div>
       <div class="pill muted">🕐 마지막 동기화: {{ formatRelativeTime(summary.lastSyncedAt) }}</div>
     </div>
