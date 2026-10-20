@@ -58,6 +58,7 @@ public class SlackSyncService {
     private final CategoryClassifier categoryClassifier;
     private final PostTitleService postTitleService;
     private final PostTitleGenerator postTitleGenerator;
+    private final AiReindexService aiReindexService;
     private final SlackBotReplyService slackBotReplyService;
     private final SlackDmNotificationService slackDmNotificationService;
     private final SyncFailureRepository syncFailureRepository;
@@ -84,6 +85,7 @@ public class SlackSyncService {
             CategoryClassifier categoryClassifier,
             PostTitleService postTitleService,
             PostTitleGenerator postTitleGenerator,
+            AiReindexService aiReindexService,
             SlackBotReplyService slackBotReplyService,
             SlackDmNotificationService slackDmNotificationService,
             SyncFailureRepository syncFailureRepository,
@@ -97,6 +99,7 @@ public class SlackSyncService {
         this.categoryClassifier = categoryClassifier;
         this.postTitleService = postTitleService;
         this.postTitleGenerator = postTitleGenerator;
+        this.aiReindexService = aiReindexService;
         this.slackBotReplyService = slackBotReplyService;
         this.slackDmNotificationService = slackDmNotificationService;
         this.syncFailureRepository = syncFailureRepository;
@@ -427,6 +430,14 @@ public class SlackSyncService {
             } else {
                 postTitleService.generateTitleAsync(post.getId());
             }
+        }
+
+        // 새 글이고 제목까지 준비됐으면 AI 서버(RAG)에 색인을 요청한다. 로컬 개발이라
+        // 제목이 비동기로 채워지는 중(getAiTitle()이 아직 null)이면 여기서는 건너뛰고
+        // 다음 전체 재색인(scripts/build_index.py)이 잡아준다 - 제목 없이 먼저
+        // 색인되면 나중에 또 색인해야 해서 두 번 일하게 된다.
+        if (isNew && post.getAiTitle() != null) {
+            aiReindexService.reindexAsync(post.getId());
         }
 
         fetchMissingLinkPreviews(post.getContent(), msg.path("attachments"));

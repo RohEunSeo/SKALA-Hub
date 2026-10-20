@@ -59,6 +59,11 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
 
+# AI 서버(RAG) - 새 글 색인 요청용. 로컬 개발에서 안 띄워도 뜨도록 기본값은 빈 문자열
+# (AiReindexService가 비어있으면 호출을 건너뛴다)
+ai:
+  api-base-url: ${AI_API_BASE_URL:}
+
 # 구글 계정 연동/로그인 - 팝업 코드플로우(Google Identity Services)라 redirect-uri 불필요
 google:
   client-id: ${GOOGLE_CLIENT_ID}

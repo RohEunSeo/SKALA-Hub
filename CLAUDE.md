@@ -122,17 +122,19 @@ chat.postMessage / chat.update / chat.delete → 관리자가 동기화 안내�
   이 웹훅에서 하지 않고 여전히 스케줄러 경로로만 이루어짐
 
 
-## 배포 (대상이 3곳이고 하나만 수동이다)
+## 배포 (3곳 모두 main 머지 시 자동)
 
 | 대상 | 무엇 | 언제 올라가나 |
 |---|---|---|
 | Vercel | frontend/ | **main 머지 시 자동** |
 | Render | backend/ (Spring) | **main 머지 시 자동** |
-| **Cloud Run** | **ai/ (RAG 서버)** | **수동** — `./deploy/deploy-ai.sh` |
+| **Cloud Run** | **ai/ (RAG 서버)** | **main 머지 시 자동** — GitHub Actions(`.github/workflows/deploy-ai.yml`), `ai/**`·`deploy/**` 변경 시 트리거 |
 
-Cloud Run은 GitHub을 보지 않는다. `ai/` 를 고쳤으면 머지와 별개로 직접 배포해야 한다.
-실제로 save_proposal(저장 제안)을 추가하고 머지까지 했는데 AI 서버만 어제 코드로 남아
-"폴더에 저장할까요?"가 운영에서 안 뜬 적이 있다.
+2026-10-12부터 Cloud Run도 자동 배포된다. 그전엔 GitHub을 안 보고 수동(`./deploy/deploy-ai.sh`)
+배포뿐이라, save_proposal(저장 제안)을 추가하고 머지까지 했는데 AI 서버만 어제 코드로 남아
+"폴더에 저장할까요?"가 운영에서 안 뜬 적이 있다 — 그 사건이 계기가 돼 자동화했다.
+**단, `dev-v5` 같은 다른 브랜치에 push해서는 안 돌고 `main`에 머지될 때만 돈다.**
+로컬 수동 배포(`./deploy/deploy-ai.sh`)는 그대로 남아있어 급할 때 쓸 수 있다.
 
 - 프론트 환경변수 `VITE_AI_API_BASE_URL` 이 비면 챗봇 UI가 통째로 숨는다 (베타 on/off 스위치).
   Vite는 빌드 시점에 값을 박으므로 Vercel에서 바꾸면 **재배포**해야 반영된다.

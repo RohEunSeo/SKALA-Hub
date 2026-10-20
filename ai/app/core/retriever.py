@@ -105,13 +105,10 @@ def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{v:.8f}" for v in values) + "]"
 
 
-def _pg_build(chunks: list[Document]) -> int:
-    """조각 전체를 임베딩해서 post_chunks에 넣는다 (이미 있으면 덮어쓴다).
-
-    본문과 숫자만 넣는다. 분류·태그는 검색할 때 posts에서 읽으므로 여기 두지 않는다.
-    """
+def _chunk_rows(chunks: list[Document]) -> list[dict]:
+    """조각들을 임베딩하고 INSERT에 바로 쓸 수 있는 dict로 바꾼다."""
     vectors = get_embeddings().embed_documents([c.page_content for c in chunks])
-    rows = [
+    return [
         {
             "post_id": c.metadata["post_id"],
             "chunk_index": c.metadata.get("chunk_index", 0),
@@ -121,10 +118,39 @@ def _pg_build(chunks: list[Document]) -> int:
         }
         for c, v in zip(chunks, vectors)
     ]
+
+
+def _pg_build(chunks: list[Document]) -> int:
+    """글 **전체**를 통째로 다시 임베딩해서 post_chunks에 넣는다.
+
+    ⚠️ **TRUNCATE로 테이블을 통째로 비운 뒤 다시 채운다.** 전체 재색인
+    (scripts/build_index.py) 전용이다 - 글 1건만 반영하려고 이 함수를 여러 번
+    부르면, 부를 때마다 테이블이 비워져서 **마지막으로 부른 글 1건만 남고
+    나머지 전부가 사라진다** (실제로 이렇게 사고가 났다, 10-19).
+    글 1건만 반영하려면 pg_upsert_post()를 쓴다.
+    """
+    rows = _chunk_rows(chunks)
     with get_connection() as conn, conn.cursor() as cur:
         # 지운 글의 조각이 남지 않게 통째로 비우고 다시 넣는다.
         # 412개 규모에선 증분보다 이게 단순하고 안전하다 (증분은 글이 수만 개일 때 의미가 있다).
         cur.execute("TRUNCATE post_chunks")
+        cur.executemany(_INSERT_SQL, rows)
+    return len(rows)
+
+
+def pg_upsert_post(chunks: list[Document]) -> int:
+    """글 **한 건**의 조각만 반영한다. core/indexer.py가 새 글 1건을 색인할 때 쓴다.
+
+    _pg_build()와 달리 TRUNCATE하지 않는다 - 이 글의 기존 조각만 지우고 새로
+    넣어서 다른 글은 전혀 건드리지 않는다. 글이 짧아져 조각 수가 줄어도
+    (예: 3개 → 2개) 남은 조각이 생기지 않게, 지우고 나서 다시 넣는다.
+    """
+    if not chunks:
+        return 0
+    post_id = chunks[0].metadata["post_id"]
+    rows = _chunk_rows(chunks)
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM post_chunks WHERE post_id = %(post_id)s", {"post_id": post_id})
         cur.executemany(_INSERT_SQL, rows)
     return len(rows)
 

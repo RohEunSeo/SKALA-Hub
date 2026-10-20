@@ -50,6 +50,13 @@ WHERE p.is_deleted = false
 ORDER BY p.id
 """
 
+# load_post() 전용 - POSTS_SQL과 같은 조건에 글 하나만 더 좁힌다. 조건이 둘로 갈라지면
+# "전체 재색인에는 포함되는데 단건 재색인에는 빠진다" 같은 틈이 생긴다.
+POST_BY_ID_SQL = POSTS_SQL.replace(
+    "WHERE p.is_deleted = false",
+    "WHERE p.id = %(post_id)s AND p.is_deleted = false",
+)
+
 # 슬랙 마크업 - 문서화된 고정 형식이라 정규화는 튜닝이 아니라 파싱이다.
 # 프론트도 표시할 때 같은 변환을 한다 (CLAUDE.md 「게시글 표시 방식」).
 _LINK_LABELED = re.compile(r"<(https?://[^|>]+)\|([^>]*)>")  # <url|라벨> - 222개 글
@@ -124,6 +131,25 @@ def load_posts() -> tuple[list[Document], list[int]]:
             continue
         docs.append(Document(page_content=body, metadata=_to_metadata(row)))
     return docs, skipped
+
+
+def load_post(post_id: int) -> Document | None:
+    """게시글 한 건만 불러온다. 새 글이 올라왔을 때 그 한 건만 다시 색인할 때 쓴다
+    (core/indexer.py). load_posts()의 글 하나짜리 버전 - 건너뛰는 기준(삭제됨,
+    본문·제목 없음)도 똑같이 맞춘다. 없거나 건너뛸 글이면 None.
+    """
+    rows = fetch_all(POST_BY_ID_SQL, {"bot": BOT_NAME, "post_id": post_id})
+    if not rows:
+        return None
+    row = rows[0]
+    raw = row.get("content") or ""
+    if TOMBSTONE.match(raw):
+        return None
+    body = clean_slack_text(raw)
+    title = (row.get("ai_title") or "").strip()
+    if not body and not title:
+        return None
+    return Document(page_content=body, metadata=_to_metadata(row))
 
 
 def split_documents(docs: list[Document]) -> list[Document]:

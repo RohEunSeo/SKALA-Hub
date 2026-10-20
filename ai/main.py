@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import admin, chat
+from app.routers import admin, chat, internal
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -27,6 +27,7 @@ app.add_middleware(
 
 app.include_router(chat.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(internal.router, prefix="/api")
 
 
 @app.on_event("startup")
