@@ -93,6 +93,28 @@ public class SlackDmNotificationService {
         sendDm(message);
     }
 
+    // 새 글 1건 실시간 재색인(AiReindexService) 결과 - 지금 색인이 실제로 도는지 확인용
+    public void sendReindexResult(Long postId, int chunks) {
+        String message;
+        if (chunks > 0) {
+            message = "✅ 새 글 #" + postId + " RAG 색인 완료 (" + chunks + "조각)\n"
+                    + "🔗 바로가기: " + frontendUrl + "/posts/" + postId;
+        } else if (chunks == 0) {
+            message = "⏭️ 새 글 #" + postId + " 색인 대상 아님 (삭제됨/본문 없음 - 정상이에요)";
+        } else {
+            message = "⚠️ 새 글 #" + postId + " 색인 응답이 비정상이에요 (chunks 값을 못 읽음)";
+        }
+        sendDm(message);
+    }
+
+    // AI 서버 호출 자체가 실패한 경우 - 자동 반영이 안 됐으니 수동으로 재색인해야 함
+    public void sendReindexFailure(Long postId, String reason) {
+        String message = "⚠️ 새 글 #" + postId + " RAG 색인 실패!\n"
+                + "원인: " + reason + "\n"
+                + "수동 재색인이 필요해요 (scripts/build_index.py 또는 /api/internal/reindex-post 직접 호출).";
+        sendDm(message);
+    }
+
     private String truncate(String text, int maxLen) {
         return text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
     }
