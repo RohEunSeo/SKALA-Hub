@@ -20,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Page<User> findByGoogleIdIsNull(Pageable pageable);
 
+    // 마이페이지 배너 - 현재까지 구글 계정 연동 완료한 인원 수
+    long countByGoogleIdIsNotNull();
+
     // 대시보드 신규 가입자 추이 - 날짜별 신규 가입자 수
     @Query(
             value =

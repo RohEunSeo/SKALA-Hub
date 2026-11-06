@@ -219,9 +219,64 @@ onUnmounted(() => {
         <span class="login-banner-sub">2. 워크스페이스 입력 화면이 뜨면 <strong>'theskala'</strong>를 입력해주세요.</span>
       </div>
       <div class="login-actions">
-        <button class="login-btn" @click="handleLogin">Slack으로 로그인</button>
-        <!-- 구글 로그인 테스트 중 - 완료 전까지 비노출 (필요 시 아래 버튼 되살리면 됨) -->
-        <!-- <button class="login-btn-google" @click="handleGoogleLogin">Google로 로그인</button> -->
+        <button class="login-btn" @click="handleLogin">
+          <svg class="login-icon" viewBox="0 0 122.8 122.8" width="16" height="16" aria-hidden="true">
+            <path
+              d="M25.8,77.6c0,7.1-5.8,12.9-12.9,12.9S0,84.7,0,77.6s5.8-12.9,12.9-12.9h12.9V77.6z"
+              fill="#E01E5A"
+            />
+            <path
+              d="M32.3,77.6c0-7.1,5.8-12.9,12.9-12.9s12.9,5.8,12.9,12.9v32.3c0,7.1-5.8,12.9-12.9,12.9s-12.9-5.8-12.9-12.9V77.6z"
+              fill="#E01E5A"
+            />
+            <path
+              d="M45.2,25.8c-7.1,0-12.9-5.8-12.9-12.9S38.1,0,45.2,0s12.9,5.8,12.9,12.9v12.9H45.2z"
+              fill="#36C5F0"
+            />
+            <path
+              d="M45.2,32.3c7.1,0,12.9,5.8,12.9,12.9s-5.8,12.9-12.9,12.9H12.9C5.8,58.1,0,52.3,0,45.2s5.8-12.9,12.9-12.9H45.2z"
+              fill="#36C5F0"
+            />
+            <path
+              d="M97,45.2c0-7.1,5.8-12.9,12.9-12.9s12.9,5.8,12.9,12.9s-5.8,12.9-12.9,12.9H97V45.2z"
+              fill="#2EB67D"
+            />
+            <path
+              d="M90.5,45.2c0,7.1-5.8,12.9-12.9,12.9s-12.9-5.8-12.9-12.9V12.9C64.7,5.8,70.5,0,77.6,0s12.9,5.8,12.9,12.9V45.2z"
+              fill="#2EB67D"
+            />
+            <path
+              d="M77.6,97c7.1,0,12.9,5.8,12.9,12.9s-5.8,12.9-12.9,12.9s-12.9-5.8-12.9-12.9V97H77.6z"
+              fill="#ECB22E"
+            />
+            <path
+              d="M77.6,90.5c-7.1,0-12.9-5.8-12.9-12.9s5.8-12.9,12.9-12.9h32.3c7.1,0,12.9,5.8,12.9,12.9s-5.8,12.9-12.9,12.9H77.6z"
+              fill="#ECB22E"
+            />
+          </svg>
+          Slack으로 로그인
+        </button>
+        <button class="login-btn-google" :disabled="googleLoginLoading" @click="handleGoogleLogin">
+          <svg class="login-icon" viewBox="0 0 18 18" width="16" height="16" aria-hidden="true">
+            <path
+              fill="#4285F4"
+              d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.8741 2.6836-6.615z"
+            />
+            <path
+              fill="#34A853"
+              d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.8586-3.0477.8586-2.3436 0-4.3282-1.5831-5.0359-3.7104H.9573v2.3318C2.4382 15.9832 5.4818 18 9 18z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M3.9641 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1023-1.17.2822-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.9641 10.71z"
+            />
+            <path
+              fill="#EA4335"
+              d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.9641 7.29C4.6718 5.1627 6.6564 3.5795 9 3.5795z"
+            />
+          </svg>
+          Google로 로그인
+        </button>
       </div>
     </div>
 
@@ -402,6 +457,9 @@ onUnmounted(() => {
 }
 
 .login-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 9px 18px;
   background: #4a3f8f;
@@ -411,6 +469,10 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.login-icon {
+  flex-shrink: 0;
 }
 
 .login-btn:hover {
@@ -424,6 +486,9 @@ onUnmounted(() => {
 }
 
 .login-btn-google {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 9px 18px;
   background: #ffffff;

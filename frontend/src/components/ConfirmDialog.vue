@@ -11,6 +11,8 @@ const props = defineProps({
   danger: { type: Boolean, default: true },
   confirmLabel: { type: String, default: '삭제' },
   cancelLabel: { type: String, default: '취소' },
+  // danger일 때 표시되는 강조 경고 문구 - 기본값은 삭제류 동작용, 다른 경고(예: 계정 연동 해제)는 구체적으로 바꿔서 쓴다
+  warningText: { type: String, default: '이 작업은 되돌릴 수 없습니다.' },
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
@@ -37,7 +39,7 @@ watch(
       <div ref="panel" class="cd-panel" role="alertdialog" aria-modal="true" :aria-label="title">
         <h2 class="cd-title">{{ title }}</h2>
         <p v-if="message" class="cd-message">{{ message }}</p>
-        <p v-if="danger" class="cd-warn">이 작업은 되돌릴 수 없습니다.</p>
+        <p v-if="danger" class="cd-warn">{{ warningText }}</p>
 
         <div class="cd-actions">
           <button class="cd-cancel" @click="emit('cancel')">{{ cancelLabel }}</button>
@@ -54,10 +56,11 @@ watch(
   inset: 0;
   z-index: 1200;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 24px;
-  background: rgba(26, 26, 46, 0.42);
+  padding-top: 16vh;
+  background: rgba(26, 26, 46, 0.58);
 }
 
 .cd-panel {

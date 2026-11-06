@@ -78,6 +78,6 @@ public class MyPageController {
     @DeleteMapping("/account/google-link")
     public AccountLinkResponse unlinkGoogleAccount(Principal principal) {
         googleAuthService.unlinkAccount(principal.getName());
-        return new AccountLinkResponse(false, null);
+        return googleAuthService.getLinkStatus(principal.getName());
     }
 }
