@@ -79,7 +79,7 @@ public class GoogleAuthService {
             // 동시성 경합으로 방금 다른 요청이 먼저 연동한 경우
             throw new GoogleAlreadyLinkedException();
         }
-        return new AccountLinkResponse(true, saved.getGoogleEmail());
+        return new AccountLinkResponse(true, saved.getGoogleEmail(), userRepository.countByGoogleIdIsNotNull());
     }
 
     // 본인 마이페이지 해제 / 관리자 강제 해제 공용
@@ -98,7 +98,8 @@ public class GoogleAuthService {
         User user = userRepository
                 .findById(slackId)
                 .orElseThrow(() -> new IllegalStateException("유저를 찾을 수 없습니다: " + slackId));
-        return new AccountLinkResponse(user.getGoogleId() != null, user.getGoogleEmail());
+        return new AccountLinkResponse(
+                user.getGoogleId() != null, user.getGoogleEmail(), userRepository.countByGoogleIdIsNotNull());
     }
 
     // 관리자 "구글 계정 연동 관리" 화면 - status: all/linked/unlinked

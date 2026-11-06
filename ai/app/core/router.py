@@ -17,7 +17,7 @@ import re
 from typing import Literal
 
 Route = Literal["block", "person", "summarize", "similar", "count", "about", "how",
-                "keywords", "popular", "reject", "clarify", "search"]
+                "keywords", "popular", "latest", "reject", "clarify", "search"]
 
 # 위에서부터 먼저 맞는 길로 간다. 순서가 곧 우선순위다.
 RULES: list[tuple[Route, str]] = [
@@ -87,6 +87,14 @@ RULES: list[tuple[Route, str]] = [
 
     # 집계 - 세어야 알 수 있다. 벡터 검색으로는 구조적으로 불가능
     ("keywords", r"키워드|트렌드|많이\s*(올라|언급|나오)|자주\s*(올라|언급|나오)|요즘\s*(뜨는|핫)"),
+
+    # 최신순 - 벡터 검색은 "의미가 비슷한 글"만 찾지 "날짜가 가장 최근인 글"은 못 찾는다.
+    # (reaction_count처럼 created_at도 top-k 밖에 있을 수 있으므로 DB에 직접 물어야 한다)
+    ("latest",
+     r"최신(글|소식|업데이트|버전)?|가장\s*(최근|나중)|제일\s*(최근|나중)|"
+     r"최근\s*(에\s*)?(올라온|올린|나온|업데이트|소식)|"
+     r"어디[^.?!\n]{0,8}까지[^.?!\n]{0,6}(업데이트|올라)|마지막\s*(으로\s*)?(업데이트|올라온|올린)"),
+
     ("popular",  r"인기|반응\s*(많|높)|좋아요\s*많|가장\s*많이\s*(본|저장|읽)|탑\s*\d|top\s*\d|순위"),
 
     # 서비스 밖

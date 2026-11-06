@@ -38,7 +38,7 @@ export const useMyPageStore = defineStore('mypage', () => {
   const loaded = ref(false)
 
   // 계정 설정 - 구글 계정 연동 상태 (교육 종료 후 슬랙 로그인 불가 대비)
-  const accountLink = ref({ googleLinked: false, googleEmail: null })
+  const accountLink = ref({ googleLinked: false, googleEmail: null, linkedCount: 0 })
 
   async function loadAccountLink() {
     try {

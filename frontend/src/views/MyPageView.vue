@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import AuthRequired from '../components/AuthRequired.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useAuthStore } from '../stores/auth'
 import { useBookmarksStore } from '../stores/bookmarks'
@@ -42,6 +43,7 @@ const {
 } = storeToRefs(myPageStore)
 
 const googleLinkLoading = ref(false)
+const unlinkAsk = ref(false)
 
 async function handleLinkGoogle() {
   if (googleLinkLoading.value) return
@@ -61,8 +63,12 @@ async function handleLinkGoogle() {
   }
 }
 
-async function handleUnlinkGoogle() {
-  if (!window.confirm('구글 계정 연동을 해제할까요? 해제 후에는 구글 로그인을 다시 사용할 수 없습니다.')) return
+function handleUnlinkGoogle() {
+  unlinkAsk.value = true
+}
+
+async function confirmUnlinkGoogle() {
+  unlinkAsk.value = false
   try {
     await myPageStore.unlinkGoogle()
     toastStore.show('구글 계정 연동이 해제되었습니다.')
@@ -186,7 +192,10 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="authStore.effectiveIsAdmin" class="google-banner">
+        <div
+          v-if="authStore.effectiveIsAdmin || authStore.user?.classNum === '5반'"
+          class="google-banner"
+        >
           <button v-if="accountLink.googleLinked" class="google-link-btn google-link-btn-done" disabled>
             ✅ 연동 완료됨
           </button>
@@ -204,13 +213,16 @@ onMounted(async () => {
             <template v-if="accountLink.googleLinked">
               <div class="google-banner-desc">
                 * {{ accountLink.googleEmail }}로 연동되어 있습니다.
-                <span v-if="authStore.effectiveIsAdmin" class="google-unlink-btn" @click="handleUnlinkGoogle">연동 해제</span>
+                <span class="google-unlink-btn" @click="handleUnlinkGoogle">연동 해제</span>
               </div>
             </template>
             <template v-else>
               <div class="google-banner-desc">
                 * 교육 수료 후 Slack 계정이 비활성화되어 슬랙 로그인이 불가합니다. 구글
                 계정을 연동하면 이후에도 동일 계정으로 접근 가능합니다.
+              </div>
+              <div v-if="accountLink.linkedCount > 0" class="google-banner-desc">
+                현재 {{ accountLink.linkedCount }}명이 이미 연동했어요.
               </div>
               <div class="google-banner-warning">
                 ⚠️ 계정이 비활성화되기 전에 반드시 연동해야 수료 후에도 접근할 수 있습니다.
@@ -338,6 +350,18 @@ onMounted(async () => {
         </div>
       </div>
     </template>
+
+    <ConfirmDialog
+      :open="unlinkAsk"
+      :danger="true"
+      title="구글 계정 연동을 해제할까요?"
+      message="특별한 이유가 없다면 연동 상태를 유지하는 걸 추천해요."
+      warning-text="⚠️ 해제 후 Slack 로그인이 막히면(교육 수료 후 등), 내가 쓴 글·댓글·북마크를 포함해 SKALA-Hub 전체를 다시는 못 보게 될 수 있어요."
+      confirm-label="해제"
+      cancel-label="유지하기"
+      @confirm="confirmUnlinkGoogle"
+      @cancel="unlinkAsk = false"
+    />
   </AppLayout>
 </template>
 
