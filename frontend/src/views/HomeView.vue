@@ -147,10 +147,12 @@ function handleLogin() {
 // 교육 종료 후 슬랙 로그인이 불가능한 교육생을 위한 대체 로그인 (마이페이지에서 미리 연동해둔 계정만 가능)
 const googleLoginLoading = ref(false)
 async function handleGoogleLogin() {
-  if (googleLoginLoading.value) return
-  googleLoginLoading.value = true
+  // 구글 팝업이 떠있는 동안은 버튼을 막지 않는다 - X로 닫아도 콜백이 안 올 수 있어서
+  // 거기에 걸어두면 버튼이 영영 안 풀릴 수 있다. 백엔드 호출 구간만 중복 클릭을 막는다.
   try {
     const code = await requestGoogleAuthCode()
+    if (googleLoginLoading.value) return
+    googleLoginLoading.value = true
     const { data } = await loginWithGoogleCode(code)
     authStore.setAuth(data.token)
   } catch (e) {

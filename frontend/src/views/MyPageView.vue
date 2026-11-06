@@ -46,10 +46,13 @@ const googleLinkLoading = ref(false)
 const unlinkAsk = ref(false)
 
 async function handleLinkGoogle() {
-  if (googleLinkLoading.value) return
-  googleLinkLoading.value = true
+  // 구글 팝업이 떠있는 동안은 버튼을 막지 않는다 - 팝업을 X로 닫아도
+  // 콜백이 안 올 수 있어서, 거기에 걸어두면 버튼이 영영 안 풀릴 수 있다.
+  // 백엔드 호출(코드 교환) 구간만 중복 클릭을 막는다.
   try {
     const code = await requestGoogleAuthCode()
+    if (googleLinkLoading.value) return
+    googleLinkLoading.value = true
     await myPageStore.linkGoogle(code)
     toastStore.show('구글 계정이 연동되었습니다.')
   } catch (e) {
