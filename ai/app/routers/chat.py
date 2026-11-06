@@ -35,7 +35,7 @@ from app.services.rag_service import (
     stream_summary,
 )
 from app.core.grader import agrade
-from app.services.stats_service import get_post, popular_posts
+from app.services.stats_service import get_post, popular_posts, recent_posts
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -217,6 +217,24 @@ async def _respond(req: ev.ChatRequest, rec: dict[str, Any]) -> AsyncIterator[st
             return
         head = "최근 한 달 동안" if days else "지금까지"
         text = f"{head} 반응이 많았던 글 {len(posts)}개예요."
+        async for piece in say(text):
+            yield piece
+        yield ev.sources(posts)
+        yield ev.save_proposal([p["id"] for p in posts])
+        rec["answer"] = text
+        rec["post_ids"] = [p["id"] for p in posts]  # 유사도는 없다 - SQL로 고른 것
+        return
+
+    if path == "latest":
+        yield ev.status("search_posts", "최신 글 찾는 중")
+        posts = recent_posts()
+        if not posts:
+            text = "아직 보여드릴 글이 없어요."
+            async for piece in say(text):
+                yield piece
+            rec["answer"] = text
+            return
+        text = f"최근에 올라온 글 {len(posts)}개예요."
         async for piece in say(text):
             yield piece
         yield ev.sources(posts)
