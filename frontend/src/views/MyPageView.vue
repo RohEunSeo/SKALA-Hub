@@ -215,17 +215,18 @@ onMounted(async () => {
                 * {{ accountLink.googleEmail }}로 연동되어 있습니다.
                 <span class="google-unlink-btn" @click="handleUnlinkGoogle">연동 해제</span>
               </div>
+              <div class="google-banner-count" style="margin-top: 6px">👥 현재 {{ accountLink.linkedCount }}명 연동 완료</div>
             </template>
             <template v-else>
               <div class="google-banner-desc">
                 * 교육 수료 후 Slack 계정이 비활성화되어 슬랙 로그인이 불가합니다. 구글
                 계정을 연동하면 이후에도 동일 계정으로 접근 가능합니다.
               </div>
-              <div v-if="accountLink.linkedCount > 0" class="google-banner-desc">
-                현재 {{ accountLink.linkedCount }}명이 이미 연동했어요.
-              </div>
-              <div class="google-banner-warning">
-                ⚠️ 계정이 비활성화되기 전에 반드시 연동해야 수료 후에도 접근할 수 있습니다.
+              <div class="google-banner-warning-row">
+                <div class="google-banner-count">👥 현재 {{ accountLink.linkedCount }}명 연동 완료</div>
+                <div class="google-banner-warning">
+                  ⚠️ 계정이 비활성화되기 전에 반드시 연동해야 수료 후에도 접근할 수 있습니다.
+                </div>
               </div>
             </template>
           </div>
@@ -387,7 +388,9 @@ onMounted(async () => {
   justify-content: flex-start;
   gap: 16px;
   background: transparent;
-  padding: 10px 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(74, 63, 143, 0.14);
+  border-radius: 14px;
   flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
@@ -405,8 +408,15 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
-.google-banner-warning {
+.google-banner-warning-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.google-banner-warning {
   font-size: 12px;
   font-weight: 700;
   color: #e01e5a;
@@ -455,6 +465,18 @@ onMounted(async () => {
   background: #e7f8ee;
   color: #1a8f4c;
   opacity: 1;
+}
+
+.google-banner-count {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f1eefc;
+  color: #4a3f8f;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .google-icon {
